@@ -1,6 +1,6 @@
 # Nous OSINT — Single-VM Podman / Quadlet Deployment Design
 
-Status: **target architecture only; not deployed or verified on a VM**  
+Status: **initial VM deployment verified on 2026-11-03; see the deployment record below**
 Updated: 2026-11-03
 
 ## 1. Operating assumptions
@@ -14,14 +14,17 @@ Updated: 2026-11-03
 
 ## 2. Service layout
 
-The repository will eventually contain reproducible Quadlet templates in `deploy/quadlet/`:
+The repository contains reproducible Quadlet definitions in `deploy/quadlet/`:
 
 | Quadlet file | Generated systemd unit | Responsibility |
 | --- | --- | --- |
 | `nous.network` | `nous-network.service` | Private application network |
+| `nous-ingress.network` | `nous-ingress-network.service` | Isolated MCP ingress; cloudflared does not join the database network |
 | `nous-db.volume` | `nous-db-volume.service` | Persistent PostgreSQL files |
 | `nous-db.container` | `nous-db.service` | PostgreSQL |
 | `nous-api.container` | `nous-api.service` | FastAPI retrieval API |
+| `nous-mcp.container` | `nous-mcp.service` | Read-only MCP origin on backend and ingress networks |
+| `nous-tunnel.container` | `nous-tunnel.service` | Outbound-only cloudflared connector on ingress network |
 | `nous-scheduler.container` | `nous-scheduler.service` | One scheduling process |
 | `nous-worker.container` | `nous-worker.service` | Fetch/parse/normalize worker |
 
@@ -98,9 +101,19 @@ systemctl --user status nous-db.service nous-api.service nous-scheduler.service 
 journalctl --user -u nous-worker.service -n 100 --no-pager
 ```
 
-Generated systemd unit names are derived from Quadlet filenames; after installation verify the generated services and their dependency graph. On failed generation use Podman's Quadlet generator in dry-run mode for the installed version. The above is a **planned procedure**, not an executed VM validation.
+Generated systemd unit names are derived from Quadlet filenames; after installation verify the generated services and their dependency graph. On failed generation use Podman's Quadlet generator in dry-run mode for the installed version. The initial VM-specific procedures were exercised; see the record below.
 
-## 6. Backup, restore and disaster recovery
+## 6. Initial VM deployment record (2026-11-03)
+
+- `nous` is a non-root account with lingering enabled. Its user manager has an active D-Bus user bus at `/run/user/1001`; services remained available across separate SSH sessions.
+- The MCP process uses Podman Secret `nous-mcp-database-url` for the dedicated `nous_mcp` role. The role can `SELECT` and cannot `INSERT`, `UPDATE` or `DELETE` application tables. Future tables created by the `nous` migration role receive default `SELECT` grants.
+- `nous-mcp.service` uses the pinned local application image, publishes no host port, and joins `nous-private` plus `nous-ingress`. `nous-tunnel.service` uses the pinned cloudflared 2026.10.3 image and joins only `nous-ingress`. Both units use restart-on-failure and are in the user manager's default target.
+- `~/.config/nous/mcp.env` on the VM is mode 0600 and contains the configured Access issuer and audience. The Tunnel token remains only in Podman Secret `nous-tunnel-token`.
+- Verified on the VM: an in-process MCP protocol harness using a synthetic test identity completed `initialize`, `tools/list` and read-only `get_source_status` `tools/call` against the deployed image and live SELECT-only database role. The actual listener rejects missing/forged assertions. `tests/test_access_auth.py` passed 10 tests, including invalid signature, audience and expiry cases. `/health`, `/docs` and `/api/v1` return 404 at the origin; external HTTPS returned 401 after reboot (403 before reboot); the Tunnel registered four edge connections.
+- `nous-mcp.service` and `nous-tunnel.service` were each killed once and systemd restarted them automatically. A full VM reboot at 11:35:52 UTC restored all six user services; PostgreSQL became healthy, the API readiness endpoint returned `{"status":"ok","schema":"0004"}`, and the Tunnel re-registered four connections.
+- The Tunnel's loaded runtime route in its local startup log shows `nous.yohn.jp` -> `http://nous-mcp:8001`, Access `required=true`, team `zenprax` and the configured audience. No Cloudflare resources or Access/IdP/OAuth settings were changed. The application policy's allowed IdP/email, Managed OAuth/DCR behavior, GitHub login and a real OAuth client remain unverified.
+
+## 7. Backup, restore and disaster recovery
 
 - Daily logical `pg_dump`-based backup (plus schema/version manifest); encrypt and push backups to a location **outside the VM**.
 - Keep at least a 7-day rolling retention initially, configurable subject to volume, source terms and restore testing.
@@ -109,7 +122,7 @@ Generated systemd unit names are derived from Quadlet filenames; after installat
 - Initial **targets**, to validate rather than promise: RPO ≤24 hours and RTO ≤4 hours. If tests fail, report actual recovery performance and revise capacity/plan.
 - Monitor free disk, failed backup, stale source polls, failed services and persistent queue backlog.
 
-## 7. Definition of deployed
+## 8. Definition of deployed
 
 Deployment is not complete until these are observed on the target VM:
 

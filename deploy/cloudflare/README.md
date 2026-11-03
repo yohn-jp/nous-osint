@@ -2,12 +2,12 @@
 
 Canonical public endpoint: **https://nous.yohn.jp/mcp**.
 
-This feature branch is **stacked on PR #1**. Do **not** run Terraform apply, install Quadlet examples, or expose the origin until PR #1 is merged and deployment prerequisites have been verified.
+The Cloudflare resource changes remain unapplied. The VM-side MCP origin and Tunnel connector are now installed from merged `main`; see [the VM deployment record](../../docs/QUADLET_DEPLOYMENT.md#6-initial-vm-deployment-record-2026-11-03).
 
 ## Implementation status
 
-- Implemented here: strict allowlisted Access/Managed OAuth IaC, new named Tunnel + DNS target, dedicated ingress network and inactive Quadlet templates, standalone Python read-only MCP adapter, Cloudflare Access JWT verifier.
-- Not yet implemented: foundation image dependency update, read-only database credential, pinned image digests, fully validated Terraform provider plan, VM deployment, Cloudflare resources, live ChatGPT OAuth verification.
+- Implemented in the repository and VM: strict allowlisted Access/Managed OAuth IaC, standalone Python read-only MCP adapter and Access JWT verifier; pinned MCP/Tunnel Quadlets, dedicated ingress network and SELECT-only MCP database credential.
+- Not performed: Cloudflare Terraform import/init/plan/apply, Access app/IdP/OAuth policy inspection, or live ChatGPT OAuth verification.
 - Reuse: Majiwari's Access application/Managed OAuth policy and Proprium's Tunnel/Gateway transport model. Do not copy their credentials or reuse their Tunnel routes.
 - No Worker, Workers VPC Service, KV, D1 or custom OAuth service.
 
@@ -44,4 +44,4 @@ Sources: Cloudflare Access Managed OAuth https://developers.cloudflare.com/cloud
 Cloudflare Tunnel token-file https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/run-parameters/ ;
 MCP Python SDK ASGI https://py.sdk.modelcontextprotocol.io/run/asgi/ .
 
-**Staged only. Neither VM nor Cloudflare account has been modified.**
+**Cloudflare account unchanged.** The VM-side runtime is deployed and reboot-tested; its current loaded Tunnel route is recorded in [QUADLET_DEPLOYMENT.md](../../docs/QUADLET_DEPLOYMENT.md#6-initial-vm-deployment-record-2026-11-03).

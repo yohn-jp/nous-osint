@@ -1,0 +1,21 @@
+[Unit]
+Description=Cloudflare Tunnel for Nous MCP
+Requires=nous-mcp.service
+After=nous-mcp.service
+
+[Container]
+Image=sha256:1475624a6d235381d8886c0e0a7ca8694d01ae535370047a09c89787380e9d6c
+ContainerName=nous-tunnel
+Network=nous-ingress.network
+Secret=nous-tunnel-token,type=mount,target=/run/secrets/token
+Exec=tunnel run --token-file /run/secrets/token
+ReadOnly=true
+NoNewPrivileges=true
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target
