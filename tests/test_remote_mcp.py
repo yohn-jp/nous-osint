@@ -17,9 +17,12 @@ def target(monkeypatch):
     from nous import remote_mcp
     # Test the MCP framing against an authenticated origin. The JWT verification
     # itself is tested independently with real RSA signatures in test_access_auth.
-    from nous.access_auth import AccessIdentity
-    monkeypatch.setattr(remote_mcp.app.verifier, "verify",
-                        lambda assertion: AccessIdentity(subject="ci-test", email=None))
+    from nous.access_auth import AccessDenied, AccessIdentity
+    def verified_identity(assertion):
+        if not assertion:
+            raise AccessDenied("missing assertion")
+        return AccessIdentity(subject="ci-test", email=None)
+    monkeypatch.setattr(remote_mcp.app.verifier, "verify", verified_identity)
     return remote_mcp
 
 
