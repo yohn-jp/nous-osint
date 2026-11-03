@@ -2,7 +2,7 @@
 
 Canonical public endpoint: **https://nous.yohn.jp/mcp**.
 
-This change is intentionally staged on an independent feature branch while foundation PR #1 is in progress. Do **not** run Terraform apply, install Quadlet examples, or expose the origin before that PR has been merged and tested.
+This feature branch is **stacked on PR #1**. Do **not** run Terraform apply, install Quadlet examples, or expose the origin until PR #1 is merged and deployment prerequisites have been verified.
 
 ## Implementation status
 
@@ -14,7 +14,7 @@ This change is intentionally staged on an independent feature branch while found
 ## After PR #1 is merged
 
 1. Rebase this branch onto the merged main and inspect the real pyproject, API query layer, Quadlet network and Containerfile. Resolve conflicts without overwriting the working foundation.
-2. Add **mcp==2.3.0** and compatible pinned **cryptography** to the existing Python project and rebuild the application image. Run tests/test_access_auth.py with pytest and real MCP transport tests before deploying.
+2. The stacked branch now pins **mcp==2.3.0** and **cryptography==46.0.3** in the canonical Python project; rebuild the image, run the auth and end-to-end MCP transport tests before deploying.
 3. Give the MCP process a dedicated **SELECT-only** PostgreSQL credential. Change the staged nous-mcp.container.example secret from the temporary API credential to the new read-only secret. There must be no ingestion or migration permissions.
 4. Verify rootless Podman network DNS and separate nous-ingress network. The cloudflared container joins only ingress; nous-mcp joins ingress and backend. PostgreSQL stays internal. Set Cloudflare tunnel origin to http://nous-mcp:8001 with Host nous.yohn.jp.
 5. Pin the actual built app image and a reviewed cloudflared image **by digest**, provision a VM-side Podman Tunnel token secret and provide a root-owned or user-owned non-Git config file for CF_ACCESS_ISSUER / CF_ACCESS_AUDIENCE. Rename example Quadlet files only when runnable.

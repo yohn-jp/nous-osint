@@ -56,6 +56,7 @@ def search_intelligence(
         raise ValueError("cursor must be positive")
     from .api import items
     result = items(
+        state=None, organization=None, published_since=None,
         kind=_bounded(kind, "kind", 40),
         source=_bounded(source, "source", 100),
         q=_bounded(query, "query"),
@@ -92,8 +93,9 @@ def get_changes(since: str, kind: str | None = None, limit: int = 20) -> list[di
     if not 1 <= limit <= 50:
         raise ValueError("limit must be 1..50")
     from .api import changes
-    return jsonable_encoder(changes(since=_since(since, required=True),
-                                    kind=_bounded(kind, "kind", 40), limit=limit))
+    result = changes(since=_since(since, required=True),
+                     kind=_bounded(kind, "kind", 40), limit=limit)
+    return jsonable_encoder(result["changes"])
 
 
 @mcp.tool()
