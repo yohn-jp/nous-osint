@@ -46,3 +46,12 @@ def test_304_is_not_redirect(monkeypatch):
     status, body, _, _ = fetch_module.fetch("https://example.com/feed", etag='"abc"')
     assert status == 304
     assert body == b""
+
+def test_automattic_html_adapter():
+    source = next(s for s in load_registry("sources") if s.id == "automattic-jobs")
+    runtime_source = SimpleNamespace(kind=source.kind, adapter=source.adapter,
+                                     config=source.model_dump())
+    html = b'<script id="wwu-positions-wwu-positions-view-script-js-before">const ghJobsData = [{"id":42,"title":"Engineer","href":"https://automattic.com/work-with-us/job/engineer/","type":"job"}];</script>'
+    records = extract(runtime_source, html, source.url)
+    assert records == [{"id": "42", "url": "https://automattic.com/work-with-us/job/engineer/",
+                        "title": "Engineer"}]

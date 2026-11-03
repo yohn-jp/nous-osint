@@ -13,12 +13,15 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    registry digest. Copy the Quadlets into `~nous/.config/containers/systemd/`.
 3. Create 0600 temporary files containing a randomly generated DB password and
    `postgresql+psycopg://nous:<password>@nous-db:5432/nous`. Import them as
-   Podman secrets `nous-db-password` and `nous-database-url`, then securely
+   Podman secrets `nous-db-password`, `nous-database-url` (migrations),
+   `nous-api-database-url` and
+   `nous-runtime-database-url` after provisioning separate `nous_api` and
+   `nous_runtime` SQL roles, then securely
    remove the temporary files. Never put a password in Git or a Quadlet.
 4. Run `systemctl --user daemon-reload`; start `nous-db.service`. Wait for
    `podman exec nous-db pg_isready -U nous -d nous` to succeed.
 5. Run the migration as a one-off container on `nous-private` with the database
-   URL secret mounted at `/run/secrets/database_url` and
+   migration/admin URL secret mounted at `/run/secrets/database_url` and
    `DATABASE_URL_FILE=/run/secrets/database_url`, invoking `alembic upgrade head`.
 6. Start `nous-api.service nous-scheduler.service nous-worker.service` and check
    `/health/ready` over VM loopback. Quadlet's `[Install]` section generates

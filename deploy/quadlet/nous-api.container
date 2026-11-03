@@ -4,11 +4,11 @@ Requires=nous-db.service
 After=nous-db.service
 
 [Container]
-Image=sha256:428b87a4e26f50a4036ecea7edcfcc27d8ea6a1cc5aaa4e5a8e596d11457c106
+Image=sha256:92b9c329902fb26eb8cc5c1e709a3e47ae96503a89ba6874cc3c2e0d9791dabf
 ContainerName=nous-api
 Network=nous.network
 PublishPort=127.0.0.1:8000:8000
-Secret=nous-database-url,type=mount,target=/run/secrets/database_url
+Secret=nous-api-database-url,type=mount,target=/run/secrets/database_url
 Environment=DATABASE_URL_FILE=/run/secrets/database_url
 Exec=uvicorn nous.api:app --host 0.0.0.0 --port 8000
 NoNewPrivileges=true

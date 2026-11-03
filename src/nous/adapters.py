@@ -28,6 +28,15 @@ def extract(source, content, base_url):
                 for e in data if isinstance(e, dict)]
     if kind == "html":
         soup = BeautifulSoup(content, "html.parser")
+        if source.adapter == "automattic_html_v1":
+            script = soup.select_one("script#wwu-positions-wwu-positions-view-script-js-before")
+            marker = "const ghJobsData = "
+            if script is None or marker not in script.text:
+                raise ValueError("Automattic job data missing")
+            payload = script.text.split(marker, 1)[1]
+            jobs, _ = json.JSONDecoder().raw_decode(payload)
+            return [{"id": str(job["id"]), "url": job["href"],
+                     "title": job["title"]} for job in jobs if job.get("type") == "job"]
         selectors = source.config["selectors"]
         result = []
         for node in soup.select(selectors["item"]):

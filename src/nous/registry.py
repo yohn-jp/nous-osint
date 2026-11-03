@@ -8,7 +8,8 @@ from sqlalchemy import select
 from .models import Source
 
 KINDS = {"job_posting", "news", "advisory", "vulnerability", "company_update"}
-ADAPTERS = {"rss": "rss_v1", "json_api": "json_v1", "html": "html_v1"}
+ADAPTERS = {"rss": {"rss_v1"}, "json_api": {"json_v1"},
+            "html": {"html_v1", "automattic_html_v1"}}
 
 class Policy(BaseModel):
     reviewed_at: str
@@ -35,13 +36,13 @@ class SourceConfig(BaseModel):
     @model_validator(mode="after")
     def valid(self):
         parsed = urlparse(self.url)
-        if self.kind not in ADAPTERS or self.adapter != ADAPTERS[self.kind]:
+        if self.kind not in ADAPTERS or self.adapter not in ADAPTERS[self.kind]:
             raise ValueError("unsupported adapter")
         if self.item_kind not in KINDS or parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("invalid source kind or endpoint")
         if self.policy.content_storage != "metadata_only" or not self.policy.note:
             raise ValueError("unreviewed policy")
-        if self.kind == "html" and not {"item", "title", "url"} <= self.selectors.keys():
+        if self.adapter == "html_v1" and not {"item", "title", "url"} <= self.selectors.keys():
             raise ValueError("HTML selectors required")
         return self
 
