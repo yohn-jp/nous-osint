@@ -45,10 +45,13 @@ final_manifest="$backup_dir/${base}.manifest.json"
 [[ ! -e "$final_dump" && ! -e "$final_manifest" ]] || fail "backup already exists for ${stamp}"
 tmp_dump=$(mktemp "$backup_dir/.${base}.dump.gpg.XXXXXX")
 tmp_manifest=$(mktemp "$backup_dir/.${base}.manifest.json.XXXXXX")
-tmp_metadata=$(mktemp "$backup_dir/.${base}.sn# Export one repeatable-read snapshot; stream its dump and snapshot metadata.
+tmp_metadata=$(mktemp "$backup_dir/.${base}.snapshot-metadata.XXXXXX")
+trap 'rm -f -- "$tmp_dump" "$tmp_manifest" "$tmp_metadata"' EXIT
+
+# Stream a consistent PostgreSQL exported snapshot to the encrypted archive.
 snapshot_script="$(dirname -- "${BASH_SOURCE[0]}")/snapshot-dump.sh"
 [[ -r "$snapshot_script" ]] || fail "snapshot helper missing: $snapshot_script"
-remote=(cd /tmp '&&' sudo -u nous env HOME=/home/nous "XDG_RUNTIME_DIR=/run/user/${uid}" podman exec -i nous-db bash -s)
+remote=(cd /tmp '&&' sudo -n -u nous env HOME=/home/nous "XDG_RUNTIME_DIR=/run/user/${uid}" podman exec -i nous-db bash -s)
 if ! ssh "${ssh_options[@]}" "$target" "${remote[*]}" \
       < "$snapshot_script" 2>"$tmp_metadata" \
     | gpg --batch --yes --trust-model always --recipient "$recipient" \
@@ -58,13 +61,10 @@ fi
 [[ -s "$tmp_dump" ]] || fail "encrypted dump is empty"
 chmod 600 -- "$tmp_dump"
 
-# Do not read changing live counters after pg_dump: they must match its snapshot.
+# Manifest counts come from the same repeatable-read snapshot as pg_dump.
 metadata=$(sed -n 's/^NOUS_SNAPSHOT_METADATA=//p' "$tmp_metadata")
 [[ "$metadata" =~ ^[A-Za-z0-9._-]+\|[0-9]+\|[0-9]+\|[0-9]+$ ]] \
   || fail "no valid snapshot metadata from database"
-
-AtF '|' -c \"${metadata_sql}\"") \
-  || fail "could not read backup manifest metadata"
 IFS='|' read -r schema_version source_count item_count version_count <<< "$metadata"
 [[ "$schema_version" =~ ^[A-Za-z0-9._-]+$ && "$source_count" =~ ^[0-9]+$ && \
    "$item_count" =~ ^[0-9]+$ && "$version_count" =~ ^[0-9]+$ ]] \
