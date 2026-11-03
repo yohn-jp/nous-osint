@@ -1,0 +1,26 @@
+[Unit]
+Description=Nous OSINT read-only MCP origin
+Requires=nous-db.service
+After=nous-db.service
+
+[Container]
+Image=localhost/nous-osint@sha256:46ea22fa455f0594862370e06dec6a7e66d467afd734b5831c3e1232de518727
+ContainerName=nous-mcp
+Network=nous.network
+Network=nous-ingress.network
+Secret=nous-mcp-database-url,type=mount,target=/run/secrets/database_url
+Environment=DATABASE_URL_FILE=/run/secrets/database_url
+EnvironmentFile=%h/.config/nous/mcp.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Exec=uvicorn nous.remote_mcp:app --host 0.0.0.0 --port 8001 --workers 1
+ReadOnly=true
+Tmpfs=/tmp:rw,nosuid,nodev,noexec,size=16m
+NoNewPrivileges=true
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

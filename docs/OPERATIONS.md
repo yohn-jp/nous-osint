@@ -16,7 +16,8 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    Podman secrets `nous-db-password`, `nous-database-url` (migrations),
    `nous-api-database-url` and
    `nous-runtime-database-url` after provisioning separate `nous_api` and
-   `nous_runtime` SQL roles, then securely
+   `nous_runtime` SQL roles. For remote MCP, provision a `nous_mcp` role with
+   SELECT-only grants and import its URL as `nous-mcp-database-url`, then securely
    remove the temporary files. Never put a password in Git or a Quadlet.
 4. Run `systemctl --user daemon-reload`; start `nous-db.service`. Wait for
    `podman exec nous-db pg_isready -U nous -d nous` to succeed.
@@ -27,9 +28,19 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    runtime database secret to populate typed organization and publisher dates
    from existing immutable versions.
 6. Start `nous-api.service nous-scheduler.service nous-worker.service` and check
-   `/health/ready` over VM loopback. Quadlet's `[Install]` section generates
+   `/health/ready` over VM loopback. For remote MCP, install
+   `nous-mcp.container` and `nous-ingress.network`, set `CF_ACCESS_ISSUER` and
+   `CF_ACCESS_AUDIENCE` in mode-0600 `~/.config/nous/mcp.env`, then start
+   `nous-mcp.service` and `nous-tunnel.service`. The tunnel joins only
+   `nous-ingress`; PostgreSQL has no host-published port. Quadlet's `[Install]` section generates
    `default.target.wants` links; generated units cannot be enabled with
    `systemctl --user enable`.
+
+The VM-side MCP services and read-only role were deployed and verified on
+2026-11-03, including automatic recovery and a full VM reboot. The loaded Tunnel
+route points to the MCP origin with Access required; Cloudflare resources and
+application policy/IdP/OAuth settings were not changed. A real OAuth client
+flow remains unverified; see [REMOTE_MCP_ACCESS.md](REMOTE_MCP_ACCESS.md).
 
 Run migrations before rolling out a new image. The API and worker retry database
 connection failures. Inspect user journals with `journalctl --user -u nous-worker`.

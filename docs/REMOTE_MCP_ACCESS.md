@@ -1,10 +1,10 @@
 # Remote MCP ingress — Cloudflare Tunnel + Access Managed OAuth
 
-**Status:** accepted target design; **not deployed**  
+**Status:** VM-side MCP origin and Tunnel connector deployed on 2026-11-03. The running Tunnel reports the expected hostname, origin, Access-required flag, team and audience. Cloudflare resources and Access application/IdP/OAuth settings were not changed. GitHub login and end-to-end OAuth remain unverified.
 **Canonical hostname:** `nous.yohn.jp`  
 **Target URL:** `https://nous.yohn.jp/mcp`  
 **Target host:** single VM, reachable for implementation as `ssh nous.osint.vm`  
-**Implementation sequencing:** after the foundational ingestion/API/Quadlet implementation PR is reviewed and merged.  
+**Implementation sequencing:** VM deployment uses the merged foundation; Cloudflare control-plane work remains separate.
 **Last updated:** 2026-11-03
 
 This document adds a subsequent remote-access phase. It **does not** change the acceptance criteria for Phase 1–3 in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and must not trigger unrelated changes to work currently in progress.
@@ -137,18 +137,15 @@ Cloudflared's token-file mechanism, Podman secret delivery, container command an
 
 A shared hostname is **not** permission to expose every FastAPI route. If a future UI/API needs different authorization than the MCP app, define and verify separate Access path-scoped applications or a strict per-route origin policy before changing the public route contract. No second public hostname should be added merely to sidestep the authorization decision.
 
-## 7. Execution order and coordination with ongoing work
+## 7. Remaining Cloudflare control-plane work
 
-**Do not start implementing these changes while a separate foundational Codex branch/PR is still in flight.**
+The VM-side origin and connector are deployed and reboot-tested. Cloudflare resources were not changed in that operation. The following remains a separate control-plane task:
 
-1. Finish, review and merge the foundation PR (Phase 1–3). Confirm the actual FastAPI app, SQL service layer, Quadlet filenames and networking, host listener and service account from **merged `main`**.
-2. Start a **new, independent feature branch** for remote MCP and Cloudflare ingress. Reconcile this design document with actual code; do not overwrite existing app/Quadlet files or regenerate them from assumptions.
-3. Add the minimal MCP adapter using the canonical API query services and verify protocol compliance **locally**.
-4. Add cryptographic Access JWT verification with negative/rotation tests. Fail closed.
-5. Add pinned `cloudflared` Quadlet and minimal dedicated ingress network. Verify generated units and secrets on `ssh nous.osint.vm`.
-6. Add Cloudflare IaC using Access Managed OAuth and an explicitly scoped allow policy; provision/attach the **new** Tunnel route and DNS without touching existing Proprium or Majiwari resources.
-7. Deploy with origin still private; run end-to-end MCP client OAuth, including **ChatGPT**, only after the public Access policy is active. Record live response evidence.
-8. PR with exact config/code diff, checks, end-to-end test evidence, security assessment and rollback steps; **do not merge automatically**.
+1. Import the existing account, zone, Access policy/application, Tunnel, DNS record and Tunnel configuration into Terraform state. Inspect provider import identifiers and ensure the plan contains only Nous changes.
+2. Verify the existing Access app and policy enforce only the approved GitHub IdP and named email; verify Managed OAuth is on and no Everyone/Bypass rule exists.
+3. Keep DCR disabled until a real MCP client's callback URI is observed; then allow only that exact HTTPS callback.
+4. Perform real GitHub authorization, denial for another user, MCP `initialize`, `tools/list` and read-only `tools/call` through an actual client. Include ChatGPT if the account UI supports it.
+5. Record the reviewed Terraform plan/apply and live OAuth evidence. Do not change Majiwari or Proprium resources.
 
 If Cloudflare Managed OAuth + the target MCP client is incompatible in practice, **do not silently add a Worker or open the endpoint**. Record the failing protocol exchange (without secrets) and present the minimal alternative as a separate, reviewed architecture decision.
 
