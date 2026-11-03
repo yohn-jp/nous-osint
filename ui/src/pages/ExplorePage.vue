@@ -1,0 +1,177 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useQuasar } from 'quasar'
+import { useRoute, useRouter } from 'vue-router'
+import ItemPreview from '../components/ItemPreview.vue'
+import { api, type Item, type ItemKind, type Source } from '../lib/api'
+import { kinds, kindLabel, stateLabel, dateLabel } from '../lib/presentation'
+
+const route = useRoute()
+const router = useRouter()
+const $q = useQuasar()
+const term = ref('')
+const kind = ref<ItemKind | null>(null)
+const source = ref<string | null>(null)
+const sources = ref<Source[]>([])
+const sourceError = ref('')
+const rows = ref<Item[]>([])
+const nextCursor = ref<number | null>(null)
+const loading = ref(false)
+const loadingMore = ref(false)
+const error = ref('')
+const kindOptions = [{ label: 'すべての種別', value: null }, ...kinds]
+const sourceOptions = computed(() => [{ label: 'すべての情報源', value: null }, ...sources.value.map(s => ({ label: s.id, value: s.id }))])
+const selectedId = computed(() => {
+  const raw = typeof route.query.item === 'string' ? Number(route.query.item) : 0
+  return Number.isSafeInteger(raw) && raw > 0 ? raw : null
+})
+
+function queryValue(value: unknown): string { return typeof value === 'string' ? value : '' }
+function parseKind(value: string): ItemKind | null {
+  return kinds.find(k => k.value === value)?.value ?? null
+}
+let request: AbortController | null = null
+let sourceRequest: AbortController | null = new AbortController()
+let generation = 0
+
+async function fetchSources() {
+  try { sources.value = await api.sources(sourceRequest?.signal) }
+  catch (e) {
+    if (!(e instanceof Error && e.name === 'AbortError')) sourceError.value = '情報源フィルタを取得できません。'
+  }
+}
+void fetchSources()
+
+async function loadPage(append = false) {
+  if (append && (loading.value || loadingMore.value || nextCursor.value === null)) return
+  if (!append) {
+    request?.abort()
+    generation++
+    rows.value = []
+    nextCursor.value = null
+  }
+  const token = generation
+  const controller = new AbortController()
+  request = controller
+  if (append) loadingMore.value = true
+  else loading.value = true
+  error.value = ''
+  try {
+    const page = await api.items({
+      q: queryValue(route.query.q).trim().slice(0, 200) || undefined,
+      kind: parseKind(queryValue(route.query.kind)) ?? undefined,
+      source: queryValue(route.query.source) || undefined,
+      limit: 40,
+      cursor: append ? nextCursor.value ?? undefined : undefined,
+    }, controller.signal)
+    if (token !== generation || controller.signal.aborted) return
+    rows.value = append ? [...rows.value, ...page.items] : page.items
+    nextCursor.value = page.next_cursor
+  } catch (e) {
+    if (!controller.signal.aborted && token === generation) error.value = e instanceof Error ? e.message : '取得に失敗しました。'
+  } finally {
+    if (token === generation) { loading.value = false; loadingMore.value = false }
+  }
+}
+
+watch(() => [route.query.q, route.query.kind, route.query.source], () => {
+  term.value = queryValue(route.query.q).slice(0, 200)
+  kind.value = parseKind(queryValue(route.query.kind))
+  source.value = queryValue(route.query.source) || null
+  void loadPage()
+}, { immediate: true })
+
+function applyFilters() {
+  void router.replace({
+    name: 'explore',
+    query: {
+      ...(term.value.trim() ? { q: term.value.trim().slice(0, 200) } : {}),
+      ...(kind.value ? { kind: kind.value } : {}),
+      ...(source.value ? { source: source.value } : {}),
+    },
+  })
+}
+function onSearchKeydown(event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  applyFilters()
+}
+function clearFilters() { term.value = ''; kind.value = null; source.value = null; applyFilters() }
+function openItem(id: number) {
+  if ($q.screen.width >= 1250) {
+    void router.replace({ name: 'explore', query: { ...route.query, item: String(id) } })
+  } else {
+    void router.push({ name: 'item', params: { id }, query: { returnTo: route.fullPath } })
+  }
+}
+onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
+</script>
+
+<template>
+  <q-page class="nous-page">
+    <div class="row items-end justify-between q-mb-xl">
+      <div><div class="eyebrow q-mb-sm">INTELLIGENCE / EXPLORE</div><h1 class="page-title q-ma-none">情報を探索する。</h1><div class="page-subtitle">公開情報を横断検索し、出典と更新履歴をたどる。</div></div>
+      <div class="text-caption text-grey-6 q-pb-xs gt-xs">SOURCE-ATTRIBUTED RECORDS</div>
+    </div>
+
+    <section aria-label="検索条件" class="content-panel q-pa-md q-mb-lg">
+      <div class="row q-col-gutter-sm items-center">
+        <div class="col-12 col-md">
+          <q-input v-model="term" maxlength="200" outlined dense clearable placeholder="キーワードで検索" aria-label="キーワード検索" @keydown.enter="onSearchKeydown">
+            <template #prepend><q-icon name="search" color="primary" /></template>
+          </q-input>
+        </div>
+        <div class="col-6 col-md-3">
+          <q-select v-model="kind" outlined dense emit-value map-options :options="kindOptions" label="種別" @update:model-value="applyFilters" />
+        </div>
+        <div class="col-6 col-md-3">
+          <q-select v-model="source" outlined dense emit-value map-options :options="sourceOptions" label="情報源" @update:model-value="applyFilters" />
+        </div>
+        <div class="col-auto">
+          <q-btn color="primary" unelevated icon="search" label="検索" @click="applyFilters" />
+        </div>
+      </div>
+      <div v-if="sourceError" class="text-caption text-negative q-mt-sm">{{ sourceError }}</div>
+    </section>
+
+    <div class="explore-grid">
+      <section aria-label="検索結果" class="content-panel">
+        <div class="row items-center justify-between q-px-lg q-py-md">
+          <div><div class="text-weight-bold">検索結果</div><div class="text-caption text-grey-6">出典を保持した最新レコード</div></div>
+          <q-btn flat no-caps size="sm" color="secondary" label="条件をクリア" @click="clearFilters" />
+        </div>
+        <q-separator />
+        <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 4" :key="n" type="QItem" class="q-mb-lg" /></div>
+        <div v-else-if="error" class="empty-state" role="alert">
+          <q-icon name="error_outline" size="32px" color="negative" />
+          <p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="loadPage()" />
+        </div>
+        <div v-else-if="rows.length === 0" class="empty-state">
+          <q-icon name="inbox" size="38px" /><div class="q-mt-md text-weight-medium">該当する情報がありません</div>
+          <p class="text-caption">検索条件を変更するか、収集状態を確認してください。</p>
+        </div>
+        <template v-else>
+          <div v-for="item in rows" :key="item.id" role="button" tabindex="0" class="result-row"
+            :class="{ selected: selectedId === item.id }" :aria-label="item.title + ' の詳細を開く'"
+            @click="openItem(item.id)" @keydown.enter.prevent="openItem(item.id)" @keydown.space.prevent="openItem(item.id)">
+            <div class="result-meta">
+              <span class="kind-tag">{{ kindLabel(item.kind) }}</span><span>{{ item.organization || item.source }}</span>
+              <span class="meta-sep">{{ stateLabel[item.state] }}</span>
+            </div>
+            <div class="result-title">{{ item.title }}</div>
+            <div class="result-foot">{{ item.source }} · {{ dateLabel(item.published_at || item.last_seen_at) }} · v{{ item.current_version }}</div>
+          </div>
+          <div class="q-pa-md row items-center justify-center">
+            <q-btn v-if="nextCursor !== null" outline color="primary" no-caps :loading="loadingMore" label="さらに読み込む" icon-right="expand_more" @click="loadPage(true)" />
+            <span v-else class="text-caption text-grey-6">表示できる結果は以上です</span>
+          </div>
+          <div v-if="error" class="q-px-md q-pb-md text-negative" role="alert">{{ error }} <q-btn flat dense label="再試行" @click="loadPage(true)" /></div>
+        </template>
+      </section>
+      <aside class="content-panel preview-pane" aria-label="情報のプレビュー">
+        <ItemPreview v-if="selectedId" :item-id="selectedId" compact />
+        <div v-else class="empty-state"><q-icon name="article" size="38px" /><p class="q-mt-md">項目を選ぶと出典と履歴を表示します。</p></div>
+      </aside>
+    </div>
+  </q-page>
+</template>
