@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -68,3 +69,13 @@ def test_version_response_requires_sha256():
     assert VersionResponse.model_validate(payload).version == 1
     with pytest.raises(ValidationError):
         VersionResponse.model_validate({**payload, "sha256": "bad"})
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="PostgreSQL required")
+def test_ready_requires_latest_schema_revision(monkeypatch):
+    from nous import api
+    success = client.get("/health/ready")
+    assert success.status_code == 200, success.text
+    monkeypatch.setattr(api, "expected_schema_head", lambda: "not-current")
+    mismatch = client.get("/health/ready")
+    assert mismatch.status_code == 503
