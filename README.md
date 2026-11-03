@@ -12,7 +12,7 @@
 - **処理**: 定期取得、変更検出、正規化、重複排除、履歴記録
 - **保存**: 単一VM上のPostgreSQL
 - **実行**: rootless Podman + systemd Quadlet
-- **提供**: 現段階はローカル向け検索API。後続のPR #2でAccess保護付きRemote MCPを追加
+- **提供**: Access保護付きのブラウザUI、読み取り専用API、Remote MCP
 - **公開リポジトリ**: ソースコード、収集先設定、スキーマ、設計書のみ。秘密情報・私的な転職情報・第三者の本文転載は含めない
 
 ## Architecture documents
