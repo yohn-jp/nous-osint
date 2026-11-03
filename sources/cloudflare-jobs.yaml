@@ -4,7 +4,7 @@ url: https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs
 adapter: json_v1
 item_kind: job_posting
 interval_minutes: 360
-max_requests_per_hour: 2
+max_requests_per_hour: 4
 max_concurrency: 1
 enabled: true
 json_path: jobs

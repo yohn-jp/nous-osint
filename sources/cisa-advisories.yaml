@@ -4,7 +4,7 @@ url: https://www.cisa.gov/cybersecurity-advisories/all.xml
 adapter: rss_v1
 item_kind: advisory
 interval_minutes: 360
-max_requests_per_hour: 2
+max_requests_per_hour: 4
 max_concurrency: 1
 enabled: true
 policy:

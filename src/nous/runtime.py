@@ -3,6 +3,7 @@ import json
 import logging
 import time
 from datetime import timedelta
+from email.utils import parsedate_to_datetime
 from sqlalchemy import func, or_, select
 from .adapters import extract
 from .db import session_factory
@@ -12,6 +13,7 @@ from .registry import load_registry, sync
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def event(name, **fields):
     log.info(json.dumps({"event": name, **fields}, default=str))
@@ -95,6 +97,7 @@ def process(factory, job_id):
     status = None
     final_url = None
     error = None
+    retry_after = None
     try:
         status, body, headers, final_url = fetch(url, etag, modified)
         if status == 304:
@@ -104,6 +107,12 @@ def process(factory, job_id):
             records = extract(source, body, final_url)
             outcome = "success"
         elif status == 429:
+            value = headers.get("retry-after")
+            if value:
+                try:
+                    retry_after = int(value)
+                except ValueError:
+                    retry_after = max(0, int((parsedate_to_datetime(value) - now()).total_seconds()))
             raise RuntimeError("rate_limited")
         elif status >= 500:
             raise RuntimeError("upstream_error")
@@ -137,7 +146,7 @@ def process(factory, job_id):
             retryable = status in (429, 500, 502, 503, 504) or "Timeout" in error
             job.state = "queued" if retryable and job.attempts < 5 else "failed"
             if job.state == "queued":
-                delay = min(3600, 30 * 2 ** job.attempts)
+                delay = min(3600, max(retry_after or 0, 30 * 2 ** job.attempts))
                 job.available_at = now() + timedelta(seconds=delay)
             outcome = "failure"
         db.add(FetchAttempt(job_id=job_id, started_at=started, ended_at=now(), outcome=outcome,

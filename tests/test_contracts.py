@@ -1,8 +1,10 @@
 import socket
 from types import SimpleNamespace
 import pytest
+import httpx
 from nous.adapters import extract
 from nous.fetch import validate_url
+import nous.fetch as fetch_module
 from nous.registry import SourceConfig, load_registry
 
 def test_registry_valid_and_duplicate(tmp_path):
@@ -35,3 +37,12 @@ def test_private_destination_blocked(monkeypatch, address):
 def test_unsafe_scheme_blocked():
     with pytest.raises(ValueError, match="unsafe"):
         validate_url("file:///etc/passwd")
+
+def test_304_is_not_redirect(monkeypatch):
+    original_client = httpx.Client
+    transport = httpx.MockTransport(lambda request: httpx.Response(304, request=request))
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    monkeypatch.setattr(fetch_module.httpx, "Client", lambda **kwargs: original_client(transport=transport))
+    status, body, _, _ = fetch_module.fetch("https://example.com/feed", etag='"abc"')
+    assert status == 304
+    assert body == b""

@@ -4,7 +4,7 @@ Requires=nous-db.service
 After=nous-db.service
 
 [Container]
-Image=sha256:ced3356d5339e5826b3d3a09fe0ed0b359292b0c1ccc8d61fa6e228a9ce47087
+Image=sha256:428b87a4e26f50a4036ecea7edcfcc27d8ea6a1cc5aaa4e5a8e596d11457c106
 ContainerName=nous-worker
 Network=nous.network
 Secret=nous-database-url,type=mount,target=/run/secrets/database_url
