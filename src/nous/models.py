@@ -19,11 +19,25 @@ class Source(Base):
     enabled: Mapped[bool] = mapped_column(Boolean)
     interval_minutes: Mapped[int] = mapped_column(Integer)
     max_requests_per_hour: Mapped[int] = mapped_column(Integer)
+    origin: Mapped[str] = mapped_column(String(16), default="official")
+    catalog_revision: Mapped[str | None] = mapped_column(String(64))
+    overrides: Mapped[dict] = mapped_column(JSON, default=dict)
     next_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(String(100))
     etag: Mapped[str | None] = mapped_column(Text)
     last_modified: Mapped[str | None] = mapped_column(Text)
+
+class SourceAudit(Base):
+    __tablename__ = "source_audits"
+    __table_args__ = (Index("ix_source_audits_source_id", "source_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"))
+    actor: Mapped[str] = mapped_column(String(256))
+    action: Mapped[str] = mapped_column(String(40))
+    before: Mapped[dict | None] = mapped_column(JSON)
+    after: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 class FetchJob(Base):
     __tablename__ = "fetch_jobs"

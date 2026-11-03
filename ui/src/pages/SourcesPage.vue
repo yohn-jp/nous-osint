@@ -7,6 +7,8 @@ const sources = ref<Source[]>([])
 const loading = ref(false)
 const error = ref('')
 const textFilter = ref('')
+const canAdmin = ref(false)
+void api.adminSession().then(() => { canAdmin.value = true }).catch(() => { canAdmin.value = false })
 const filtered = computed(() => sources.value
   .filter(s => s.id.toLowerCase().includes(textFilter.value.toLowerCase()))
   .sort((a,b) => a.id.localeCompare(b.id)))
@@ -27,8 +29,8 @@ onBeforeUnmount(() => controller?.abort())
 <template>
   <q-page class="nous-page">
     <div class="eyebrow q-mb-sm">INTELLIGENCE / SOURCES</div>
-    <div class="row items-center justify-between q-gutter-md"><h1 class="page-title q-ma-none">情報源を確認する。</h1><q-btn color="primary" unelevated icon="add" label="情報源を追加" to="/sources/new" /></div>
-    <p class="page-subtitle q-mb-xl">収集先の有効状態と最終成功日時。新しい情報源はGitでのレビュー後に収集を開始します。</p>
+    <div class="row items-center justify-between q-gutter-md"><h1 class="page-title q-ma-none">情報源を確認する。</h1><div class="row q-gutter-sm"><q-btn v-if="canAdmin" color="primary" unelevated icon="tune" label="ソース管理" to="/admin/sources" /><q-btn flat color="primary" icon="add" label="Gitに提案" to="/sources/new" /></div></div>
+    <p class="page-subtitle q-mb-xl">収集先の有効状態と最終成功日時。管理者はこのインスタンスへ直接追加できます。公式カタログへの提案はGitでレビューします。</p>
     <section class="content-panel">
       <div class="row items-center q-pa-md q-gutter-sm">
         <q-input v-model="textFilter" dense outlined clearable label="情報源を絞り込む" class="col" style="max-width: 370px"><template #prepend><q-icon name="search" /></template></q-input>

@@ -16,13 +16,13 @@ The application image includes the Python API/MCP/worker/scheduler and compiled 
 
 **Important:** Committing a concrete digest to the repository cannot happen in the same source commit that builds it without creating a self-referential build loop. The workflow publishes the digest as a release artifact; the VM's effective Quadlet configuration is pinned at deployment time. The current Quadlet digests are historical VM build references and are **not** automatically changed by this PR. This is deliberate; no unverified VM deployment is claimed.
 
-## Source Onboarding: Git-controlled intake to scheduled ingestion
+## Source Onboarding: official Git catalog and private-instance Admin UI
 
-Source YAML in `sources/*.yaml` remains authoritative. No API endpoints capable of changing the collector are exposed through read-only MCP or Cloudflare Access. Registration is **reviewed and activated in Git**, then picked up by the runtime scheduler after that commit's immutable application image has been deployed.
+`src/nous/admin.py` and `/admin/sources` provide Access-authorized **per-instance** source management with a separate write-limited database credential, while the MCP and public query API stay read-only. Custom source creation, review, probing, activation and configuration changes do not require GitHub. Git-tracked `sources/*.yaml` remains authoritative only for **Nous's bundled official catalog**, which is updated through PRs and application image releases. See [Source Management](SOURCE_MANAGEMENT.md).
 
-### Browser workflow
+### Official catalog contribution workflow
 
-In Nous, navigate to **Sources → 情報源を追加** (`/sources/new`).
+To propose a new **distributed official** source, navigate to **Sources → Gitに提案** (`/sources/new`). For instance-local sources, use `/admin/sources/new` instead.
 
 1. Select RSS, JSON API or HTML, add source ID/HTTPS URL, source kind, polling budget, publisher and reviewed policy metadata.
 2. For JSON API specify a dot-separated array path and field mapping if needed. For HTML supply the CSS selectors for item/title/link. Generated YAML is always `enabled: false`.
@@ -60,7 +60,7 @@ Without `--write`, the candidate is printed as YAML. `--probe` performs one boun
 
 ### Trust boundary and limitations
 
-There is no GitHub write token in the SPA or MCP origin. The GitHub approval and image rollout remain intentional operations, not background automation. The UI validates simple field constraints for feedback, while CI/CLI validate the canonical Pydantic schema. Untrusted source bodies are never injected into HTML or Git; only metadata, title and URLs appear in probe output. No unauthenticated URL-fetch tool is exposed to the public interface.
+There is no GitHub write token in the SPA or MCP origin. Instance administration uses the dedicated Access-authorized gateway endpoint; the GitHub approval and image rollout for **official catalog** updates remain intentional operations, not background automation. The UI validates simple field constraints for feedback, while CI/CLI validate the canonical Pydantic schema. Untrusted source bodies are never injected into HTML or Git; only metadata, title and URLs appear in probe output. No unauthenticated URL-fetch tool is exposed to the public interface.
 
 Ingestion and UI should be checked independently after deployment. Neither PR CI nor a GitHub Actions probe can demonstrate that a VM restarted onto the new digest without runtime evidence.
 

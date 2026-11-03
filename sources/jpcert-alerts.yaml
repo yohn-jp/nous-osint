@@ -1,0 +1,14 @@
+id: jpcert-alerts
+kind: rss
+url: https://www.jpcert.or.jp/rss/jpcert.rdf
+adapter: rss_v1
+item_kind: advisory
+organization: JPCERT/CC
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  content_storage: metadata_only
+  note: Official JPCERT/CC RSS for alerts and Weekly Reports; titles, links and dates only. Review publisher terms before enabling.

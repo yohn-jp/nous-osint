@@ -21,6 +21,15 @@ def test_registry_rejects_unsafe_url():
     data["url"] = "http://localhost/private"
     with pytest.raises(ValueError):
         SourceConfig.model_validate(data)
+    data = load_registry("sources")[0].model_dump()
+    data["url"] = "https://user:password@example.com/feed"
+    with pytest.raises(ValueError):
+        SourceConfig.model_validate(data)
+    data = load_registry("sources")[0].model_dump()
+    data["policy"]["reviewed_at"] = "invalid"
+    with pytest.raises(ValueError):
+        SourceConfig.model_validate(data)
+
 
 def test_json_mapping():
     source = next(s for s in load_registry("sources") if s.id == "github-advisories")

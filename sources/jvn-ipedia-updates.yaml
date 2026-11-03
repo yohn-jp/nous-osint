@@ -1,0 +1,14 @@
+id: jvn-ipedia-updates
+kind: rss
+url: https://jvndb.jvn.jp/ja/rss/jvndb.rdf
+adapter: rss_v1
+item_kind: vulnerability
+organization: IPA JVN iPedia
+interval_minutes: 720
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  content_storage: metadata_only
+  note: Official JVN iPedia new/updated vulnerability RDF feed. Store identifiers, titles, links and dates only; review terms before enabling.

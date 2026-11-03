@@ -28,7 +28,7 @@ Nous OSINT is a general-purpose public-information ingestion and retrieval syste
 ## 2. Runtime components
 
 ```text
-Git-tracked source registry (YAML)
+Packaged official source catalog (YAML) + instance custom sources (SQL)
                |
                v
       Scheduler (one instance)
@@ -53,12 +53,12 @@ Use one application image with distinct commands for **scheduler**, **worker** a
 
 ### Component boundaries
 
-- **Source registry**: Git-tracked configuration is authoritative for source IDs, endpoint allowlists, polling interval and license/policy notes. Synchronization imports it to SQL; runtime state and errors live only in SQL. Configuration conflicts fail validation instead of silently overwriting runtime state.
+- **Source management**: Git-tracked YAML is authoritative for the **official catalog**. Instance-specific enabled state and polling budgets override official defaults in SQL. Custom source declarations are owned by PostgreSQL and are never reset by catalog synchronization. The separate admin gateway requires verified Cloudflare Access identity, a subject allowlist and a dedicated DB role; Remote MCP and public query routes remain read-only. See [Source Management](SOURCE_MANAGEMENT.md).
 - **Scheduler**: discovers due sources and creates durable jobs. A unique deduplication key makes repeated scheduler ticks harmless. Scheduler decisions are based on persisted state, not process memory.
 - **Fetch worker**: claims a job using a short PostgreSQL transaction (`FOR UPDATE SKIP LOCKED` plus lease), releases that transaction before network I/O, then reports outcome transactionally. Workers are *at-least-once*, so all storage operations must be idempotent.
 - **Adapters**: isolated code for RSS/Atom, JSON API and static HTML. Site-specific extraction is a separately versioned adapter/configuration, not a fork of the whole pipeline. JavaScript browser automation is deferred until a justified source requires it.
 - **Normalizer**: applies type-specific validation without erasing source wording, stores source evidence and normalized attributes separately, and never substitutes an AI inference for source data.
-- **Query API**: provides health, per-source status, item listing/search, version history and provenance. Mutating/admin endpoints are disabled until an authenticated management interface exists.
+- **Query API**: provides health, per-source status, item listing/search, version history and provenance. The authenticated gateway exposes a narrowly scoped admin API; public query endpoints and Remote MCP remain read-only.
 
 ## 3. Fetch and change pipeline
 

@@ -9,6 +9,9 @@ ContainerName=nous-mcp
 Network=nous.network
 Network=nous-ingress.network
 Secret=nous-mcp-database-url,type=mount,target=/run/secrets/database_url
+# Separate limited write credential for Access-subject-allowlisted administration.
+Secret=nous-admin-database-url,type=mount,target=/run/secrets/admin_database_url
+Environment=NOUS_ADMIN_DATABASE_URL_FILE=/run/secrets/admin_database_url
 Environment=DATABASE_URL_FILE=/run/secrets/database_url
 EnvironmentFile=%h/.config/nous/mcp.env
 Environment=PYTHONDONTWRITEBYTECODE=1

@@ -8,6 +8,7 @@ from starlette.staticfiles import StaticFiles
 from urllib.parse import parse_qsl
 
 from .access_auth import AccessAssertionMiddleware, AccessConfig, AccessVerifier, _SPA_ROUTE
+from .admin import app as admin_app
 from .remote_mcp import mcp_http
 
 _API_ORIGIN = "http://nous-api:8000"
@@ -93,6 +94,8 @@ class RemoteGateway:
         path = scope.get("path", "")
         if path in ("/mcp", "/mcp/"):
             return await mcp_http(scope, receive, send)
+        if path.startswith("/v1/admin/"):
+            return await admin_app(scope, receive, send)
         if path.startswith("/v1/") or path == "/v1/items":
             return await self._api(scope, send)
         # StaticFiles is used as a bare ASGI app, so handle its missing-file
