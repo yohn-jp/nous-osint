@@ -1,9 +1,10 @@
 import hashlib
+from datetime import date
 import json
 from pathlib import Path
 from urllib.parse import urlparse
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from .models import Source
 
@@ -17,6 +18,15 @@ class Policy(BaseModel):
     robots_url: str | None = None
     content_storage: str = "metadata_only"
     note: str
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def reviewed_date(cls, value):
+        try:
+            date.fromisoformat(value)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("policy review date must be YYYY-MM-DD") from exc
+        return value
 
 class SourceConfig(BaseModel):
     id: str = Field(pattern=r"^[a-z][a-z0-9-]{2,99}$")
@@ -39,9 +49,10 @@ class SourceConfig(BaseModel):
         parsed = urlparse(self.url)
         if self.kind not in ADAPTERS or self.adapter not in ADAPTERS[self.kind]:
             raise ValueError("unsupported adapter")
-        if self.item_kind not in KINDS or parsed.scheme != "https" or not parsed.hostname:
+        if (self.item_kind not in KINDS or parsed.scheme != "https" or
+                not parsed.hostname or parsed.username or parsed.password or parsed.fragment):
             raise ValueError("invalid source kind or endpoint")
-        if self.policy.content_storage != "metadata_only" or not self.policy.note:
+        if self.policy.content_storage != "metadata_only" or not self.policy.note.strip():
             raise ValueError("unreviewed policy")
         if self.adapter == "html_v1" and not {"item", "title", "url"} <= self.selectors.keys():
             raise ValueError("HTML selectors required")

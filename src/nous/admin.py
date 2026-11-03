@@ -7,6 +7,7 @@ audit history are private to this instance.
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 import re
 from pathlib import Path
 
@@ -25,6 +26,11 @@ _SOURCE_ID = re.compile(r"^[a-z][a-z0-9-]{2,99}$")
 _MAX_REQUEST = 16384
 
 
+@lru_cache(maxsize=4)
+def _factory_for_dsn(dsn):
+    return sessionmaker(create_engine(dsn, pool_pre_ping=True))
+
+
 def _factory():
     path = os.getenv("NOUS_ADMIN_DATABASE_URL_FILE")
     if not path:
@@ -35,7 +41,7 @@ def _factory():
         raise HTTPException(503, "admin database secret is unavailable") from exc
     if not dsn:
         raise HTTPException(503, "admin database secret is empty")
-    return sessionmaker(create_engine(dsn, pool_pre_ping=True))
+    return _factory_for_dsn(dsn)
 
 
 def _admin_subjects():

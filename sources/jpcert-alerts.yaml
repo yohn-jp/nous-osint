@@ -11,5 +11,4 @@ enabled: false
 policy:
   reviewed_at: '2026-11-04'
   content_storage: metadata_only
-  terms_url: https://www.jpcert.or.jp/rss/index.html
   note: Official JPCERT/CC RSS for alerts and Weekly Reports; titles, links and dates only. Review publisher terms before enabling.
