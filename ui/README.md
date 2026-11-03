@@ -8,7 +8,7 @@ Requires Node.js 24 (or 22.22+), npm and a **separately running loopback-only** 
 
 ```bash
 cd ui
-npm install
+npm ci
 npm run dev
 ```
 
