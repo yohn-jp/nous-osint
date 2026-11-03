@@ -1,0 +1,60 @@
+import json
+import os
+import uuid
+from sqlalchemy import func, select
+import pytest
+from nous import runtime
+from nous.db import session_factory
+from nous.models import FetchAttempt, FetchJob, Item, ItemVersion, Source
+
+pytestmark = pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="PostgreSQL required")
+
+def test_versioning_and_failures(monkeypatch):
+    factory = session_factory()
+    key = "test-" + uuid.uuid4().hex[:12]
+    with factory() as db:
+        source = Source(source_key=key, kind="json_api", url="https://example.org/api",
+                        adapter="json_v1", item_kind="news", config_revision="test",
+                        config={"max_concurrency": 1}, enabled=True, interval_minutes=60,
+                        max_requests_per_hour=4)
+        db.add(source)
+        db.flush()
+        job = FetchJob(source_id=source.id, dedupe_key=key)
+        db.add(job)
+        db.commit()
+        job_id, source_id = job.id, source.id
+
+    def response(title):
+        payload = [{"id": "story-1", "url": "https://example.org/story-1", "title": title}]
+        return 200, json.dumps(payload).encode(), {}, "https://example.org/api"
+
+    monkeypatch.setattr(runtime, "fetch", lambda *a: response("Original"))
+    runtime.process(factory, job_id)
+    runtime.process(factory, job_id)
+    with factory() as db:
+        item = db.scalar(select(Item).where(Item.source_id == source_id))
+        assert db.scalar(select(func.count()).select_from(ItemVersion).where(ItemVersion.item_id == item.id)) == 1
+
+    monkeypatch.setattr(runtime, "fetch", lambda *a: response("Updated"))
+    runtime.process(factory, job_id)
+    with factory() as db:
+        item = db.scalar(select(Item).where(Item.source_id == source_id))
+        assert item.current_version == 2
+
+    monkeypatch.setattr(runtime, "fetch", lambda *a: (304, b"", {}, "https://example.org/api"))
+    runtime.process(factory, job_id)
+    monkeypatch.setattr(runtime, "fetch", lambda *a: (429, b"", {"retry-after": "120"}, "https://example.org/api"))
+    runtime.process(factory, job_id)
+    with factory() as db:
+        assert db.get(FetchJob, job_id).state == "queued"
+        assert db.scalar(select(FetchAttempt).where(FetchAttempt.job_id == job_id)
+                         .order_by(FetchAttempt.id.desc())).http_status == 429
+
+    monkeypatch.setattr(runtime, "fetch", lambda *a: (_ for _ in ()).throw(TimeoutError("timeout")))
+    runtime.process(factory, job_id)
+    monkeypatch.setattr(runtime, "fetch", lambda *a: (200, b"not-json", {}, "https://example.org/api"))
+    runtime.process(factory, job_id)
+    with factory() as db:
+        item = db.scalar(select(Item).where(Item.source_id == source_id))
+        assert item.current_version == 2
+        assert db.get(FetchJob, job_id).state == "failed"

@@ -41,7 +41,8 @@ def items(kind: str | None = None, source: str | None = None, q: str | None = No
         if source:
             query = query.where(Source.source_key == source)
         if q:
-            query = query.where(Item.title.ilike("%" + q.replace("%", "\\%").replace("_", "\\_") + "%"))
+            query = query.where(func.to_tsvector("simple", Item.title)
+                                .op("@@")(func.plainto_tsquery("simple", q)))
         if since:
             query = query.where(Item.last_seen_at >= since)
         if cursor:

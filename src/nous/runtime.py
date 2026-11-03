@@ -4,7 +4,8 @@ import logging
 import time
 from datetime import timedelta
 from email.utils import parsedate_to_datetime
-from sqlalchemy import func, or_, select
+from urllib.parse import urlparse
+from sqlalchemy import func, or_, select, text
 from .adapters import extract
 from .db import session_factory
 from .fetch import fetch
@@ -40,9 +41,20 @@ def claim(factory):
             .order_by(FetchJob.available_at, FetchJob.id).with_for_update(skip_locked=True))
         if job is None:
             return None
-        source = db.get(Source, job.source_id)
+        source = db.scalar(select(Source).where(Source.id == job.source_id).with_for_update())
         if not source.enabled:
             job.state = "cancelled"
+            db.commit()
+            return None
+        host = urlparse(source.url).hostname
+        lock_key = int.from_bytes(hashlib.sha256(host.encode()).digest()[:8], "big", signed=True)
+        db.execute(text("select pg_advisory_xact_lock(:key)"), {"key": lock_key})
+        active = db.execute(select(FetchJob, Source).join(Source, FetchJob.source_id == Source.id)
+                            .where(FetchJob.state == "leased", FetchJob.lease_until > current)).all()
+        source_active = sum(j.source_id == source.id for j, _ in active)
+        host_active = sum(urlparse(s.url).hostname == host for _, s in active)
+        if source_active >= source.config["max_concurrency"] or host_active >= 1:
+            job.available_at = current + timedelta(seconds=15)
             db.commit()
             return None
         earliest = current - timedelta(hours=1)
@@ -77,6 +89,7 @@ def store_item(db, source, raw, final_url):
         db.add(item)
         db.flush()
     item.last_seen_at = now()
+    item.state = "current"
     if item.current_hash != digest:
         item.current_version += 1
         item.current_hash = digest
@@ -129,6 +142,13 @@ def process(factory, job_id):
         try:
             for raw in records:
                 store_item(db, source, raw, final_url)
+            if outcome == "success":
+                seen = {raw.get("id") or raw.get("url") for raw in records}
+                for old_item in db.scalars(select(Item).where(Item.source_id == source.id)):
+                    if old_item.external_id not in seen:
+                        old_item.state = ("stale" if old_item.state == "unknown" and
+                                          old_item.last_seen_at < now() - timedelta(days=7)
+                                          else "unknown")
             if outcome != "failure":
                 source.last_success_at = now()
                 source.last_error = None
