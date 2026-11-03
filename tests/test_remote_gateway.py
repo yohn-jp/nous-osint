@@ -38,6 +38,10 @@ def test_static_ui_requires_assertion_and_unknown_routes_stay_hidden(gateway):
     page = client.get("/", headers=headers)
     assert page.text == "<main>Nous UI</main>"
     assert page.headers["cache-control"] == "no-store"
+    for route in ("/explore", "/changes", "/sources", "/sources/new", "/items/3"):
+        page = client.get(route, headers=headers)
+        assert page.status_code == 200 and page.text == "<main>Nous UI</main>"
+        assert page.headers["cache-control"] == "no-store"
     asset = client.get("/assets/app-123.js", headers=headers)
     assert asset.status_code == 200 and "window.nous" in asset.text
     assert asset.headers["cache-control"] == "no-store"
