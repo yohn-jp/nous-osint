@@ -14,4 +14,4 @@ policy:
   attribution: 'Amazon Web Services'
   terms_url: https://aws.amazon.com/terms/
   content_storage: metadata_only
-  note: 'Official AWS bulletin feed. Feed retains only approximately 30 days of posts; do not treat absent older entries as withdrawn. Publisher content not relicensed; store metadata and links only.'
+  note: 'Official AWS bulletin feed. Feed retains only approximately 30 days of posts; do not treat absent older entries as withdrawn. AWS site terms restrict robots and data extraction; evaluate RSS subscription authorization before activation. Publisher content not relicensed; store metadata and links only.'
