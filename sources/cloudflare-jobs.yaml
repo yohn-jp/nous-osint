@@ -1,0 +1,20 @@
+id: cloudflare-jobs
+kind: json_api
+url: https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs
+adapter: json_v1
+item_kind: job_posting
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: true
+json_path: jobs
+field_map:
+  url: absolute_url
+  published: first_published
+  updated: updated_at
+policy:
+  reviewed_at: '2026-11-03'
+  terms_url: https://docs.greenhouse.io/job-board
+  robots_url: null
+  content_storage: metadata_only
+  note: Public Greenhouse Job Board GET API; store only job IDs, titles, URLs and timestamps.

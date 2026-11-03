@@ -1,0 +1,21 @@
+[Unit]
+Description=Nous API
+Requires=nous-db.service
+After=nous-db.service
+
+[Container]
+Image=sha256:ced3356d5339e5826b3d3a09fe0ed0b359292b0c1ccc8d61fa6e228a9ce47087
+ContainerName=nous-api
+Network=nous.network
+PublishPort=127.0.0.1:8000:8000
+Secret=nous-database-url,type=mount,target=/run/secrets/database_url
+Environment=DATABASE_URL_FILE=/run/secrets/database_url
+Exec=uvicorn nous.api:app --host 0.0.0.0 --port 8000
+NoNewPrivileges=true
+
+[Service]
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

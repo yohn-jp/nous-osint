@@ -1,0 +1,15 @@
+id: cisa-advisories
+kind: rss
+url: https://www.cisa.gov/cybersecurity-advisories/all.xml
+adapter: rss_v1
+item_kind: advisory
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: true
+policy:
+  reviewed_at: '2026-11-03'
+  terms_url: https://www.cisa.gov/about/website-policies
+  robots_url: https://www.cisa.gov/robots.txt
+  content_storage: metadata_only
+  note: Official public RSS; store title, link and publication metadata only.

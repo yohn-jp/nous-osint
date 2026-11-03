@@ -1,0 +1,22 @@
+[Unit]
+Description=Nous PostgreSQL
+
+[Container]
+Image=docker.io/library/postgres@sha256:f4b419e350fd98d4a8429603295208976dea4c8fb8326d818d346d3e29f1db6f
+ContainerName=nous-db
+Network=nous.network
+Volume=nous-db.volume:/var/lib/postgresql
+Secret=nous-db-password,type=mount,target=/run/secrets/db_password
+Environment=POSTGRES_DB=nous
+Environment=POSTGRES_USER=nous
+Environment=POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+HealthCmd=pg_isready -U nous -d nous
+HealthInterval=30s
+NoNewPrivileges=true
+
+[Service]
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
