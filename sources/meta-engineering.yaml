@@ -1,0 +1,16 @@
+id: meta-engineering
+kind: rss
+url: https://engineering.fb.com/feed/
+adapter: rss_v1
+item_kind: company_update
+organization: Meta
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: true
+policy:
+  reviewed_at: '2026-11-03'
+  terms_url: null
+  robots_url: https://engineering.fb.com/robots.txt
+  content_storage: metadata_only
+  note: Official Meta Engineering RSS; robots permits the feed. Store title, URL and publication metadata only.

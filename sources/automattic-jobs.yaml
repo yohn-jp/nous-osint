@@ -1,0 +1,16 @@
+id: automattic-jobs
+kind: html
+url: https://automattic.com/work-with-us/jobs/
+adapter: automattic_html_v1
+item_kind: job_posting
+organization: Automattic
+interval_minutes: 720
+max_requests_per_hour: 1
+max_concurrency: 1
+enabled: true
+policy:
+  reviewed_at: '2026-11-03'
+  terms_url: https://automattic.com/privacy/
+  robots_url: https://automattic.com/robots.txt
+  content_storage: metadata_only
+  note: Official public careers page; robots permits the path. Only job ID, title and URL are retained.

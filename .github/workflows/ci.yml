@@ -1,0 +1,47 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: nous
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nous"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:test@localhost:5432/nous
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[dev]'
+      - run: ruff check src migrations tests
+      - run: alembic upgrade head
+      - name: Verify consistent database snapshot dump
+        run: |
+          db=$(docker ps --filter ancestor=postgres:18 --format '{{.ID}}' | head -1)
+          test -n "$db"
+          docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "CREATE ROLE nous LOGIN"
+          docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO nous; GRANT SELECT ON ALL TABLES IN SCHEMA public TO nous; GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO nous"
+          docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO nous"
+          if ! timeout 30s docker exec -i "$db" bash -s < scripts/snapshot-dump.sh > /tmp/nous-ci.dump 2> /tmp/nous-ci.meta; then
+            cat /tmp/nous-ci.meta >&2
+            exit 1
+          fi
+          grep -Fq 'NOUS_SNAPSHOT_METADATA=0004|0|0|0' /tmp/nous-ci.meta
+          docker exec -i "$db" pg_restore -l < /tmp/nous-ci.dump | grep -q sources
+      - run: pytest -q
+      - run: python -m compileall -q src migrations
+      - name: Validate backup and restoration shell syntax
+        run: bash -n scripts/backup-pull.sh scripts/snapshot-dump.sh scripts/restore-test.sh
