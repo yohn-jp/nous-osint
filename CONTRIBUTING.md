@@ -34,9 +34,10 @@ a `main` build publishes to GHCR. Image publication is not VM deployment.
 
 ## New information sources
 
-All source definitions belong in `sources/*.yaml`. Use the Source Onboarding
-UI or `python -m nous.onboard_source` to generate a **disabled** candidate,
-then submit a PR. Review the publisher's terms, robots guidance, metadata
+Official catalog source definitions belong in `sources/*.yaml`. Use the Git proposal
+UI or `python -m nous.onboard_source` to generate a **disabled** official candidate,
+then submit a PR. For private, instance-local additions use the Admin UI and
+PostgreSQL (see `docs/SOURCE_MANAGEMENT.md`); do not commit them to Git. Review the publisher's terms, robots guidance, metadata
 storage permission, polling budget, extraction mapping, and provenance.
 
 For supported sources, use the manually triggered source-probe workflow to
