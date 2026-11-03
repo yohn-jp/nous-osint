@@ -24,6 +24,7 @@ class SourceConfig(BaseModel):
     url: str
     adapter: str
     item_kind: str
+    organization: str | None = Field(default=None, max_length=200)
     interval_minutes: int = Field(ge=15)
     max_requests_per_hour: int = Field(ge=1, le=60)
     max_concurrency: int = Field(ge=1, le=4)
@@ -60,7 +61,9 @@ def load_registry(path="sources"):
     return result
 
 def sync(session, configs):
+    active_keys = set()
     for cfg in configs:
+        active_keys.add(cfg.id)
         raw = cfg.model_dump()
         revision = hashlib.sha256(json.dumps(raw, sort_keys=True).encode()).hexdigest()
         row = session.scalar(select(Source).where(Source.source_key == cfg.id))
@@ -71,4 +74,7 @@ def sync(session, configs):
         row.config_revision, row.config = revision, raw
         row.enabled, row.interval_minutes = cfg.enabled, cfg.interval_minutes
         row.max_requests_per_hour = cfg.max_requests_per_hour
+    for row in session.scalars(select(Source).where(Source.enabled.is_(True))):
+        if row.source_key not in active_keys:
+            row.enabled = False
     session.commit()

@@ -3,6 +3,7 @@ kind: html
 url: https://automattic.com/work-with-us/jobs/
 adapter: automattic_html_v1
 item_kind: job_posting
+organization: Automattic
 interval_minutes: 720
 max_requests_per_hour: 1
 max_concurrency: 1

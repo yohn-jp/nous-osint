@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 from sqlalchemy import func, or_, select, text
@@ -90,6 +90,9 @@ def store_item(db, source, raw, final_url):
         db.flush()
     item.last_seen_at = now()
     item.state = "current"
+    item.organization = source.config.get("organization")
+    item.published_at = parse_timestamp(raw.get("published"))
+    item.updated_at = parse_timestamp(raw.get("updated"))
     if item.current_hash != digest:
         item.current_version += 1
         item.current_hash = digest
@@ -100,6 +103,18 @@ def store_item(db, source, raw, final_url):
                            "final_url": final_url, "item_url": url,
                            "retrieved_at": now().isoformat(), "adapter": source.adapter,
                            "extraction_method": "deterministic_parser"}))
+
+def parse_timestamp(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            parsed = parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError):
+            return None
+    return parsed.astimezone(timezone.utc) if parsed.tzinfo else None
 
 def process(factory, job_id):
     with factory() as db:

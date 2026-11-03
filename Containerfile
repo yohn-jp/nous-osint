@@ -1,4 +1,4 @@
-FROM docker.io/library/python:3.12-slim
+FROM docker.io/library/python@sha256:1148dbb014615300fa7e713b2f94f550c0d1c69780c0805f84f093ceee34dd0b
 WORKDIR /app
 COPY pyproject.toml /app/
 COPY src /app/src

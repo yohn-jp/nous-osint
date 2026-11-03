@@ -39,10 +39,13 @@ class ItemResponse(APIModel):
     source: str
     kind: ItemKind
     title: str
+    organization: str | None = None
     url: str
     state: ItemState
     first_seen_at: datetime
     last_seen_at: datetime
+    published_at: datetime | None = None
+    updated_at: datetime | None = None
     current_version: int = Field(ge=1)
 
 
@@ -102,16 +105,20 @@ def sources():
 
 def item_dict(item, source):
     return {"id": item.id, "source": source.source_key, "kind": item.kind,
-            "title": item.title, "url": item.canonical_url, "state": item.state,
+            "title": item.title, "organization": item.organization,
+            "url": item.canonical_url, "state": item.state,
             "first_seen_at": item.first_seen_at, "last_seen_at": item.last_seen_at,
+            "published_at": item.published_at, "updated_at": item.updated_at,
             "current_version": item.current_version}
 
 @app.get("/v1/items", response_model=ItemPageResponse)
 def items(kind: ItemKind | None = None, state: ItemState | None = None,
+          organization: str | None = Query(None, min_length=1, max_length=200),
           source: str | None = Query(None, min_length=3, max_length=100,
                                      pattern=r"^[a-z][a-z0-9-]*$"),
           q: str | None = Query(None, min_length=1, max_length=200),
           since: AwareDatetime | None = None,
+          published_since: AwareDatetime | None = None,
           limit: int = Query(50, ge=1, le=100),
           cursor: int | None = Query(None, ge=0)):
     with session_factory()() as db:
@@ -122,11 +129,15 @@ def items(kind: ItemKind | None = None, state: ItemState | None = None,
             query = query.where(Item.state == state)
         if source:
             query = query.where(Source.source_key == source)
+        if organization:
+            query = query.where(Item.organization == organization)
         if q:
             query = query.where(func.to_tsvector("simple", Item.title)
                                 .op("@@")(func.plainto_tsquery("simple", q)))
         if since:
             query = query.where(Item.last_seen_at >= since)
+        if published_since:
+            query = query.where(Item.published_at >= published_since)
         if cursor is not None:
             query = query.where(Item.id > cursor)
         rows = db.execute(query.order_by(Item.id).limit(limit + 1)).all()

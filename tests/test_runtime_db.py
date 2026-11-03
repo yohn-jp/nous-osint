@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import func, select
 import pytest
 from nous import runtime
@@ -8,6 +9,34 @@ from nous.db import session_factory
 from nous.models import FetchAttempt, FetchJob, Item, ItemVersion, Source
 
 pytestmark = pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="PostgreSQL required")
+
+
+def test_host_concurrency_claim():
+    factory = session_factory()
+    key = "concurrent-" + uuid.uuid4().hex[:12]
+    ids = []
+    with factory() as db:
+        for suffix in ("a", "b"):
+            source = Source(source_key=key + suffix, kind="json_api",
+                            url=f"https://same-host.example/{suffix}", adapter="json_v1",
+                            item_kind="news", config_revision="test",
+                            config={"max_concurrency": 1}, enabled=True, interval_minutes=60,
+                            max_requests_per_hour=10)
+            db.add(source)
+            db.flush()
+            job = FetchJob(source_id=source.id, dedupe_key=key + suffix)
+            db.add(job)
+            db.flush()
+            ids.append(job.id)
+        db.commit()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: runtime.claim(factory), range(2)))
+    assert sum(result in ids for result in results) == 1
+    assert results.count(None) == 1
+    with factory() as db:
+        states = [db.get(FetchJob, job_id).state for job_id in ids]
+        assert sorted(states) == ["leased", "queued"]
 
 def test_versioning_and_failures(monkeypatch):
     factory = session_factory()

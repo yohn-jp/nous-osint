@@ -4,7 +4,7 @@ Requires=nous-db.service
 After=nous-db.service
 
 [Container]
-Image=sha256:0fd26be18258c10968d6d133f3e2f3df8c7d2a91d1b3a3774e5a2ebfbab8223b
+Image=sha256:f45db6786f92ebb8c44dadc6ff2d88cf40bebfa54382c644615f654e96e2cb4c
 ContainerName=nous-api
 Network=nous.network
 PublishPort=127.0.0.1:8000:8000
