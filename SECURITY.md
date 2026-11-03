@@ -26,9 +26,9 @@ a best-effort basis; no fixed response SLA is promised.
 - **Authentication:** Cloudflare Access protects the browser UI and remote MCP.
   The origin independently validates the Access JWT; a tunnel alone is not
   an authentication boundary.
-- **MCP and APIs:** Remote MCP and the application API are read-only. A source
-  onboarding proposal does not grant the browser or MCP write access to Git,
-  the source registry, or the database.
+- **MCP and APIs:** Remote MCP and the application API are read-only. Git-based catalog proposals never grant MCP write access. The separate
+  Admin UI/API may manage instance-local sources only when the signed Access
+  subject is explicitly allowlisted and the dedicated DB role is provisioned.
 - **Collector:** Sources must pass policy review before activation. The fetcher
   must reject private, loopback, link-local, and other forbidden destinations,
   including redirects and DNS rebinding scenarios. Rate limits and bounded
