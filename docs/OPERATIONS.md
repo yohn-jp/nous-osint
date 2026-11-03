@@ -37,7 +37,9 @@ connection failures. Inspect user journals with `journalctl --user -u nous-worke
 ## Backup and restore
 
 Run the backup pull from a separate, always-on backup host with SSH access to the
-VM. Keep its backup directory on storage outside the VM; the script streams
+VM.
+Install both `scripts/backup-pull.sh` and `scripts/snapshot-dump.sh` together on
+the backup host. The latter is streamed over SSH into the DB container. Keep its backup directory on storage outside the VM; the script streams
 `pg_dump -Fc` over SSH directly into GPG encryption, so
 no plaintext dump is written to disk. GPG must be installed on the backup host,
 and its keyring must contain a public key whose full fingerprint was verified
@@ -50,6 +52,7 @@ install -d -m 700 ~/.config/nous-osint ~/.config/systemd/user ~/.local/libexec \
 gpg --import /secure/path/nous-backup-recipient.asc
 gpg --fingerprint
 install -m 700 scripts/backup-pull.sh ~/.local/libexec/nous-backup-pull.sh
+install -m 700 scripts/snapshot-dump.sh ~/.local/libexec/snapshot-dump.sh
 install -m 600 deploy/backup/backup.env.example ~/.config/nous-osint/backup.env
 # Set NOUS_BACKUP_GPG_RECIPIENT to the verified 40- or 64-hex public-key fingerprint.
 systemctl --user daemon-reload
@@ -76,6 +79,8 @@ old encrypted dumps after a new dump and manifest have been written.
 `NOUS_BACKUP_SSH_CONFIG` can select an explicit SSH config file when the backup
 host's systemd sandbox cannot read its system-wide SSH config.
 
+The archive and schema/row counts use a single PostgreSQL exported
+repeatable-read snapshot (`pg_dump --snapshot`), not a later live query.
 Each `.dump.gpg` has a JSON manifest with schema version, row counts, and the
 encrypted artifact SHA-256. Validate it with:
 

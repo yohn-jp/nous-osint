@@ -30,3 +30,6 @@ jobs:
       - run: alembic upgrade head
       - run: pytest -q
       - run: python -m compileall -q src migrations
+
+      - name: Validate backup and restoration shell syntax
+        run: bash -n scripts/backup-pull.sh scripts/snapshot-dump.sh scripts/restore-test.sh

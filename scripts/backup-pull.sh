@@ -4,7 +4,7 @@ umask 077
 
 fail() { printf 'nous-backup: %s\n' "$*" >&2; exit 1; }
 
-for command_name in ssh gpg sha256sum find mktemp date cut flock; do
+for command_name in ssh gpg sha256sum find mktemp date cut flock sed; do
   command -v "$command_name" >/dev/null 2>&1 || fail "required command not found: $command_name"
 done
 
@@ -45,20 +45,25 @@ final_manifest="$backup_dir/${base}.manifest.json"
 [[ ! -e "$final_dump" && ! -e "$final_manifest" ]] || fail "backup already exists for ${stamp}"
 tmp_dump=$(mktemp "$backup_dir/.${base}.dump.gpg.XXXXXX")
 tmp_manifest=$(mktemp "$backup_dir/.${base}.manifest.json.XXXXXX")
-trap 'rm -f -- "$tmp_dump" "$tmp_manifest"' EXIT
-
-remote=(cd /tmp '&&' sudo -u nous env HOME=/home/nous "XDG_RUNTIME_DIR=/run/user/${uid}" podman exec nous-db pg_dump -U nous -d nous -Fc)
+tmp_metadata=$(mktemp "$backup_dir/.${base}.sn# Export one repeatable-read snapshot; stream its dump and snapshot metadata.
+snapshot_script="$(dirname -- "${BASH_SOURCE[0]}")/snapshot-dump.sh"
+[[ -r "$snapshot_script" ]] || fail "snapshot helper missing: $snapshot_script"
+remote=(cd /tmp '&&' sudo -u nous env HOME=/home/nous "XDG_RUNTIME_DIR=/run/user/${uid}" podman exec -i nous-db bash -s)
 if ! ssh "${ssh_options[@]}" "$target" "${remote[*]}" \
+      < "$snapshot_script" 2>"$tmp_metadata" \
     | gpg --batch --yes --trust-model always --recipient "$recipient" \
         --output "$tmp_dump" --encrypt; then
-  fail "dump transfer or encryption failed"
+  fail "consistent dump transfer or encryption failed"
 fi
 [[ -s "$tmp_dump" ]] || fail "encrypted dump is empty"
 chmod 600 -- "$tmp_dump"
 
-metadata_sql="SELECT (SELECT version_num FROM alembic_version), (SELECT count(*) FROM sources), (SELECT count(*) FROM items), (SELECT count(*) FROM item_versions)"
-metadata=$(ssh "${ssh_options[@]}" "$target" \
-  "cd /tmp && sudo -u nous env HOME=/home/nous XDG_RUNTIME_DIR=/run/user/${uid} podman exec nous-db psql -v ON_ERROR_STOP=1 -U nous -d nous -AtF '|' -c \"${metadata_sql}\"") \
+# Do not read changing live counters after pg_dump: they must match its snapshot.
+metadata=$(sed -n 's/^NOUS_SNAPSHOT_METADATA=//p' "$tmp_metadata")
+[[ "$metadata" =~ ^[A-Za-z0-9._-]+\|[0-9]+\|[0-9]+\|[0-9]+$ ]] \
+  || fail "no valid snapshot metadata from database"
+
+AtF '|' -c \"${metadata_sql}\"") \
   || fail "could not read backup manifest metadata"
 IFS='|' read -r schema_version source_count item_count version_count <<< "$metadata"
 [[ "$schema_version" =~ ^[A-Za-z0-9._-]+$ && "$source_count" =~ ^[0-9]+$ && \
