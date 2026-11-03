@@ -51,7 +51,7 @@ export interface SourceDefinition {
   max_requests_per_hour: number
   max_concurrency: number
   enabled: boolean
-  policy: { reviewed_at: string; terms_url?: string | null; robots_url?: string | null; content_storage: 'metadata_only'; note: string }
+  policy: { reviewed_at: string; terms_url?: string | null; robots_url?: string | null; content_storage: 'metadata_only'; note: string; license_id?: string; license_url?: string | null; attribution?: string | null }
   json_path?: string | null
   field_map?: Record<string, string>
   selectors?: Record<string, string>

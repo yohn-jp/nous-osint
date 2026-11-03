@@ -125,6 +125,8 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
               <q-badge :color="runtimeRow(entry)?.enabled ? 'positive' : 'grey-6'" :label="runtimeRow(entry)?.enabled ? '収集中' : '停止'" />
             </div>
             <div class="admin-source-id">{{ entry.config.id }} · {{ kindLabel(entry.config.item_kind) }} · {{ entry.config.kind.toUpperCase() }}</div>
+            <div class="admin-source-id">権利表示: {{ entry.config.policy.license_id || 'NOASSERTION' }} · {{ entry.config.policy.attribution || '提供元未記録' }}</div>
+            <a v-if="entry.config.policy.license_url || entry.config.policy.terms_url" class="text-caption" :href="entry.config.policy.license_url || entry.config.policy.terms_url || undefined" target="_blank" rel="noopener noreferrer">提供元の利用条件・ライセンスを確認</a>
             <div class="admin-source-detail">{{ entry.config.url }}</div>
             <div v-if="runtimeRow(entry)?.last_error" class="text-negative text-caption">最終エラー: {{ runtimeRow(entry)?.last_error }}</div>
             <div class="admin-source-id">最終成功: {{ dateLabel(runtimeRow(entry)?.last_success_at ?? null) }}</div>

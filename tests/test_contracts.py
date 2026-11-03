@@ -100,3 +100,23 @@ def test_automattic_html_adapter():
     records = extract(runtime_source, html, source.url)
     assert records == [{"id": "42", "url": "https://automattic.com/work-with-us/job/engineer/",
                         "title": "Engineer"}]
+
+def test_new_official_catalog_sources_are_disabled_and_rights_explicit():
+    expected = {
+        "debian-security-advisories", "debian-lts-advisories",
+        "ubuntu-security-notices", "aws-security-bulletins",
+        "gitlab-patch-releases", "google-cloud-security-bulletins",
+        "cloudflare-security-research", "fortinet-psirt", "sie-japan-careers",
+    }
+    configs = {source.id: source for source in load_registry("sources")}
+    assert expected <= configs.keys()
+    for name in expected:
+        source = configs[name]
+        assert not source.enabled, name
+        assert source.policy.license_id == "NOASSERTION"
+        assert source.policy.attribution and source.policy.attribution.strip()
+        assert source.policy.content_storage == "metadata_only"
+    sie = configs["sie-japan-careers"]
+    assert sie.adapter == "json_v1" and sie.json_path == "jobs"
+    assert sie.field_map["url"] == "absolute_url"
+    assert all(config.policy.license_id for config in configs.values())

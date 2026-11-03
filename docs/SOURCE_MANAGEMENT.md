@@ -101,6 +101,18 @@ source configuration. Source deletion and arbitrary command/script execution
 are deliberately not exposed. Source URLs remain subject to the production
 SSRF-safe fetcher and constrained extraction adapters.
 
+## Source rights and extension plan
+
+All bundled source definitions must be assessed independently of Nous's MIT
+license. Newly proposed feeds carry a publisher attribution, an explicit
+`license_id` (default `NOASSERTION` where no verified universal content license
+exists), and links to any identified legal terms. A public feed is not a
+permission to relicense or mirror the content. The current set of disabled
+sources and their review gates are documented in [Source Rights](SOURCE_LICENSES.md).
+
+For sources that need API pagination, ATS-specific fields, vulnerability dataset
+normalization or headless HTML processing, see the [OSS Adapter Evaluation](ADAPTER_EVALUATION.md).
+
 ## New catalog candidates
 
 The following are packaged as **disabled** definitions:
