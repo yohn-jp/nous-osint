@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Nous OSINT backup pull
+
+[Timer]
+OnCalendar=*-*-* 03:17:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

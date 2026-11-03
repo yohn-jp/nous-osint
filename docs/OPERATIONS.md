@@ -23,6 +23,9 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
 5. Run the migration as a one-off container on `nous-private` with the database
    migration/admin URL secret mounted at `/run/secrets/database_url` and
    `DATABASE_URL_FILE=/run/secrets/database_url`, invoking `alembic upgrade head`.
+   After migration `0004`, run `python -m nous.maintenance` once with the
+   runtime database secret to populate typed organization and publisher dates
+   from existing immutable versions.
 6. Start `nous-api.service nous-scheduler.service nous-worker.service` and check
    `/health/ready` over VM loopback. Quadlet's `[Install]` section generates
    `default.target.wants` links; generated units cannot be enabled with
@@ -33,17 +36,62 @@ connection failures. Inspect user journals with `journalctl --user -u nous-worke
 
 ## Backup and restore
 
-Produce a PostgreSQL custom dump with
-`podman exec nous-db pg_dump -U nous -d nous -Fc`. Encrypt it before transfer
-off the VM, retain the decryption key separately with 0600 permissions, and keep
-at least seven daily copies. A backup is valid only after a restore test in a
-separate PostgreSQL container and volume, including checks of `sources`, `items`,
-`item_versions` and a representative item history. Never copy live PGDATA as
-a generic archive. Do not commit dumps or keys.
+Run the backup pull from a separate, always-on backup host with SSH access to the
+VM. Keep its backup directory on storage outside the VM; the script streams
+`pg_dump -Fc` over SSH directly into GPG encryption, so
+no plaintext dump is written to disk. GPG must be installed on the backup host,
+and its keyring must contain a public key whose full fingerprint was verified
+out of band. Keep the matching private key separately from the backup files.
 
-The initial manual test restored a 519-item, 519-version dump into an isolated
-PostgreSQL 18 container and volume. An encrypted off-VM backup was also produced
-and decrypted successfully. Automated daily off-VM backups remain to be set up.
+```sh
+install -d -m 700 ~/.config/nous-osint ~/.config/systemd/user ~/.local/libexec \
+  ~/.local/state/nous-osint/backups
+# Import the recipient public key after verifying its fingerprint out of band.
+gpg --import /secure/path/nous-backup-recipient.asc
+gpg --fingerprint
+install -m 700 scripts/backup-pull.sh ~/.local/libexec/nous-backup-pull.sh
+install -m 600 deploy/backup/backup.env.example ~/.config/nous-osint/backup.env
+# Set NOUS_BACKUP_GPG_RECIPIENT to the verified 40- or 64-hex public-key fingerprint.
+systemctl --user daemon-reload
+install -m 644 deploy/backup/nous-backup.service \
+  ~/.config/systemd/user/nous-backup.service
+install -m 644 deploy/backup/nous-backup.timer \
+  ~/.config/systemd/user/nous-backup.timer
+systemctl --user daemon-reload
+systemctl --user enable --now nous-backup.timer
+systemctl --user start nous-backup.service  # first-run check
+```
+
+Set `NOUS_BACKUP_HOST`, `NOUS_BACKUP_DIR`, and `NOUS_BACKUP_RETENTION_DAYS` in
+`backup.env` as needed. The default destination is
+`~/.local/state/nous-osint/backups`; it is off-VM when this service runs on the
+separate backup host. For a second failure domain, choose a path on externally
+mounted backup storage. If using a different directory, add it to
+`ReadWritePaths=` in `nous-backup.service`. The configured host must be covered
+by a verified SSH host key and allow non-interactive `sudo -u nous` for the
+rootless Podman backup command. For a persistent backup host, enable lingering
+for its user or use a system service. The timer runs daily and catches missed
+runs with `Persistent=true`. It retains seven days by default and only prunes
+old encrypted dumps after a new dump and manifest have been written.
+
+Each `.dump.gpg` has a JSON manifest with schema version, row counts, and the
+encrypted artifact SHA-256. Validate it with:
+
+```sh
+scripts/restore-test.sh ~/.local/state/nous-osint/backups/<backup>.dump.gpg
+```
+
+This decrypts into a temporary, isolated PostgreSQL container and volume,
+restores without ACL/owner assumptions, verifies all recorded row counts, then
+removes the test database resources. Keep a verified off-VM copy of the
+decryption key; the backup host's public key alone cannot restore data. Never
+copy live PGDATA as a generic archive. Do not commit dumps or keys.
+
+The initial manual restore test restored records into a separate PostgreSQL 18
+container and volume. The scheduled backup still needs to be provisioned on the
+off-VM host with an approved GPG key fingerprint and its SSH known-host entry;
+the scripts and user timer are repository-managed, but the timer is not enabled
+on the VM or backup host yet.
 
 ## Network and sources
 
