@@ -1,0 +1,26 @@
+{
+  "name": "nous-osint-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "quasar dev",
+    "build": "quasar build",
+    "typecheck": "vue-tsc --noEmit",
+    "postinstall": "quasar prepare --silent"
+  },
+  "dependencies": {
+    "@quasar/extras": "^2.0.0",
+    "quasar": "2.35.2",
+    "vue": "^3.5.0",
+    "vue-router": "^5.0.6"
+  },
+  "devDependencies": {
+    "@quasar/app-vite": "3.10.3",
+    "typescript": "~5.9.3",
+    "vue-tsc": "^3.1.0"
+  }
+}
