@@ -1,5 +1,7 @@
 # Nous OSINT
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 公開情報を継続的に収集し、出典と変更履歴を保持したうえで検索・分析できる、汎用OSINT基盤。
 
 **Status: Phase 1–3 implementation in progress; VM deployment under validation**
@@ -38,3 +40,14 @@
 Python、FastAPI、PostgreSQL、Podman Quadletを採用する。スケジューリングとジョブ実行はPostgreSQLを協調基盤として実装し、初期段階でRedis・Kafka・Kubernetes・Elasticsearch・n8nは導入しない。
 
 実装は `src/nous/`、読み取り専用SPAは `ui/`、ソース定義は `sources/`、Quadletは `deploy/quadlet/` にあります。VMでの導入と検証手順は [運用手順](docs/OPERATIONS.md) を参照してください。
+
+## Community and licensing
+
+Nous OSINT is released under the [MIT License](LICENSE), aligned with the
+`gh-inari` project. See [Contributing](CONTRIBUTING.md) for development and
+source registration, [Security Policy](SECURITY.md) for private vulnerability
+reporting, and [Code of Conduct](CODE_OF_CONDUCT.md) for participation standards.
+
+The MIT License applies to this project's original source code and documentation;
+it does not relicense third-party data, collected articles, upstream feeds, or
+third-party dependencies. Source-specific usage rights remain independent.
