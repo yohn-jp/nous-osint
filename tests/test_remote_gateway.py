@@ -19,6 +19,7 @@ def gateway(monkeypatch, tmp_path):
         return AccessIdentity(subject="gateway-test", email=None)
 
     monkeypatch.setattr(remote_gateway.app.verifier, "verify", verify)
+    remote_gateway.app.app.ui.directory = str(tmp_path)
     remote_gateway.app.app.ui.all_directories = [str(tmp_path)]
     (tmp_path / "index.html").write_text("<main>Nous UI</main>")
     assets = tmp_path / "assets"
