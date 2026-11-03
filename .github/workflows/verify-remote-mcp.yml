@@ -9,6 +9,7 @@ on:
       - "src/nous/remote_mcp.py"
       - "tests/test_access_auth.py"
       - ".github/workflows/verify-remote-mcp.yml"
+      - "deploy/cloudflare/terraform/**"
 
 permissions:
   contents: read
@@ -38,3 +39,17 @@ jobs:
           CF_ACCESS_ISSUER: https://test.cloudflareaccess.com
           CF_ACCESS_AUDIENCE: test-audience
         run: python -c 'from nous.remote_mcp import app; print(type(app).__name__)'
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+      - name: Terraform formatting
+        run: terraform -chdir=deploy/cloudflare/terraform fmt -check -diff
+      - name: Resolve Cloudflare provider without remote backend
+        run: terraform -chdir=deploy/cloudflare/terraform init -backend=false -input=false
+      - name: Validate Access and Tunnel resources
+        run: terraform -chdir=deploy/cloudflare/terraform validate -no-color
