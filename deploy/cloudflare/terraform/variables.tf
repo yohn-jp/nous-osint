@@ -13,15 +13,15 @@ variable "zone_id" {
   }
 }
 variable "team_name" {
-  type = string
+  type        = string
   description = "Access team prefix before .cloudflareaccess.com"
   validation {
-    condition = can(regex("^[a-z0-9-]+$", var.team_name))
+    condition     = can(regex("^[a-z0-9-]+$", var.team_name))
     error_message = "Provide an Access team prefix."
   }
 }
 variable "allowed_emails" {
-  type = set(string)
+  type        = set(string)
   description = "Explicit per-user Access allowlist; empty is forbidden."
   validation {
     condition = length(var.allowed_emails) > 0 && alltrue([
@@ -32,15 +32,15 @@ variable "allowed_emails" {
   }
 }
 variable "allowed_idps" {
-  type = set(string)
+  type        = set(string)
   description = "Existing Cloudflare Access IdP IDs."
   validation {
-    condition = length(var.allowed_idps) > 0
+    condition     = length(var.allowed_idps) > 0
     error_message = "Explicit IdP allowlist must not be empty."
   }
 }
 variable "allowed_redirect_uris" {
-  type = set(string)
+  type        = set(string)
   description = "Exact observed HTTPS OAuth callback URI(s), e.g. the actual ChatGPT client callback."
   validation {
     condition = length(var.allowed_redirect_uris) > 0 && alltrue([
