@@ -94,3 +94,18 @@ def test_mcp_http_initialize_and_tool_listing(target):
         tools = {tool["name"] for tool in response.json()["result"]["tools"]}
         assert tools == {"search_intelligence", "get_item", "get_changes",
                          "get_source_status"}
+
+        source_key, item_id = seed()
+        called = client.post("/mcp", json={
+            "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+            "params": {
+                "name": "search_intelligence",
+                "arguments": {"query": "Unique MCP integration title",
+                              "source": source_key, "limit": 10},
+            },
+        }, headers=headers)
+        assert called.status_code == 200, called.text
+        result = called.json()
+        assert "result" in result and "error" not in result, result
+        assert str(item_id) in called.text
+
