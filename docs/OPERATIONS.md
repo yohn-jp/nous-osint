@@ -31,8 +31,9 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    `/health/ready` over VM loopback. For remote MCP, install
    `nous-mcp.container` and `nous-ingress.network`, set `CF_ACCESS_ISSUER` and
    `CF_ACCESS_AUDIENCE` in mode-0600 `~/.config/nous/mcp.env`, then start
-   `nous-mcp.service` and `nous-tunnel.service`. The tunnel joins only
-   `nous-ingress`; PostgreSQL has no host-published port. Quadlet's `[Install]` section generates
+   `nous-mcp.service` and `nous-tunnel.service`. The same origin serves the
+   static UI at `/` and its allowlisted GET API under `/v1`. The tunnel joins
+   only `nous-ingress`; PostgreSQL has no host-published port. Quadlet's `[Install]` section generates
    `default.target.wants` links; generated units cannot be enabled with
    `systemctl --user enable`.
 

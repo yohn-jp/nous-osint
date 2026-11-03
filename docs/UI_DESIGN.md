@@ -1,6 +1,6 @@
 # Nous OSINT — Quasar Information Portal UI
 
-Status: **approved design; implementation in progress**  
+Status: **implemented and deployed behind the existing Access-required Tunnel; browser acceptance remains in progress**
 Updated: 2026-11-03  
 Companion: [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [ARCHITECTURE.md](ARCHITECTURE.md)
 
@@ -49,13 +49,13 @@ Existing FastAPI contracts have been verified in `src/nous/api.py`:
 - `GET /v1/changes?since=&kind=&limit=` returns `{changes: [...]}`.
 - `GET /v1/status` provides operational counters; use only when there is a real UI need.
 
-The UI must use the **same-origin `/v1` route** through an authenticated gateway, not an embedded API secret or direct SQL. For local development use a Vite dev proxy to a loopback API; the deployed gateway/static host configuration is a separate, explicitly verified operation. Neither Cloudflare Access nor a public UI deployment is implied by this change. Endpoint failure, 401/403/404, empty data, and stale sources must remain truthful and actionable.
+The UI uses the **same-origin `/v1` route** through the MCP origin's authenticated gateway, not an embedded API secret or direct SQL. The origin validates the Cloudflare Access JWT and proxies only the UI's GET allowlist to the loopback-only API. For local development use a Vite dev proxy to a loopback API. Cloudflare resources were not changed for the UI rollout. Endpoint failure, 401/403/404, empty data, and stale sources must remain truthful and actionable.
 
 ## Security and operational constraints
 
 - No credentials in static assets or browser persistent storage. Browser query params contain only non-sensitive filters; don't place a private token in the URL.
 - No HTML rendering of publisher content; Vue interpolation escapes untrusted strings. External links use `rel="noopener noreferrer"`.
-- No unauthorized API/public exposure: VM API stays loopback-only until authenticated ingress is implemented and validated.
+- No unauthorized API/public exposure: VM API stays loopback-only; the origin exposes only the Access-JWT-protected read routes needed by this UI.
 - No client-side data fabrication in production. Demo fixtures, if any, are strictly isolated and labeled.
 - Frontend CI must compile/typecheck from committed dependency metadata; no UI runtime container.
 - Preserve the single-VM Podman/Quadlet/PostgreSQL design; do not introduce Appsmith, MongoDB, Redis, SSR, separate search database, or UI server.

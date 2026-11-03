@@ -4,7 +4,7 @@ Requires=nous-db.service
 After=nous-db.service
 
 [Container]
-Image=localhost/nous-osint@sha256:46ea22fa455f0594862370e06dec6a7e66d467afd734b5831c3e1232de518727
+Image=localhost/nous-osint@sha256:5c9417f21cc913a3f0b73bfba184599324725e0acee06fc82379b750e2528495
 ContainerName=nous-mcp
 Network=nous.network
 Network=nous-ingress.network
@@ -12,7 +12,7 @@ Secret=nous-mcp-database-url,type=mount,target=/run/secrets/database_url
 Environment=DATABASE_URL_FILE=/run/secrets/database_url
 EnvironmentFile=%h/.config/nous/mcp.env
 Environment=PYTHONDONTWRITEBYTECODE=1
-Exec=uvicorn nous.remote_mcp:app --host 0.0.0.0 --port 8001 --workers 1
+Exec=uvicorn nous.remote_gateway:app --host 0.0.0.0 --port 8001 --workers 1
 ReadOnly=true
 Tmpfs=/tmp:rw,nosuid,nodev,noexec,size=16m
 NoNewPrivileges=true

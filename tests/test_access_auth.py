@@ -96,7 +96,7 @@ def test_expired_cache_fails_closed_on_jwks_error(auth):
         verifier.verify(jwt(key, claims))
 
 
-def test_middleware_only_exposes_mcp_and_rejects_missing_assertion(auth):
+def test_middleware_only_exposes_mcp_ui_and_allowlisted_read_api(auth):
     key, claims, verifier, _ = auth
     async def upstream(scope, receive, send):
         from starlette.responses import JSONResponse
@@ -105,8 +105,10 @@ def test_middleware_only_exposes_mcp_and_rejects_missing_assertion(auth):
         )
     app = AccessAssertionMiddleware(upstream, verifier)
     # No fake lifespan service is installed on the local test double.
-    client = TestClient(app)
-    assert client.get("/v1/items").status_code == 404
+    client = TestClient(app, base_url="https://nous.yohn.jp")
+    assert client.get("/api/v1/items").status_code == 404
+    assert client.get("/v1/status").status_code == 404
+    assert client.get("/").status_code == 403
     assert client.post("/mcp").status_code == 403
     response = client.post("/mcp", headers={
         "Cf-Access-Jwt-Assertion": jwt(key, claims),

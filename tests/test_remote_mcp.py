@@ -73,7 +73,10 @@ def test_mcp_http_initialize_and_tool_listing(target):
         "MCP-Protocol-Version": "2025-06-18",
     }
     with TestClient(target.app, base_url="https://nous.yohn.jp") as client:
-        assert client.get("/v1/items", headers=headers).status_code == 404
+        assert client.get("/api/v1/items", headers=headers).status_code == 404
+        assert client.get("/v1/items", headers={
+            k: v for k, v in headers.items() if k != "Cf-Access-Jwt-Assertion"
+        }).status_code == 403
         assert client.post("/mcp", json={}, headers={
             k: v for k, v in headers.items() if k != "Cf-Access-Jwt-Assertion"
         }).status_code == 403

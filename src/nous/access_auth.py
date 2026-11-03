@@ -24,6 +24,9 @@ from starlette.responses import JSONResponse
 _B64URL = re.compile(r"^[A-Za-z0-9_-]+$")
 _MAX_ASSERTION_LENGTH = 16_384
 _MAX_JWKS_BYTES = 128_000
+_STATIC_ASSET = re.compile(r"^/assets/[A-Za-z0-9._-]{1,255}$")
+_API_ITEM = re.compile(r"^/v1/items/[0-9]+$")
+_API_VERSIONS = re.compile(r"^/v1/items/[0-9]+/versions$")
 
 
 class AccessDenied(Exception):
@@ -203,24 +206,44 @@ class AccessVerifier:
 
 
 class AccessAssertionMiddleware:
-    """ASGI outer boundary for a dedicated /mcp-only process.
+    """ASGI boundary for MCP and the authenticated read-only browser UI.
 
     The upstream Access application protects the public hostname. This
-    middleware also rejects locally submitted / forged identity headers.
+    middleware also rejects locally submitted / forged identity headers. Only
+    the static SPA and its explicitly allowlisted GET API routes are admitted.
     """
 
     def __init__(self, app, verifier: AccessVerifier):
         self.app = app
         self.verifier = verifier
 
+    @staticmethod
+    def _allowed_path(path: str, method: str) -> bool:
+        if path in ("/mcp", "/mcp/"):
+            return True
+        if path in ("/", "/index.html") or _STATIC_ASSET.fullmatch(path):
+            return method in ("GET", "HEAD")
+        if method != "GET":
+            return False
+        if path in ("/v1/items", "/v1/sources", "/v1/changes"):
+            return True
+        return bool(_API_ITEM.fullmatch(path) or _API_VERSIONS.fullmatch(path))
+
+    @staticmethod
+    def _allowed_host(headers: dict[bytes, bytes]) -> bool:
+        host = headers.get(b"host", b"").lower()
+        return host in (b"nous.yohn.jp", b"nous.yohn.jp:443")
+
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
-        if scope.get("path") not in ("/mcp", "/mcp/"):
+        path = scope.get("path", "")
+        method = scope.get("method", "").upper()
+        headers = {key.lower(): value for key, value in scope.get("headers", [])}
+        if not self._allowed_host(headers) or not self._allowed_path(path, method):
             return await JSONResponse({"detail": "not found"}, status_code=404)(
                 scope, receive, send
             )
-        headers = {key.lower(): value for key, value in scope.get("headers", [])}
         raw = headers.get(b"cf-access-jwt-assertion")
         try:
             assertion = raw.decode("ascii") if raw else None
