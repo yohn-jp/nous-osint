@@ -249,7 +249,7 @@ class AccessAssertionMiddleware:
                 immutable_asset = (method in ("GET", "HEAD") and 200 <= status < 300
                                    and bool(re.fullmatch(
                                        r"/assets/[A-Za-z0-9._-]+-[A-Za-z0-9_-]{8,}"
-                                       r"\\.(?:js|css|svg|woff2?|png|webp|avif|ico)", path)))
+                                       r"\.(?:js|css|svg|woff2?|png|webp|avif|ico)", path)))
                 cache_value = (b"public, max-age=31536000, immutable" if immutable_asset
                                else b"no-store")
                 headers_out = [(key, value) for key, value in message.get("headers", [])
