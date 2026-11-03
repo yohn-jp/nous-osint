@@ -87,7 +87,7 @@ export const api = {
     get<ItemPage>('/v1/items' + qs(params), signal),
   sources: (signal?: AbortSignal) => get<Source[]>('/v1/sources', signal),
   item: (id: number, signal?: AbortSignal) => get<ItemDetail>('/v1/items/' + id, signal),
-  versions: (id: number, signal?: AbortSignal) => get<ItemVersion[]>('/v1/items/' + id + '/versions', signal),
+  versions: (id: number, signal?: AbortSignal) => get<ItemVersion[]>('/v1/items/' + id + '/versions?limit=20', signal),
   changes: (params: { since: string; kind?: ItemKind; limit?: number }, signal?: AbortSignal) =>
     get<ChangesPage>('/v1/changes' + qs(params), signal),
 }

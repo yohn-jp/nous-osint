@@ -21,7 +21,9 @@
 2. [Data contracts](docs/DATA_MODEL.md) — ソース定義、取得記録、版管理、出典
 3. [Podman / Quadlet deployment](docs/QUADLET_DEPLOYMENT.md) — 単一VM構成、rootless起動、秘密情報、バックアップ
 4. [Implementation plan](docs/IMPLEMENTATION_PLAN.md) — 順序、検証、受入条件
-5. [Remote MCP and Cloudflare Access](docs/REMOTE_MCP_ACCESS.md) — 今後のTunnel/Managed OAuth/MCP公開設計
+5. [Quasar information portal UI](docs/UI_DESIGN.md) — ブラウザ描画、Feedly型の情報階層、実装範囲と受入条件
+6. [Frontend execution policy](docs/FRONTEND_EXECUTION_POLICY.md) — VMとブラウザの実行責務
+7. [Remote MCP and Cloudflare Access](docs/REMOTE_MCP_ACCESS.md) — 今後のTunnel/Managed OAuth/MCP公開設計
 
 ## Design principles
 
@@ -35,4 +37,4 @@
 
 Python、FastAPI、PostgreSQL、Podman Quadletを採用する。スケジューリングとジョブ実行はPostgreSQLを協調基盤として実装し、初期段階でRedis・Kafka・Kubernetes・Elasticsearch・n8nは導入しない。
 
-実装は `src/nous/`、ソース定義は `sources/`、Quadletは `deploy/quadlet/` にあります。VMでの導入と検証手順は [運用手順](docs/OPERATIONS.md) を参照してください。
+実装は `src/nous/`、読み取り専用SPAは `ui/`、ソース定義は `sources/`、Quadletは `deploy/quadlet/` にあります。VMでの導入と検証手順は [運用手順](docs/OPERATIONS.md) を参照してください。

@@ -25,3 +25,11 @@ export function safeValue(value: unknown): string {
   const text = typeof value === 'string' ? value : JSON.stringify(value)
   return text.length > 600 ? text.slice(0, 600) + '…' : text
 }
+
+/** Treat publisher URLs as untrusted data. Only HTTP(S) outbound links are allowed. */
+export function safeExternalUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : undefined
+  } catch { return undefined }
+}

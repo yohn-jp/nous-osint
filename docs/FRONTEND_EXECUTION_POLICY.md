@@ -1,6 +1,6 @@
 # Frontend execution and resource policy
 
-Status: architecture direction / frontend implementation not started  
+Status: browser-rendered Quasar SPA implementation in progress  
 Updated: 2026-11-03
 
 ## Objective
@@ -17,10 +17,10 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 - **PostgreSQL:** perform full-text search, filtering, ranking, sorting, pagination, aggregates and provenance/history queries. Never ship an entire corpus to the browser for searching.
 - **Workers:** ingest permitted public sources, deduplicate and persist revisions independently of frontend availability.
 
-## Candidate implementation (not yet selected or deployed)
+## Selected frontend (implementation in ui/; not deployed)
 
-- Static SPA built with Vite; default proposal: React-admin + Material UI, taking advantage of pre-built list, detail, filter, pagination and layout components instead of hand-written HTML/CSS.
-- Evaluate existing React-admin PostgREST data-provider compatibility before relying on it. React/TypeScript page composition is still required; this is not a GUI-only builder.
+- Quasar 2 + Vue 3 + TypeScript, Quasar CLI with Vite, static SPA with browser-only rendering. [UI_DESIGN.md](UI_DESIGN.md) is the UI design contract.
+- Feed-reader-inspired, source-first information layout using Quasar components; not a Feedly copy. Vue pages and a small shared stylesheet still require maintenance.
 - Serve static assets through Cloudflare (behind Access if private); expose the API via the separately authenticated/tunneled origin with same-origin reverse proxy preferred to avoid CORS complexity.
 - Reuse PostgreSQL views/functions as the canonical query contract; PostgREST is a candidate for read endpoints, while existing FastAPI can remain for domain-specific operations and feed output. Avoid redundant API surfaces unless justified.
 - PGroonga is a candidate for Japanese search; verify extension/container compatibility and search relevance before adoption.
@@ -41,5 +41,5 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 - Verify browser-side list/detail/filter navigation and usability on desktop/mobile; prevent loading an entire result set into memory.
 - Measure JS transfer size, initial render and interaction responsiveness in browsers; avoid claiming a measured budget before testing.
 - Measure API latency, PostgreSQL query plans/index use and memory separately; compare with an API-only baseline.
-- One query contract backs UI, REST and RSS where possible; source provenance and update timestamps remain available.
+- One query contract backs UI, REST and RSS where possible; source provenance and update timestamps remain available. RSS/watch APIs remain unimplemented and are not exposed as functional UI features.
 - The preexisting implementation phases remain in order. UI rollout is a later phase and is not evidence that ingestion/API endpoints already work.

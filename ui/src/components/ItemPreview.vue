@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { api, type ItemDetail, type ItemVersion } from '../lib/api'
-import { dateLabel, kindLabel, safeValue, stateLabel } from '../lib/presentation'
+import { dateLabel, kindLabel, safeExternalUrl, safeValue, stateLabel } from '../lib/presentation'
 
 const props = withDefaults(defineProps<{ itemId: number; compact?: boolean }>(), { compact: false })
 const item = ref<ItemDetail | null>(null)
@@ -18,7 +18,7 @@ async function load() {
   item.value = null
   versions.value = []
   error.value = ''
-  if (!Number.isSafeInteger(props.itemId) || props.itemId <= 0) { error.value = '不正な項目IDです。'; return }
+  if (!Number.isSafeInteger(props.itemId) || props.itemId <= 0) { error.value = '不正な項目IDです。'; loading.value = false; return }
   loading.value = true
   try {
     const [detail, history] = await Promise.all([
@@ -49,7 +49,7 @@ onBeforeUnmount(() => controller?.abort())
       <div class="eyebrow q-mb-md">{{ kindLabel(item.kind) }} / {{ stateLabel[item.state] }}</div>
       <h2 class="q-ma-none" :class="compact ? 'text-h6' : 'text-h5'" style="line-height: 1.5; overflow-wrap: anywhere">{{ item.title }}</h2>
       <div class="text-caption text-grey-6 q-mt-md">{{ item.organization || item.source }}</div>
-      <q-btn class="q-mt-lg" outline no-caps color="primary" icon-right="open_in_new" :href="item.url" target="_blank" rel="noopener noreferrer" label="元の情報源を開く" />
+      <q-btn class="q-mt-lg" outline no-caps color="primary" icon-right="open_in_new" :href="safeExternalUrl(item.url)" :disable="!safeExternalUrl(item.url)" target="_blank" rel="noopener noreferrer" label="元の情報源を開く" />
       <section class="detail-section">
         <div class="text-subtitle2 q-mb-sm">出典と記録</div>
         <div class="kv-line"><div class="kv-key">情報源</div><div>{{ item.source }}</div></div>

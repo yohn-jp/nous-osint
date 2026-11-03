@@ -45,3 +45,23 @@ jobs:
       - run: python -m compileall -q src migrations
       - name: Validate backup and restoration shell syntax
         run: bash -n scripts/backup-pull.sh scripts/snapshot-dump.sh scripts/restore-test.sh
+
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install UI dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck Quasar UI
+        run: npm run typecheck
+      - name: Build static Quasar SPA
+        run: npm run build
+      - name: Verify static output
+        run: test -f dist/spa/index.html

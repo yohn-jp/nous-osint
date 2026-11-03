@@ -98,7 +98,7 @@ function onSearchKeydown(event: KeyboardEvent) {
 }
 function clearFilters() { term.value = ''; kind.value = null; source.value = null; applyFilters() }
 function openItem(id: number) {
-  if ($q.screen.width >= 1250) {
+  if ($q.screen.width > 1250) {
     void router.replace({ name: 'explore', query: { ...route.query, item: String(id) } })
   } else {
     void router.push({ name: 'item', params: { id }, query: { returnTo: route.fullPath } })
