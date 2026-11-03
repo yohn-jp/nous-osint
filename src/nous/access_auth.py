@@ -273,4 +273,4 @@ class AccessAssertionMiddleware:
                 scope, receive, send_with_cache
             )
         scope.setdefault("state", {})["access_identity"] = identity
-        return await self.app(scope, receive, send)
+        return await self.app(scope, receive, send_with_cache)
