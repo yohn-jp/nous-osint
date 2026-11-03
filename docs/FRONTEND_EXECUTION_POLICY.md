@@ -1,6 +1,6 @@
 # Frontend execution and resource policy
 
-Status: browser-rendered Quasar SPA implementation in progress  
+Status: Quasar SPA implementation complete; VM rollout is being validated
 Updated: 2026-11-03
 
 ## Objective
@@ -17,11 +17,11 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 - **PostgreSQL:** perform full-text search, filtering, ranking, sorting, pagination, aggregates and provenance/history queries. Never ship an entire corpus to the browser for searching.
 - **Workers:** ingest permitted public sources, deduplicate and persist revisions independently of frontend availability.
 
-## Selected frontend (implementation in ui/; not deployed)
+## Selected frontend (implementation in ui/)
 
 - Quasar 2 + Vue 3 + TypeScript, Quasar CLI with Vite, static SPA with browser-only rendering. [UI_DESIGN.md](UI_DESIGN.md) is the UI design contract.
 - Feed-reader-inspired, source-first information layout using Quasar components; not a Feedly copy. Vue pages and a small shared stylesheet still require maintenance.
-- Serve static assets through Cloudflare (behind Access if private); expose the API via the separately authenticated/tunneled origin with same-origin reverse proxy preferred to avoid CORS complexity.
+- Build the static assets into the digest-pinned MCP origin image and serve them at `/` through the existing Access-required Tunnel. The browser's same-origin `/v1` API is a strict GET-only proxy behind the Access JWT verifier; the underlying FastAPI listener stays loopback-only on the host.
 - Reuse PostgreSQL views/functions as the canonical query contract; PostgREST is a candidate for read endpoints, while existing FastAPI can remain for domain-specific operations and feed output. Avoid redundant API surfaces unless justified.
 - PGroonga is a candidate for Japanese search; verify extension/container compatibility and search relevance before adoption.
 - Avoid Appsmith and other persistent low-code UI backends in the initial architecture due to compute/memory costs unrelated to Nous's core processing.
@@ -37,9 +37,9 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 
 ## Performance and acceptance
 
-- UI assets are produced at build time; VM does not run a UI renderer.
+- UI assets are produced at image build time; the VM runs no Node or UI renderer, only serves the static files from the existing MCP process.
 - Verify browser-side list/detail/filter navigation and usability on desktop/mobile; prevent loading an entire result set into memory.
 - Measure JS transfer size, initial render and interaction responsiveness in browsers; avoid claiming a measured budget before testing.
 - Measure API latency, PostgreSQL query plans/index use and memory separately; compare with an API-only baseline.
 - One query contract backs UI, REST and RSS where possible; source provenance and update timestamps remain available. RSS/watch APIs remain unimplemented and are not exposed as functional UI features.
-- The preexisting implementation phases remain in order. UI rollout is a later phase and is not evidence that ingestion/API endpoints already work.
+- UI availability remains independent of ingestion/API acceptance; backend readiness and UI behavior are verified separately.

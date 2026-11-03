@@ -7,7 +7,9 @@ on:
     paths:
       - "src/nous/access_auth.py"
       - "src/nous/remote_mcp.py"
+      - "src/nous/remote_gateway.py"
       - "tests/test_access_auth.py"
+      - "tests/test_remote_gateway.py"
       - ".github/workflows/verify-remote-mcp.yml"
       - "deploy/cloudflare/terraform/**"
 

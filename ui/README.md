@@ -23,9 +23,9 @@ npm run build
 
 The static files are emitted to `ui/dist/spa`. Serve these from a static host; **no Node/Quasar server runs on the Nous VM**. The UI uses hash-based routes, so it needs no SPA URL rewrite.
 
-### Production ingress prerequisite (not implemented here)
+### Production ingress
 
-The browser must see `/v1` on **the same origin** as the static UI. Implement an independently authenticated reverse proxy or Cloudflare route to the loopback-only API and validate Cloudflare Access identity at a trusted boundary. Never configure an unauthenticated public tunnel to the API or expose PostgreSQL. Deploying this repository does **not** activate Cloudflare Access, publish the API, or set up this proxy.
+The static build is baked into the MCP origin image and served at `/` behind the existing Access-required Tunnel. The origin validates the Access JWT for static assets and proxies only GET requests for the UI's allowlisted `/v1` routes to the private API. It does not publish `/api/v1`, diagnostics, administration or PostgreSQL. The Tunnel and Cloudflare Access configuration are managed separately and were not changed for this UI deployment.
 
 ## Pages
 

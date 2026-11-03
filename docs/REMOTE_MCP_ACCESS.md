@@ -17,7 +17,7 @@ Use **Cloudflare Tunnel + Cloudflare Access Managed OAuth** with a **VM-hosted, 
 - **Do not create a Workers VPC Service**, Workers KV, Durable Objects, D1, a custom authorization server, or a separate SaaS MCP gateway.
 - **Do not expose the database, scheduler, worker, admin API, or an unauthenticated fallback hostname.**
 - One canonical public host: `nous.yohn.jp`. Avoid alternate names such as `mcp.osint.yohn.jp`, `osint.yohn.jp` and `nous-osint.yohn.jp` unless a later migration explicitly authorizes them.
-- **MCP is the first externally reachable application capability**. A future web UI may live at `/` and a read API at `/api/v1/` on the same host after a separate authorization and exposure review. Their URLs are **reserved**, not presently required or considered deployed.
+- **MCP and the read-only UI share one Access-protected hostname.** The UI lives at `/`; its same-origin read API is a strict GET allowlist under `/v1`. `/api/v1/` remains closed.
 
 Reason: Cloudflare Access Managed OAuth supports non-browser OAuth clients for Access-protected self-hosted applications. Tunnel publishes a private VM origin to the Cloudflare edge with outbound-only connectivity. The host application already has the search/data service layer; a Worker would add deployment and charging surfaces without providing a required function.
 
@@ -56,7 +56,7 @@ The scheduler and worker never accept incoming traffic. No public PostgreSQL por
 
 - Add `nous-tunnel.container` using a pinned `cloudflared` image digest and a VM-local secret/token. Do not assume `127.0.0.1` inside a container references the host's loopback.
 - Prefer a **separate rootless Podman ingress network** shared only by `cloudflared` and the MCP-serving app; keep PostgreSQL on the pre-existing backend network, which `cloudflared` must not join. Connect the API process to both networks only if required. Inspect actual Quadlet service/network names before writing files; do not replace working deployments blindly.
-- On the Tunnel, map the single public hostname to the **MCP-serving origin**. The origin must return `404` or `403` for unapproved external paths even after authentication; do not rely on path routing at the edge to hide `/api/v1`, administrative routes, or diagnostics.
+- On the Tunnel, map the single public hostname to the combined MCP/UI origin. The origin admits `/mcp`, static UI files, and a strict GET allowlist under `/v1`; it returns `404` for `/api/v1`, administrative routes, diagnostics and every other unapproved path even after authentication.
 - Cloudflare Access covers the **whole public hostname**. All reachable paths, including error pages, inherit the Access policy; no broad Bypass policy. Health probes use local/VM-only addresses.
 - No direct public DNS A/AAAA to the VM and no secondary unprotected public hostname. Disable extra `workers.dev` routes because no Worker is deployed.
 
@@ -130,16 +130,17 @@ Cloudflared's token-file mechanism, Podman secret delivery, container command an
 
 | Public path | Current target state | Trust requirement |
 | --- | --- | --- |
-| `https://nous.yohn.jp/mcp` | **Phase 5: implement** | Access Managed OAuth + valid Access JWT + read-only tools |
-| `https://nous.yohn.jp/` | **Reserved** for optional future UI | Access-protected; 404 until UI implemented |
-| `https://nous.yohn.jp/api/v1/` | **Reserved, not presently exposed** | 404/403 at public ingress; internal API remains private |
+| `https://nous.yohn.jp/mcp` | MCP | Access Managed OAuth + valid Access JWT + read-only tools |
+| `https://nous.yohn.jp/` | Static UI | Access JWT required; assets are image-baked and hash-routed |
+| `https://nous.yohn.jp/v1/*` | UI read API | Access JWT required; allowlisted GET routes proxy to the private API |
+| `https://nous.yohn.jp/api/v1/` | Closed | 404 at origin; internal API remains private |
 | `/health/*`, `/admin/*`, `/metrics`, `/docs`, `/openapi.json` | **Not public** | return 404/403; health is VM-local |
 
 A shared hostname is **not** permission to expose every FastAPI route. If a future UI/API needs different authorization than the MCP app, define and verify separate Access path-scoped applications or a strict per-route origin policy before changing the public route contract. No second public hostname should be added merely to sidestep the authorization decision.
 
 ## 7. Remaining Cloudflare control-plane work
 
-The VM-side origin and connector are deployed and reboot-tested. Cloudflare resources were not changed in that operation. The following remains a separate control-plane task:
+The VM-side origin, connector and read-only UI are deployed and reboot-tested. Cloudflare resources were not changed. The following remains a separate control-plane task:
 
 1. Import the existing account, zone, Access policy/application, Tunnel, DNS record and Tunnel configuration into Terraform state. Inspect provider import identifiers and ensure the plan contains only Nous changes.
 2. Verify the existing Access app and policy enforce only the approved GitHub IdP and named email; verify Managed OAuth is on and no Everyone/Bypass rule exists.

@@ -23,7 +23,7 @@ The repository contains reproducible Quadlet definitions in `deploy/quadlet/`:
 | `nous-db.volume` | `nous-db-volume.service` | Persistent PostgreSQL files |
 | `nous-db.container` | `nous-db.service` | PostgreSQL |
 | `nous-api.container` | `nous-api.service` | FastAPI retrieval API |
-| `nous-mcp.container` | `nous-mcp.service` | Read-only MCP origin on backend and ingress networks |
+| `nous-mcp.container` | `nous-mcp.service` | MCP, static UI and authenticated read-only API proxy on backend and ingress networks |
 | `nous-tunnel.container` | `nous-tunnel.service` | Outbound-only cloudflared connector on ingress network |
 | `nous-scheduler.container` | `nous-scheduler.service` | One scheduling process |
 | `nous-worker.container` | `nous-worker.service` | Fetch/parse/normalize worker |
