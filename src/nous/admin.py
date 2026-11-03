@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from .models import Source, SourceAudit
+from .models import FetchJob, Source, SourceAudit, now
 from .onboard_source import probe
 from .registry import SourceConfig, apply_config, load_registry, revision_of
 
@@ -173,6 +173,13 @@ def update_source(key: str, config: SourceConfig, request: Request):
             raise HTTPException(404, "source not found")
         if row.origin != "custom":
             raise HTTPException(409, "official definitions are maintained in Git")
+        # Do not relabel a live fetch with a new publisher URL or parser.
+        active = db.scalar(select(FetchJob.id).where(
+            FetchJob.source_id == row.id, FetchJob.state == "leased",
+            FetchJob.lease_until > now()
+        ).limit(1))
+        if active is not None:
+            raise HTTPException(409, "wait for the active fetch before editing")
         before = row.config.copy()
         apply_config(row, config.model_dump())
         _audit(db, row, request.state.access_identity.subject, "edit", before)
