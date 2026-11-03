@@ -40,6 +40,45 @@ export interface Source {
   next_due_at: string
   last_error: string | null
 }
+export interface SourceDefinition {
+  id: string
+  kind: 'rss' | 'json_api' | 'html'
+  url: string
+  adapter: string
+  item_kind: ItemKind
+  organization?: string | null
+  interval_minutes: number
+  max_requests_per_hour: number
+  max_concurrency: number
+  enabled: boolean
+  policy: { reviewed_at: string; terms_url?: string | null; robots_url?: string | null; content_storage: 'metadata_only'; note: string }
+  json_path?: string | null
+  field_map?: Record<string, string>
+  selectors?: Record<string, string>
+}
+export interface ManagedSource {
+  id: string
+  origin: 'official' | 'custom'
+  config: SourceDefinition
+  overrides: Record<string, number | boolean>
+  catalog_revision: string | null
+  enabled: boolean
+  last_success_at: string | null
+  next_due_at: string
+  last_error: string | null
+}
+export interface CatalogEntry {
+  config: SourceDefinition
+  catalog_revision: string
+  installed: boolean
+  runtime: ManagedSource | null
+}
+export interface ProbeResult {
+  source: string
+  entries: number
+  status: number
+  sample: { title: string; url: string }[]
+}
 export interface Change {
   item_id: number
   kind: ItemKind
@@ -82,12 +121,39 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return await response.json() as T
 }
 
+async function mutation<T>(path: string, method: 'POST' | 'PUT' | 'PATCH', payload: object = {}): Promise<T> {
+  if (!/^\/v1\/admin\//.test(path) || path.startsWith('//')) throw new Error('Invalid admin path')
+  const response = await fetch(path, {
+    method, credentials: 'same-origin', cache: 'no-store',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Nous-Admin-Action': '1' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const message = response.status === 409 ? 'ソースIDまたは設定が競合しています。'
+      : response.status === 422 ? 'ソース定義または接続検証に失敗しました。'
+      : response.status === 401 || response.status === 403 ? '管理者権限を確認してください。'
+      : response.status >= 500 ? '管理APIが利用できません。設定とDB接続を確認してください。'
+      : '操作に失敗しました。'
+    throw new ApiError(response.status, message)
+  }
+  return await response.json() as T
+}
+
 export const api = {
   items: (params: { q?: string | undefined; kind?: ItemKind | undefined; source?: string | undefined; limit?: number | undefined; cursor?: number | undefined }, signal?: AbortSignal) =>
     get<ItemPage>('/v1/items' + qs(params), signal),
   sources: (signal?: AbortSignal) => get<Source[]>('/v1/sources', signal),
   item: (id: number, signal?: AbortSignal) => get<ItemDetail>('/v1/items/' + id, signal),
   versions: (id: number, signal?: AbortSignal) => get<ItemVersion[]>('/v1/items/' + id + '/versions?limit=20', signal),
+  adminSession: () => get<{ allowed: boolean }>('/v1/admin/session'),
+  adminCatalog: () => get<CatalogEntry[]>('/v1/admin/catalog'),
+  adminSources: () => get<ManagedSource[]>('/v1/admin/sources'),
+  adminCreate: (source: SourceDefinition) => mutation<ManagedSource>('/v1/admin/sources', 'POST', source),
+  adminUpdate: (id: string, source: SourceDefinition) =>
+    mutation<ManagedSource>('/v1/admin/sources/' + encodeURIComponent(id), 'PUT', source),
+  adminSettings: (id: string, settings: { enabled?: boolean; interval_minutes?: number; max_requests_per_hour?: number; max_concurrency?: number }) =>
+    mutation<ManagedSource>('/v1/admin/sources/' + encodeURIComponent(id) + '/settings', 'PATCH', settings),
+  adminProbe: (id: string) => mutation<ProbeResult>('/v1/admin/sources/' + encodeURIComponent(id) + '/probe', 'POST'),
   changes: (params: { since: string; kind?: ItemKind | undefined; limit?: number | undefined }, signal?: AbortSignal) =>
     get<ChangesPage>('/v1/changes' + qs(params), signal),
 }
