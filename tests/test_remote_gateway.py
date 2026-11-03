@@ -25,16 +25,30 @@ def gateway(monkeypatch, tmp_path):
     assets = tmp_path / "assets"
     assets.mkdir()
     (assets / "app-123.js").write_text("window.nous = true")
+    (assets / "index-0123456789.js").write_text("window.compiled = true")
     return remote_gateway
 
 
 def test_static_ui_requires_assertion_and_unknown_routes_stay_hidden(gateway):
     client = TestClient(gateway.app, base_url="https://nous.yohn.jp")
-    assert client.get("/").status_code == 403
+    unauthenticated = client.get("/")
+    assert unauthenticated.status_code == 403
+    assert unauthenticated.headers["cache-control"] == "no-store"
     headers = {"Cf-Access-Jwt-Assertion": "test-assertion"}
-    assert client.get("/", headers=headers).text == "<main>Nous UI</main>"
+    page = client.get("/", headers=headers)
+    assert page.text == "<main>Nous UI</main>"
+    assert page.headers["cache-control"] == "no-store"
+    for route in ("/explore", "/changes", "/sources", "/sources/new", "/items/3"):
+        page = client.get(route, headers=headers)
+        assert page.status_code == 200 and page.text == "<main>Nous UI</main>"
+        assert page.headers["cache-control"] == "no-store"
     asset = client.get("/assets/app-123.js", headers=headers)
     assert asset.status_code == 200 and "window.nous" in asset.text
+    assert asset.headers["cache-control"] == "no-store"
+    immutable = client.get("/assets/index-0123456789.js", headers=headers)
+    assert immutable.status_code == 200
+    assert immutable.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert client.get("/assets/missing-0123456789.js", headers=headers).headers["cache-control"] == "no-store"
     for path in ("/docs", "/health/ready", "/admin", "/api/v1/items", "/v1/status"):
         assert client.get(path, headers=headers).status_code == 404
     assert client.post("/v1/items", headers=headers).status_code == 404

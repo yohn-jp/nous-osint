@@ -27,6 +27,7 @@ _MAX_JWKS_BYTES = 128_000
 _STATIC_ASSET = re.compile(r"^/assets/[A-Za-z0-9._-]{1,255}$")
 _API_ITEM = re.compile(r"^/v1/items/[0-9]+$")
 _API_VERSIONS = re.compile(r"^/v1/items/[0-9]+/versions$")
+_SPA_ROUTE = re.compile(r"^/(?:explore|changes|sources|sources/new|items/[0-9]+)$")
 
 
 class AccessDenied(Exception):
@@ -221,7 +222,7 @@ class AccessAssertionMiddleware:
     def _allowed_path(path: str, method: str) -> bool:
         if path in ("/mcp", "/mcp/"):
             return True
-        if path in ("/", "/index.html") or _STATIC_ASSET.fullmatch(path):
+        if path in ("/", "/index.html") or _STATIC_ASSET.fullmatch(path) or _SPA_ROUTE.fullmatch(path):
             return method in ("GET", "HEAD")
         if method != "GET":
             return False
@@ -239,10 +240,30 @@ class AccessAssertionMiddleware:
             return await self.app(scope, receive, send)
         path = scope.get("path", "")
         method = scope.get("method", "").upper()
+
+        async def send_with_cache(message):
+            if message["type"] == "http.response.start":
+                status = message["status"]
+                # A shared CDN must never store authenticated records, OAuth/MCP
+                # exchanges, HTML, or error responses. Only content-hashed,
+                # identity-independent SPA assets are reusable across users.
+                immutable_asset = (method in ("GET", "HEAD") and 200 <= status < 300
+                                   and bool(re.fullmatch(
+                                       r"/assets/[A-Za-z0-9._-]+-[A-Za-z0-9_-]{8,}"
+                                       r"\.(?:js|css|svg|woff2?|png|webp|avif|ico)", path)))
+                cache_value = (b"public, max-age=31536000, immutable" if immutable_asset
+                               else b"no-store")
+                headers_out = [(key, value) for key, value in message.get("headers", [])
+                               if key.lower() not in (b"cache-control", b"cdn-cache-control",
+                                                      b"cloudflare-cdn-cache-control")]
+                headers_out.extend([(b"cache-control", cache_value),
+                                    (b"x-content-type-options", b"nosniff")])
+                message = {**message, "headers": headers_out}
+            await send(message)
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
         if not self._allowed_host(headers) or not self._allowed_path(path, method):
             return await JSONResponse({"detail": "not found"}, status_code=404)(
-                scope, receive, send
+                scope, receive, send_with_cache
             )
         raw = headers.get(b"cf-access-jwt-assertion")
         try:
@@ -250,7 +271,7 @@ class AccessAssertionMiddleware:
             identity = await asyncio.to_thread(self.verifier.verify, assertion)
         except (UnicodeError, AccessDenied):
             return await JSONResponse({"detail": "forbidden"}, status_code=403)(
-                scope, receive, send
+                scope, receive, send_with_cache
             )
         scope.setdefault("state", {})["access_identity"] = identity
-        return await self.app(scope, receive, send)
+        return await self.app(scope, receive, send_with_cache)

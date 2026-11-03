@@ -27,8 +27,8 @@ onBeforeUnmount(() => controller?.abort())
 <template>
   <q-page class="nous-page">
     <div class="eyebrow q-mb-sm">INTELLIGENCE / SOURCES</div>
-    <h1 class="page-title q-ma-none">情報源を確認する。</h1>
-    <p class="page-subtitle q-mb-xl">収集先の有効状態と最終成功日時。変更操作は提供していません。</p>
+    <div class="row items-center justify-between q-gutter-md"><h1 class="page-title q-ma-none">情報源を確認する。</h1><q-btn color="primary" unelevated icon="add" label="情報源を追加" to="/sources/new" /></div>
+    <p class="page-subtitle q-mb-xl">収集先の有効状態と最終成功日時。新しい情報源はGitでのレビュー後に収集を開始します。</p>
     <section class="content-panel">
       <div class="row items-center q-pa-md q-gutter-sm">
         <q-input v-model="textFilter" dense outlined clearable label="情報源を絞り込む" class="col" style="max-width: 370px"><template #prepend><q-icon name="search" /></template></q-input>
