@@ -1,0 +1,23 @@
+# Staged only: rename after image is rebuilt and secrets configured.
+[Unit]
+Description=Nous OSINT read-only MCP origin
+Requires=nous-db.service
+After=nous-db.service
+
+[Container]
+Image=REPLACE_WITH_VERIFIED_NOUS_IMAGE_DIGEST
+ContainerName=nous-mcp
+Network=nous.network
+Network=nous-ingress.network
+Secret=nous-api-database-url,type=mount,target=/run/secrets/database_url
+Environment=DATABASE_URL_FILE=/run/secrets/database_url
+EnvironmentFile=%h/.config/nous/mcp.env
+Exec=uvicorn nous.remote_mcp:app --host 0.0.0.0 --port 8001 --workers 1
+NoNewPrivileges=true
+
+[Service]
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
