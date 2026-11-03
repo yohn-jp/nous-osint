@@ -65,3 +65,13 @@ jobs:
         run: npm run build
       - name: Verify static output
         run: test -f dist/spa/index.html
+
+      - name: Export generated UI dependency lock (temporary)
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const b = fs.readFileSync('package-lock.json').toString('base64');
+          for (let i = 0; i < b.length; i += 2000) {
+            console.log('NOUS_LOCK_CHUNK:' + String(i / 2000) + ':' + b.slice(i, i + 2000));
+          }
+          NODE
