@@ -34,7 +34,10 @@ jobs:
           test -n "$db"
           docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "CREATE ROLE nous LOGIN"
           docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO nous; GRANT SELECT ON ALL TABLES IN SCHEMA public TO nous"
-          timeout 30s docker exec -i "$db" bash -s < scripts/snapshot-dump.sh > /tmp/nous-ci.dump 2> /tmp/nous-ci.meta
+          if ! timeout 30s docker exec -i "$db" bash -s < scripts/snapshot-dump.sh > /tmp/nous-ci.dump 2> /tmp/nous-ci.meta; then
+            cat /tmp/nous-ci.meta >&2
+            exit 1
+          fi
           grep -Fq 'NOUS_SNAPSHOT_METADATA=0004|0|0|0' /tmp/nous-ci.meta
           docker exec -i "$db" pg_restore -l < /tmp/nous-ci.dump | grep -q sources
       - run: pytest -q
