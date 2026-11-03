@@ -1,11 +1,13 @@
 import hashlib
 import json
 import logging
+import socket
 import time
+import httpx
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from .adapters import extract
 from .db import session_factory
@@ -27,7 +29,8 @@ def schedule_once(factory):
                          .with_for_update(skip_locked=True)).all()
         for source in due:
             # The due timestamp is stable until this transaction commits.
-            key = f"{source.source_key}:{source.next_due_at.isoformat()}"
+            # Deterministic, bounded key even for the longest legal source identifier.
+            key = hashlib.sha256(f"{source.source_key}\0{source.next_due_at.isoformat()}".encode()).hexdigest()
             db.add(FetchJob(source_id=source.id, dedupe_key=key))
             source.next_due_at = now() + timedelta(minutes=source.interval_minutes)
         db.commit()
@@ -41,6 +44,12 @@ def claim(factory):
                 (FetchJob.lease_until < current)), FetchJob.available_at <= current)
             .order_by(FetchJob.available_at, FetchJob.id).with_for_update(skip_locked=True))
         if job is None:
+            return None
+        # An abandoned lease counts toward the same retry budget as caught failures.
+        if job.attempts >= 5:
+            job.state = "failed"
+            job.lease_until = None
+            db.commit()
             return None
         source = db.scalar(select(Source).where(Source.id == job.source_id).with_for_update())
         if not source.enabled:
@@ -125,6 +134,7 @@ def process(factory, job_id):
     final_url = None
     error = None
     retry_after = None
+    retryable_fetch_failure = False
     try:
         status, body, headers, final_url = fetch(url, etag, modified)
         if status == 304:
@@ -146,6 +156,10 @@ def process(factory, job_id):
         else:
             raise ValueError(f"http_{status}")
     except Exception as exc:
+        # HTTPX transports and DNS resolution fail before an HTTP status exists.
+        retryable_fetch_failure = isinstance(
+            exc, (httpx.TransportError, socket.gaierror, ConnectionError, TimeoutError)
+        )
         error = type(exc).__name__ + ":" + str(exc)[:80]
         outcome = "failure"
         records = []
@@ -156,6 +170,12 @@ def process(factory, job_id):
         try:
             for raw in records:
                 store_item(db, source, raw, final_url)
+            if outcome == "unchanged":
+                # 304 confirms the unchanged representation still describes the
+                # current records; absent/unknown entries are not resurrected.
+                db.execute(update(Item).where(Item.source_id == source.id,
+                                              Item.state == "current")
+                           .values(last_seen_at=now()))
             if outcome == "success":
                 seen = {raw.get("id") or raw.get("url") for raw in records}
                 for old_item in db.scalars(select(Item).where(Item.source_id == source.id)):
@@ -177,7 +197,7 @@ def process(factory, job_id):
             source = db.get(Source, job.source_id)
             error = str(exc)[:100]
             source.last_error = error
-            retryable = status in (429, 500, 502, 503, 504) or "Timeout" in error
+            retryable = retryable_fetch_failure or status in (429, 500, 502, 503, 504)
             job.state = "queued" if retryable and job.attempts < 5 else "failed"
             if job.state == "queued":
                 delay = min(3600, max(retry_after or 0, 30 * 2 ** job.attempts))

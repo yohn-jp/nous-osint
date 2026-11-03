@@ -1,4 +1,7 @@
 from datetime import datetime
+from functools import lru_cache
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from typing import Any, Literal
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
@@ -88,12 +91,26 @@ class StatusResponse(APIModel):
 def live():
     return {"status": "ok"}
 
+@lru_cache(maxsize=1)
+def expected_schema_head():
+    # The image carries alembic.ini and migrations in /app.
+    return ScriptDirectory.from_config(Config("alembic.ini")).get_current_head()
+
+
 @app.get("/health/ready", response_model=ReadyResponse)
 def ready():
-    with session_factory()() as db:
-        db.execute(text("select 1"))
-        version = db.execute(text("select version_num from alembic_version")).scalar_one()
-        return {"status": "ok", "schema": version}
+    try:
+        expected = expected_schema_head()
+        with session_factory()() as db:
+            db.execute(text("select 1"))
+            version = db.execute(text("select version_num from alembic_version")).scalar_one()
+        if not expected or version != expected:
+            raise HTTPException(status_code=503, detail="database schema is not current")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="database is not ready") from exc
+    return {"status": "ok", "schema": version}
 
 @app.get("/v1/sources", response_model=list[SourceResponse])
 def sources():
@@ -172,7 +189,8 @@ def changes(since: AwareDatetime, kind: ItemKind | None = None,
         query = select(ItemVersion, Item).join(Item).where(ItemVersion.observed_at >= since)
         if kind:
             query = query.where(Item.kind == kind)
-        return {"changes": [{"item_id": item.id, "kind": item.kind, "title": item.title,
+        return {"changes": [{"item_id": item.id, "kind": item.kind,
+                             "title": v.attributes["title"],
                              "version": v.version, "observed_at": v.observed_at}
                             for v, item in db.execute(query.order_by(ItemVersion.id.desc()).limit(limit))]}
 
