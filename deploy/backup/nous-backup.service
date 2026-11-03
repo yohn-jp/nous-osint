@@ -1,0 +1,12 @@
+[Unit]
+Description=Pull and encrypt Nous OSINT PostgreSQL backup
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/nous-osint/backup.env
+ExecStart=%h/.local/libexec/nous-backup-pull.sh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=%h/.local/state/nous-osint/backups %h/.gnupg

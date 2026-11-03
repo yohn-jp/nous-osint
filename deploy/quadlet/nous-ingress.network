@@ -1,0 +1,3 @@
+# Cloudflared joins this network, never the backend database network.
+[Network]
+NetworkName=nous-ingress

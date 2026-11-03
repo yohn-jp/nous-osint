@@ -1,0 +1,22 @@
+# Staged only: replace image placeholder and provision Podman token secret.
+# cloudflared >= 2025.4.0 supports --token-file.
+[Unit]
+Description=Cloudflare Tunnel for Nous MCP
+Requires=nous-mcp.service
+After=nous-mcp.service
+
+[Container]
+Image=REPLACE_WITH_PINNED_CLOUDFLARED_DIGEST
+ContainerName=nous-tunnel
+Network=nous-ingress.network
+Secret=nous-tunnel-token,type=mount,target=/run/secrets/token
+Exec=tunnel --no-autoupdate run --token-file /run/secrets/token
+NoNewPrivileges=true
+ReadOnly=true
+
+[Service]
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

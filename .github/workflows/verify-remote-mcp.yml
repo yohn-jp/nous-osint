@@ -1,0 +1,55 @@
+name: Remote MCP security and SDK validation
+
+on:
+  push:
+    branches: [feat/access-tunnel-mcp]
+  pull_request:
+    paths:
+      - "src/nous/access_auth.py"
+      - "src/nous/remote_mcp.py"
+      - "tests/test_access_auth.py"
+      - ".github/workflows/verify-remote-mcp.yml"
+      - "deploy/cloudflare/terraform/**"
+
+permissions:
+  contents: read
+
+jobs:
+  remote-mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install standalone MCP adapter dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            mcp==2.3.0 cryptography==46.0.3 \
+            fastapi==0.121.2 httpx==0.28.1 pytest==9.0.1
+      - name: Compile modules
+        run: python -m compileall -q src/nous/access_auth.py src/nous/remote_mcp.py
+      - name: Verify Access assertion and network boundary
+        env:
+          PYTHONPATH: src
+        run: python -m pytest -q tests/test_access_auth.py
+      - name: Import MCP SDK app under explicit Access configuration
+        env:
+          PYTHONPATH: src
+          CF_ACCESS_ISSUER: https://test.cloudflareaccess.com
+          CF_ACCESS_AUDIENCE: test-audience
+        run: python -c 'from nous.remote_mcp import app; print(type(app).__name__)'
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+      - name: Terraform formatting
+        run: terraform -chdir=deploy/cloudflare/terraform fmt -check -diff
+      - name: Resolve Cloudflare provider without remote backend
+        run: terraform -chdir=deploy/cloudflare/terraform init -backend=false -input=false
+      - name: Validate Access and Tunnel resources
+        run: terraform -chdir=deploy/cloudflare/terraform validate -no-color

@@ -1,0 +1,22 @@
+id: github-advisories
+kind: json_api
+url: https://api.github.com/advisories?per_page=20
+adapter: json_v1
+item_kind: vulnerability
+organization: GitHub Advisory Database
+interval_minutes: 180
+max_requests_per_hour: 4
+max_concurrency: 1
+enabled: true
+field_map:
+  id: ghsa_id
+  url: html_url
+  title: summary
+  published: published_at
+  updated: updated_at
+policy:
+  reviewed_at: '2026-11-03'
+  terms_url: https://docs.github.com/en/rest/security-advisories/global-advisories
+  robots_url: null
+  content_storage: metadata_only
+  note: Public unauthenticated advisory REST endpoint; limited to 20 metadata entries per poll.

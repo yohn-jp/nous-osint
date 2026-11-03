@@ -1,0 +1,20 @@
+[Unit]
+Description=Nous Scheduler
+Requires=nous-db.service
+After=nous-db.service
+
+[Container]
+Image=sha256:1f4ffefd5105266b157b485041325eb77917e5fa852bee7a3f86afd37f3a85d8
+ContainerName=nous-scheduler
+Network=nous.network
+Secret=nous-runtime-database-url,type=mount,target=/run/secrets/database_url
+Environment=DATABASE_URL_FILE=/run/secrets/database_url
+Exec=python -m nous.runtime scheduler
+NoNewPrivileges=true
+
+[Service]
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

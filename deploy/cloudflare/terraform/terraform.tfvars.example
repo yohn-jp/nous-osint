@@ -1,0 +1,8 @@
+# Copy this example to terraform.tfvars (ignored) and replace placeholders.
+account_id = "00000000000000000000000000000000"
+zone_id    = "00000000000000000000000000000000"
+team_name  = "YOUR_ACCESS_TEAM"
+allowed_emails = ["authorized-user@example.com"]
+allowed_idps = ["EXISTING_ACCESS_IDP_ID"]
+# Obtain the exact real redirect URI from the MCP client registration flow.
+allowed_redirect_uris = ["https://client.example.com/oauth/callback"]
