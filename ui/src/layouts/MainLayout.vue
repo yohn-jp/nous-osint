@@ -14,6 +14,7 @@ const nav = [
 ]
 const isActive = (name: string) => active.value === name || (active.value === 'item' && name === 'explore')
 function toggleDark() { $q.dark.set(!$q.dark.isActive) }
+function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
 </script>
 
 <template>
@@ -33,7 +34,7 @@ function toggleDark() { $q.dark.set(!$q.dark.isActive) }
     <q-drawer v-model="drawerOpen" show-if-above :breakpoint="1024" :width="222" bordered class="nous-drawer">
       <div class="q-px-md q-pt-xl q-pb-md sidebar-caption">LIBRARY</div>
       <q-list padding class="q-px-sm">
-        <q-item v-for="entry in nav" :key="entry.name" clickable v-ripple :to="entry.to" exact class="nav-entry" :active="isActive(entry.name)" active-class="nav-entry-active" @click="if ($q.screen.lt.md) drawerOpen = false">
+        <q-item v-for="entry in nav" :key="entry.name" clickable v-ripple :to="entry.to" exact class="nav-entry" :active="isActive(entry.name)" active-class="nav-entry-active" @click="closeDrawerOnMobile">
           <q-item-section avatar><q-icon :name="entry.icon" size="20px" /></q-item-section>
           <q-item-section><q-item-label>{{ entry.title }}</q-item-label><q-item-label caption>{{ entry.caption }}</q-item-label></q-item-section>
         </q-item>
