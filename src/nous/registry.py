@@ -60,21 +60,51 @@ def load_registry(path="sources"):
             result.append(source)
     return result
 
+def revision_of(config: dict) -> str:
+    return hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
+
+
+def apply_config(row: Source, raw: dict):
+    """Update effective collection configuration without erasing runtime history."""
+    config = SourceConfig.model_validate(raw)
+    row.kind, row.url, row.adapter, row.item_kind = (
+        config.kind, config.url, config.adapter, config.item_kind
+    )
+    row.config = config.model_dump()
+    row.config_revision = revision_of(row.config)
+    row.enabled, row.interval_minutes = config.enabled, config.interval_minutes
+    row.max_requests_per_hour = config.max_requests_per_hour
+
+
 def sync(session, configs):
+    """Import official catalog idempotently; retain instance custom sources/overrides."""
     active_keys = set()
     for cfg in configs:
+        if cfg.id in active_keys:
+            raise ValueError(f"duplicate official source ID: {cfg.id}")
         active_keys.add(cfg.id)
         raw = cfg.model_dump()
-        revision = hashlib.sha256(json.dumps(raw, sort_keys=True).encode()).hexdigest()
         row = session.scalar(select(Source).where(Source.source_key == cfg.id))
         if row is None:
-            row = Source(source_key=cfg.id)
+            row = Source(source_key=cfg.id, origin="official", overrides={})
             session.add(row)
-        row.kind, row.url, row.adapter, row.item_kind = cfg.kind, cfg.url, cfg.adapter, cfg.item_kind
-        row.config_revision, row.config = revision, raw
-        row.enabled, row.interval_minutes = cfg.enabled, cfg.interval_minutes
-        row.max_requests_per_hour = cfg.max_requests_per_hour
-    for row in session.scalars(select(Source).where(Source.enabled.is_(True))):
+        elif row.origin != "official":
+            raise ValueError(f"custom source conflicts with official catalog: {cfg.id}")
+        overrides = row.overrides or {}
+        # The administrator owns only operational overrides, not the origin URL
+        # or parsing/policy contract. A catalog update preserves those overrides.
+        if overrides.keys() - {
+            "enabled", "interval_minutes", "max_requests_per_hour", "max_concurrency"
+        }:
+            raise ValueError(f"unsupported official override: {cfg.id}")
+        apply_config(row, {**raw, **overrides})
+        row.catalog_revision = revision_of(raw)
+
+    for row in session.scalars(select(Source).where(
+        Source.origin == "official", Source.enabled.is_(True)
+    )):
         if row.source_key not in active_keys:
             row.enabled = False
+            row.config = {**row.config, "enabled": False}
+            row.config_revision = revision_of(row.config)
     session.commit()
