@@ -44,3 +44,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP
 .onboarding-review { position: sticky; top: 80px; }
 .onboarding-code { max-height: 55vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 8px; border: 1px solid var(--nous-line); background: var(--nous-paper); color: var(--nous-ink); padding: 16px; font-size: 12px; line-height: 1.7; }
 @media (max-width: 1100px) { .onboarding-grid { grid-template-columns: minmax(0,1fr); } .onboarding-review { position: static; } }
+
+/* Source management: maintain a readable density for operational metadata. */
+.admin-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.admin-stat { display: flex; flex-direction: column; gap: 5px; background: var(--nous-panel); border: 1px solid var(--nous-line); border-radius: 12px; padding: 15px 20px; }
+.admin-stat span { color: var(--nous-muted); font-size: 11px; }
+.admin-stat strong { font-size: 26px; line-height: 1.3; font-variant-numeric: tabular-nums; font-weight: 700; }
+.admin-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 16px; }
+.admin-hint { padding: 16px 22px; margin: 0; font-size: 12px; line-height: 1.8; color: var(--nous-muted); background: var(--nous-paper); }
+.admin-source { padding: 19px 22px; border-top: 1px solid var(--nous-line); display: flex; gap: 18px; align-items: center; justify-content: space-between; }
+.admin-source-main { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.admin-source-id { color: var(--nous-muted); font-size: 11px; margin-top: 6px; }
+.admin-source-detail { color: var(--nous-muted); font-size: 11px; margin-top: 7px; overflow-wrap: anywhere; }
+.admin-source-actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: flex-end; flex-shrink: 0; }
+.admin-form { padding: clamp(18px, 3vw, 32px); max-width: 860px; }
+@media(max-width: 850px) { .admin-source { flex-direction: column; align-items: stretch; } .admin-source-actions { justify-content: flex-start; } }
+@media(max-width: 480px) { .admin-stats { gap: 6px; } .admin-stat { padding: 12px; } .admin-stat strong { font-size: 22px; } .admin-toolbar { display: block; } .admin-source { padding: 16px; } }
