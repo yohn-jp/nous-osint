@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 from sqlalchemy import func, or_, select, text
+from sqlalchemy.dialects.postgresql import insert
 from .adapters import extract
 from .db import session_factory
 from .fetch import fetch
@@ -81,13 +82,11 @@ def store_item(db, source, raw, final_url):
     attrs = {"title": title.strip(), "url": url, "published": raw.get("published"),
              "updated": raw.get("updated")}
     digest = hashlib.sha256(json.dumps(attrs, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    db.execute(insert(Item).values(source_id=source.id, external_id=external_id,
+                                   canonical_url=url, kind=source.item_kind, title=title)
+               .on_conflict_do_nothing(index_elements=["source_id", "external_id"]))
     item = db.scalar(select(Item).where(Item.source_id == source.id, Item.external_id == external_id)
                      .with_for_update())
-    if item is None:
-        item = Item(source_id=source.id, external_id=external_id, canonical_url=url,
-                    kind=source.item_kind, title=title)
-        db.add(item)
-        db.flush()
     item.last_seen_at = now()
     item.state = "current"
     item.organization = source.config.get("organization")

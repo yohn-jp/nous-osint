@@ -2,6 +2,7 @@ import json
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from sqlalchemy import func, select
 import pytest
 from nous import runtime
@@ -37,6 +38,36 @@ def test_host_concurrency_claim():
     with factory() as db:
         states = [db.get(FetchJob, job_id).state for job_id in ids]
         assert sorted(states) == ["leased", "queued"]
+
+
+def test_concurrent_same_item_creates_one_version():
+    factory = session_factory()
+    key = "same-item-" + uuid.uuid4().hex[:12]
+    with factory() as db:
+        source = Source(source_key=key, kind="json_api", url="https://example.org/api",
+                        adapter="json_v1", item_kind="news", config_revision="test",
+                        config={"max_concurrency": 1}, enabled=True, interval_minutes=60,
+                        max_requests_per_hour=10)
+        db.add(source)
+        db.commit()
+        source_id = source.id
+
+    gate = Barrier(2)
+    def write(_):
+        with factory() as db:
+            source = db.get(Source, source_id)
+            gate.wait()
+            runtime.store_item(db, source, {"id": "same", "title": "Same title",
+                                            "url": "https://example.org/same"}, source.url)
+            db.commit()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(write, range(2)))
+    with factory() as db:
+        items = db.scalars(select(Item).where(Item.source_id == source_id)).all()
+        assert len(items) == 1
+        assert db.scalar(select(func.count()).select_from(ItemVersion)
+                         .where(ItemVersion.item_id == items[0].id)) == 1
 
 def test_versioning_and_failures(monkeypatch):
     factory = session_factory()

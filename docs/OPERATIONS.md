@@ -73,6 +73,8 @@ rootless Podman backup command. For a persistent backup host, enable lingering
 for its user or use a system service. The timer runs daily and catches missed
 runs with `Persistent=true`. It retains seven days by default and only prunes
 old encrypted dumps after a new dump and manifest have been written.
+`NOUS_BACKUP_SSH_CONFIG` can select an explicit SSH config file when the backup
+host's systemd sandbox cannot read its system-wide SSH config.
 
 Each `.dump.gpg` has a JSON manifest with schema version, row counts, and the
 encrypted artifact SHA-256. Validate it with:
@@ -87,11 +89,11 @@ removes the test database resources. Keep a verified off-VM copy of the
 decryption key; the backup host's public key alone cannot restore data. Never
 copy live PGDATA as a generic archive. Do not commit dumps or keys.
 
-The initial manual restore test restored records into a separate PostgreSQL 18
-container and volume. The scheduled backup still needs to be provisioned on the
-off-VM host with an approved GPG key fingerprint and its SSH known-host entry;
-the scripts and user timer are repository-managed, but the timer is not enabled
-on the VM or backup host yet.
+On 2026-11-03 the off-VM backup host produced an encrypted dump and manifest,
+then decrypted that exact artifact into an isolated PostgreSQL 18 container and
+volume. Schema `0004`, five sources, 540 items and 540 versions matched the
+manifest. The backup timer is enabled on that host; the recipient private key
+remains outside the repository under the backup user's GPG keyring.
 
 ## Network and sources
 

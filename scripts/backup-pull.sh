@@ -12,6 +12,9 @@ target=${NOUS_BACKUP_HOST:-nous.osint.vm}
 backup_dir=${NOUS_BACKUP_DIR:-$HOME/.local/state/nous-osint/backups}
 recipient=${NOUS_BACKUP_GPG_RECIPIENT:-}
 retention_days=${NOUS_BACKUP_RETENTION_DAYS:-7}
+ssh_config=${NOUS_BACKUP_SSH_CONFIG:-$HOME/.ssh/config}
+ssh_options=(-T -o BatchMode=yes -o ConnectTimeout=15)
+if [[ -f "$ssh_config" ]]; then ssh_options=(-F "$ssh_config" "${ssh_options[@]}"); fi
 
 [[ "$target" =~ ^[a-zA-Z0-9._@-]+$ && "$target" != -* ]] || fail "invalid SSH host alias"
 [[ "$recipient" =~ ^([A-Fa-f0-9]{40}|[A-Fa-f0-9]{64})$ ]] || fail "set NOUS_BACKUP_GPG_RECIPIENT to a verified full OpenPGP fingerprint"
@@ -32,7 +35,7 @@ chmod 700 -- "$backup_dir"
 exec 9>"$backup_dir/.backup.lock"
 flock -n 9 || fail "another backup is already running"
 
-uid=$(ssh -T -o BatchMode=yes -o ConnectTimeout=15 "$target" id -u nous) || fail "cannot resolve remote nous UID"
+uid=$(ssh "${ssh_options[@]}" "$target" id -u nous) || fail "cannot resolve remote nous UID"
 [[ "$uid" =~ ^[0-9]+$ ]] || fail "remote UID is not numeric"
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -45,7 +48,7 @@ tmp_manifest=$(mktemp "$backup_dir/.${base}.manifest.json.XXXXXX")
 trap 'rm -f -- "$tmp_dump" "$tmp_manifest"' EXIT
 
 remote=(cd /tmp '&&' sudo -u nous env HOME=/home/nous "XDG_RUNTIME_DIR=/run/user/${uid}" podman exec nous-db pg_dump -U nous -d nous -Fc)
-if ! ssh -T -o BatchMode=yes -o ConnectTimeout=15 "$target" "${remote[*]}" \
+if ! ssh "${ssh_options[@]}" "$target" "${remote[*]}" \
     | gpg --batch --yes --trust-model always --recipient "$recipient" \
         --output "$tmp_dump" --encrypt; then
   fail "dump transfer or encryption failed"
@@ -54,7 +57,7 @@ fi
 chmod 600 -- "$tmp_dump"
 
 metadata_sql="SELECT (SELECT version_num FROM alembic_version), (SELECT count(*) FROM sources), (SELECT count(*) FROM items), (SELECT count(*) FROM item_versions)"
-metadata=$(ssh -T -o BatchMode=yes -o ConnectTimeout=15 "$target" \
+metadata=$(ssh "${ssh_options[@]}" "$target" \
   "cd /tmp && sudo -u nous env HOME=/home/nous XDG_RUNTIME_DIR=/run/user/${uid} podman exec nous-db psql -v ON_ERROR_STOP=1 -U nous -d nous -AtF '|' -c \"${metadata_sql}\"") \
   || fail "could not read backup manifest metadata"
 IFS='|' read -r schema_version source_count item_count version_count <<< "$metadata"
