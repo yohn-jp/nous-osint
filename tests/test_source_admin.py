@@ -1,6 +1,4 @@
 """Administration requires an Access identity, an operator allowlist and CSRF intent."""
-import os
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
