@@ -104,11 +104,12 @@ def test_middleware_only_exposes_mcp_and_rejects_missing_assertion(auth):
             scope, receive, send
         )
     app = AccessAssertionMiddleware(upstream, verifier)
-    with TestClient(app) as client:
-        assert client.get("/v1/items").status_code == 404
-        assert client.post("/mcp").status_code == 403
-        response = client.post("/mcp", headers={
-            "Cf-Access-Jwt-Assertion": jwt(key, claims),
-        })
-        assert response.status_code == 200
-        assert response.json()["subject"] == "subject-1"
+    # No fake lifespan service is installed on the local test double.
+    client = TestClient(app)
+    assert client.get("/v1/items").status_code == 404
+    assert client.post("/mcp").status_code == 403
+    response = client.post("/mcp", headers={
+        "Cf-Access-Jwt-Assertion": jwt(key, claims),
+    })
+    assert response.status_code == 200
+    assert response.json()["subject"] == "subject-1"
