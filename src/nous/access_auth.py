@@ -27,6 +27,7 @@ _MAX_JWKS_BYTES = 128_000
 _STATIC_ASSET = re.compile(r"^/assets/[A-Za-z0-9._-]{1,255}$")
 _API_ITEM = re.compile(r"^/v1/items/[0-9]+$")
 _API_VERSIONS = re.compile(r"^/v1/items/[0-9]+/versions$")
+_SPA_ROUTE = re.compile(r"^/(?:explore|changes|sources|sources/new|items/[0-9]+)$")
 
 
 class AccessDenied(Exception):
@@ -221,7 +222,7 @@ class AccessAssertionMiddleware:
     def _allowed_path(path: str, method: str) -> bool:
         if path in ("/mcp", "/mcp/"):
             return True
-        if path in ("/", "/index.html") or _STATIC_ASSET.fullmatch(path):
+        if path in ("/", "/index.html") or _STATIC_ASSET.fullmatch(path) or _SPA_ROUTE.fullmatch(path):
             return method in ("GET", "HEAD")
         if method != "GET":
             return False
