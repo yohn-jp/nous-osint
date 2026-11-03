@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import httpx
+from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, Response
 from starlette.staticfiles import StaticFiles
 from urllib.parse import parse_qsl
 
-from .access_auth import AccessAssertionMiddleware, AccessConfig, AccessVerifier
+from .access_auth import AccessAssertionMiddleware, AccessConfig, AccessVerifier, _SPA_ROUTE
 from .remote_mcp import mcp_http
 
 _API_ORIGIN = "http://nous-api:8000"
@@ -94,7 +95,18 @@ class RemoteGateway:
             return await mcp_http(scope, receive, send)
         if path.startswith("/v1/") or path == "/v1/items":
             return await self._api(scope, send)
-        return await self.ui(scope, receive, send)
+        # StaticFiles is used as a bare ASGI app, so handle its missing-file
+        # exception locally. Only known SPA routes may fall back to index.html.
+        ui_scope = scope
+        if _SPA_ROUTE.fullmatch(path):
+            ui_scope = {**scope, "path": "/index.html", "raw_path": b"/index.html",
+                        "query_string": b""}
+        try:
+            return await self.ui(ui_scope, receive, send)
+        except HTTPException:
+            return await JSONResponse({"detail": "not found"}, status_code=404)(
+                scope, _empty_receive, send
+            )
 
 
 async def _empty_receive():
