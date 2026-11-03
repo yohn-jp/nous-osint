@@ -17,6 +17,10 @@
 - **提供**: Access保護付きのブラウザUI、読み取り専用API、Remote MCP
 - **公開リポジトリ**: ソースコード、収集先設定、スキーマ、設計書のみ。秘密情報・私的な転職情報・第三者の本文転載は含めない
 
+## Source administration
+
+Nous ships an official Git-maintained source catalog and also supports **per-instance custom sources** through an Access-authorized Admin UI. The database owns runtime enablement, budgets, custom definitions and audit history. GitHub credentials are **not** needed to administer a private installation. See [Source Management](docs/SOURCE_MANAGEMENT.md) for deployment prerequisites and security boundaries.
+
 ## Architecture documents
 
 1. [System architecture](docs/ARCHITECTURE.md) — 目的、責務、パイプライン、運用上の不変条件
