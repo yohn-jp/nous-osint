@@ -95,7 +95,7 @@ def sync(session, configs):
             raise ValueError(f"duplicate official source ID: {cfg.id}")
         active_keys.add(cfg.id)
         raw = cfg.model_dump()
-        row = session.scalar(select(Source).where(Source.source_key == cfg.id))
+        row = session.scalar(select(Source).where(Source.source_key == cfg.id).with_for_update())
         if row is None:
             row = Source(source_key=cfg.id, origin="official", overrides={})
             session.add(row)
@@ -113,7 +113,7 @@ def sync(session, configs):
 
     for row in session.scalars(select(Source).where(
         Source.origin == "official", Source.enabled.is_(True)
-    )):
+    ).with_for_update()):
         if row.source_key not in active_keys:
             row.enabled = False
             row.config = {**row.config, "enabled": False}
