@@ -1,12 +1,12 @@
 # Nous OSINT — Data and Source Contracts
 
-Status: **design baseline, not yet migrated**  
+Status: **implemented through Alembic 0005**  
 Updated: 2026-11-03
 
 ## 1. Data ownership
 
-- **Git** stores validated source declarations (`sources/*.yaml`), connector code, schemas and migrations.
-- **PostgreSQL** stores source execution state, jobs, observations, normalized items and their versions.
+- **Git** stores reviewed **official catalog** source declarations (`sources/*.yaml`), connector code, schemas and migrations.
+- **PostgreSQL** stores effective official configuration with local overrides, custom source definitions, admin audit history, execution state, jobs, observations, normalized items and their versions.
 - **Private VM storage** may hold temporary raw responses when permitted, with fixed TTL. No arbitrary crawled payload is committed to Git.
 - **Exports** are opt-in, fact-oriented, and omit copyrighted text, private information, keys and unreviewed AI assertions.
 
@@ -31,7 +31,7 @@ policy:
   note: "Placeholder: replace with an approved real source"
 ```
 
-Source IDs are immutable, unique and human-readable. Registration validation rejects duplicate IDs, invalid protocols, unsupported adapters, unreviewed collection policies and unsafe endpoints. A disabled source remains queryable, retaining its historical observations. Credentials are referenced by secret names, not values.
+Source IDs are immutable, unique and human-readable. Official entries are seeded from Git; custom entries are created in the per-instance Admin UI. An official ID conflict is rejected; source removal preserves historical observations. Registration validation rejects duplicate IDs, invalid protocols, unsupported adapters, unreviewed collection policies and unsafe endpoints. A disabled source remains queryable, retaining its historical observations. Credentials are referenced by secret names, not values.
 
 Every enabled source must define a reviewer-verifiable collection policy, ownership, rate limits and a positive decision to collect. A source is never enabled solely because an URL is reachable.
 
@@ -39,7 +39,7 @@ Every enabled source must define a reviewer-verifiable collection policy, owners
 
 | Table | Purpose | Required constraints |
 | --- | --- | --- |
-| `sources` | Synced source identity/configuration and execution state | unique `source_key`; `enabled`; `config_revision`; `last_success_at`; `next_due_at` |
+| `sources` | Official catalog + custom source identity, per-instance overrides and execution state | unique `source_key`; `enabled`; `config_revision`; `last_success_at`; `next_due_at` |
 | `fetch_jobs` | Durable scheduled work + claim lease | unique `dedupe_key`; `state`; `available_at`; `lease_until`; attempt count |
 | `fetch_attempts` | Append-only evidence of each network/parse attempt | `job_id`, start/end, outcome, status, final URL, error code |
 | `items` | Stable identity of a publisher record | `source_id`, `external_id` or verified canonical URL, `kind`, `first_seen_at`, `last_seen_at`, state |
@@ -85,7 +85,7 @@ Entity resolution is conservative. Similar company names or products are not eno
 - `GET /v1/items/{id}/versions` — revision history.
 - `GET /v1/changes?since=&kind=` — newly observed and changed records.
 
-All public responses have documented schemas, explicit UTC timestamps, bounded pagination, stable error envelopes and **no** secrets or unrestricted third-party full text. These are planned endpoints and do not exist yet. Write/admin API is out of scope for MVP.
+Public read responses remain bounded and omit secrets or unlicensed full text. The separate Access-authorized gateway exposes limited `/v1/admin/*` source management with audit tracking; MCP and normal query routes remain read-only. See [Source Management](SOURCE_MANAGEMENT.md).
 
 ## 6. Quality criteria
 
