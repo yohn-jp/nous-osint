@@ -141,7 +141,7 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
           <q-btn flat no-caps size="sm" color="secondary" label="条件をクリア" @click="clearFilters" />
         </div>
         <q-separator />
-        <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 4" :key="n" type="QItem" class="q-mb-lg" /></div>
+        <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 4" :key="n" type="rect" height="62px" class="q-mb-lg" /></div>
         <div v-else-if="error" class="empty-state" role="alert">
           <q-icon name="error_outline" size="32px" color="negative" />
           <p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="loadPage()" />

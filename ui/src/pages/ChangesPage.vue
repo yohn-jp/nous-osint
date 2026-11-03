@@ -59,7 +59,7 @@ onBeforeUnmount(() => controller?.abort())
         <q-space /><q-btn flat dense icon="refresh" color="primary" aria-label="再読み込み" @click="load" />
       </div>
       <q-separator />
-      <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 3" :key="n" type="QItem" class="q-mb-md" /></div>
+      <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 3" :key="n" type="rect" height="62px" class="q-mb-md" /></div>
       <div v-else-if="error" class="empty-state" role="alert"><q-icon name="error_outline" color="negative" size="30px"/><p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="load" /></div>
       <div v-else-if="changes.length === 0" class="empty-state"><q-icon name="history" size="32px"/><p class="q-mt-md">この期間に記録された変更はありません。</p></div>
       <template v-else>

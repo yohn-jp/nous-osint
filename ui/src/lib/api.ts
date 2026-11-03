@@ -69,7 +69,7 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
     credentials: 'same-origin',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
-    signal,
+    signal: signal ?? null,
   })
   if (!response.ok) {
     const message = response.status === 401 || response.status === 403
@@ -83,11 +83,11 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 export const api = {
-  items: (params: { q?: string; kind?: ItemKind; source?: string; limit?: number; cursor?: number }, signal?: AbortSignal) =>
+  items: (params: { q?: string | undefined; kind?: ItemKind | undefined; source?: string | undefined; limit?: number | undefined; cursor?: number | undefined }, signal?: AbortSignal) =>
     get<ItemPage>('/v1/items' + qs(params), signal),
   sources: (signal?: AbortSignal) => get<Source[]>('/v1/sources', signal),
   item: (id: number, signal?: AbortSignal) => get<ItemDetail>('/v1/items/' + id, signal),
   versions: (id: number, signal?: AbortSignal) => get<ItemVersion[]>('/v1/items/' + id + '/versions?limit=20', signal),
-  changes: (params: { since: string; kind?: ItemKind; limit?: number }, signal?: AbortSignal) =>
+  changes: (params: { since: string; kind?: ItemKind | undefined; limit?: number | undefined }, signal?: AbortSignal) =>
     get<ChangesPage>('/v1/changes' + qs(params), signal),
 }
