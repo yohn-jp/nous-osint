@@ -1,0 +1,16 @@
+id: google-cloud-security-bulletins
+kind: rss
+url: https://cloud.google.com/feeds/google-cloud-security-bulletins.xml
+adapter: rss_v1
+item_kind: advisory
+organization: 'Google Cloud'
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: 'NOASSERTION'
+  attribution: 'Google Cloud'
+  content_storage: metadata_only
+  note: 'Publisher-linked XML feed for Google Cloud security bulletins. Google documentation licensing must not be assumed to cover all notice text. Store metadata and publisher links only.'

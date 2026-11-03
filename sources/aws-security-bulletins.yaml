@@ -1,0 +1,17 @@
+id: aws-security-bulletins
+kind: rss
+url: https://aws.amazon.com/security/security-bulletins/rss/feed/
+adapter: rss_v1
+item_kind: advisory
+organization: 'Amazon Web Services'
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: 'NOASSERTION'
+  attribution: 'Amazon Web Services'
+  terms_url: https://aws.amazon.com/terms/
+  content_storage: metadata_only
+  note: 'Official AWS bulletin feed. Feed retains only approximately 30 days of posts; do not treat absent older entries as withdrawn. Publisher content not relicensed; store metadata and links only.'

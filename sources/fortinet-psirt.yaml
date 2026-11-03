@@ -1,0 +1,17 @@
+id: fortinet-psirt
+kind: rss
+url: https://fortiguard.fortinet.com/rss/ir.xml
+adapter: rss_v1
+item_kind: advisory
+organization: 'Fortinet PSIRT'
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: 'NOASSERTION'
+  attribution: 'Fortinet'
+  terms_url: https://fortiguard.fortinet.com/psirt_policy
+  content_storage: metadata_only
+  note: 'Fortinet official PSIRT policy links this RSS. Endpoint was not fetch-probed during catalog authoring; keep disabled until source probe, terms and robots review. Metadata only.'

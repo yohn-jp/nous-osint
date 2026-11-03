@@ -1,0 +1,17 @@
+id: debian-lts-advisories
+kind: rss
+url: https://www.debian.org/lts/security/dla
+adapter: rss_v1
+item_kind: advisory
+organization: 'Debian LTS Team'
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: 'NOASSERTION'
+  license_url: https://www.debian.org/license
+  attribution: 'Debian Project / Software in the Public Interest'
+  content_storage: metadata_only
+  note: 'Official Debian LTS DLA RSS. Website licensing depends on content age; do not assume a blanket permissive feed license. Metadata and original links only.'

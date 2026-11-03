@@ -18,6 +18,9 @@ class Policy(BaseModel):
     robots_url: str | None = None
     content_storage: str = "metadata_only"
     note: str
+    license_id: str = Field(default="NOASSERTION", min_length=3, max_length=100)
+    license_url: str | None = None
+    attribution: str | None = Field(default=None, max_length=200)
 
     @field_validator("reviewed_at")
     @classmethod

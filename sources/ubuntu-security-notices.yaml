@@ -1,0 +1,18 @@
+id: ubuntu-security-notices
+kind: rss
+url: https://ubuntu.com/security/notices/rss.xml
+adapter: rss_v1
+item_kind: advisory
+organization: 'Canonical / Ubuntu Security Team'
+interval_minutes: 240
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: 'NOASSERTION'
+  license_url: https://ubuntu.com/legal/terms
+  attribution: 'Canonical Ltd.'
+  terms_url: https://ubuntu.com/legal/terms
+  content_storage: metadata_only
+  note: 'Official Ubuntu Security Notices RSS linked from the notices page. Canonical website content is not covered by a blanket open-data grant. Metadata and direct links only.'

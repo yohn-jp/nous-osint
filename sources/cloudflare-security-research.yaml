@@ -1,0 +1,17 @@
+id: cloudflare-security-research
+kind: rss
+url: https://blog.cloudflare.com/tag/security/rss/
+adapter: rss_v1
+item_kind: news
+organization: 'Cloudflare'
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: 'NOASSERTION'
+  attribution: 'Cloudflare'
+  terms_url: https://www.cloudflare.com/terms/
+  content_storage: metadata_only
+  note: 'Official Cloudflare Security tag RSS for incident, vulnerability and threat research posts. Publisher content and images are not licensed by Nous; store titles, dates and links only.'
