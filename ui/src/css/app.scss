@@ -38,3 +38,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP
 @media(max-width: 1250px) { .explore-grid { grid-template-columns: minmax(0, 1fr); } .preview-pane { display: none; } }
 @media(max-width: 700px) { .nous-page { padding: 24px 16px 88px; } .result-row { padding: 17px; } .page-title { font-size: 28px; } }
 @media(prefers-reduced-motion:reduce) { .result-row { transition: none; } }
+
+/* Source onboarding uses the same restrained reading-focused system. */
+.onboarding-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr); gap: 20px; align-items: start; }
+.onboarding-review { position: sticky; top: 80px; }
+.onboarding-code { max-height: 55vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 8px; border: 1px solid var(--nous-line); background: var(--nous-paper); color: var(--nous-ink); padding: 16px; font-size: 12px; line-height: 1.7; }
+@media (max-width: 1100px) { .onboarding-grid { grid-template-columns: minmax(0,1fr); } .onboarding-review { position: static; } }
