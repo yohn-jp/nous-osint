@@ -10,7 +10,7 @@
     "dev": "quasar dev",
     "build": "quasar build",
     "typecheck": "vue-tsc --noEmit",
-    "postinstall": "quasar prepare --silent"
+    "postinstall": "quasar prepare"
   },
   "dependencies": {
     "@quasar/extras": "^2.0.0",
