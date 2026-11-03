@@ -220,6 +220,7 @@ def test_304_refreshes_current_record_observation(monkeypatch):
 
 
 def test_change_history_uses_version_title():
+    from datetime import timedelta
     from nous.api import changes
     from nous.models import now
     factory = session_factory()
