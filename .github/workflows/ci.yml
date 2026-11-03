@@ -28,6 +28,20 @@ jobs:
       - run: python -m pip install -e '.[dev]'
       - run: ruff check src migrations tests
       - run: alembic upgrade head
+      - name: Verify consistent database snapshot dump
+        run: |
+          db=$(docker ps --filter ancestor=postgres:18 --format '{{.ID}}' | head -1)
+          test -n "$db"
+          docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "CREATE ROLE nous LOGIN"
+          docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO nous; GRANT SELECT ON ALL TABLES IN SCHEMA public TO nous"
+          timeout 30s docker exec -i "$db" bash -s < scripts/snapshot-dump.sh > /tmp/nous-ci.dump 2> /tmp/nous-ci.meta
+          grep -Eq '^NOUS_SNAPSHOT_METADATA=0004\|0\|0\|0      - run: pytest -q
+      - run: python -m compileall -q src migrations
+
+      - name: Validate backup and restoration shell syntax
+        run: bash -n scripts/backup-pull.sh scripts/snapshot-dump.sh scripts/restore-test.sh
+ /tmp/nous-ci.meta
+          docker exec -i "$db" pg_restore -l < /tmp/nous-ci.dump | grep -q sources
       - run: pytest -q
       - run: python -m compileall -q src migrations
 

@@ -134,7 +134,8 @@ def test_exhausted_expired_lease_is_failed_without_reclaim():
         db.add(source)
         db.flush()
         job = FetchJob(source_id=source.id, dedupe_key=key, state="leased",
-                       lease_until=now() - timedelta(minutes=1), attempts=5)
+                       lease_until=now() - timedelta(minutes=1),
+                       available_at=now() - timedelta(days=2), attempts=5)
         db.add(job)
         db.commit()
         job_id = job.id
