@@ -12,7 +12,7 @@
 - **処理**: 定期取得、変更検出、正規化、重複排除、履歴記録
 - **保存**: 単一VM上のPostgreSQL
 - **実行**: rootless Podman + systemd Quadlet
-- **提供**: ローカル向け検索API。公開サービス化は別途判断する
+- **提供**: 現段階はローカル向け検索API。後続のPR #2でAccess保護付きRemote MCPを追加
 - **公開リポジトリ**: ソースコード、収集先設定、スキーマ、設計書のみ。秘密情報・私的な転職情報・第三者の本文転載は含めない
 
 ## Architecture documents
@@ -21,6 +21,7 @@
 2. [Data contracts](docs/DATA_MODEL.md) — ソース定義、取得記録、版管理、出典
 3. [Podman / Quadlet deployment](docs/QUADLET_DEPLOYMENT.md) — 単一VM構成、rootless起動、秘密情報、バックアップ
 4. [Implementation plan](docs/IMPLEMENTATION_PLAN.md) — 順序、検証、受入条件
+5. [Remote MCP and Cloudflare Access](docs/REMOTE_MCP_ACCESS.md) — 今後のTunnel/Managed OAuth/MCP公開設計
 
 ## Design principles
 
