@@ -158,7 +158,7 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
         </div>
       </template>
     </section>
-    <q-dialog v-model="settings" persistent>
+    <q-dialog :model-value="!!settings" @update:model-value="value => { if (!value) settings = null }" persistent>
       <q-card style="width: min(460px, 94vw)">
         <q-card-section><div class="text-h6">収集予算</div><div class="text-caption text-grey-7">{{ settings?.id }}</div></q-card-section>
         <q-card-section class="q-gutter-md">
