@@ -28,8 +28,26 @@ _STATIC_ASSET = re.compile(r"^/assets/[A-Za-z0-9._-]{1,255}$")
 _API_ITEM = re.compile(r"^/v1/items/[0-9]+$")
 _API_CVE = re.compile(r"^/v1/cves/CVE-[0-9]{4}-[0-9]{4,}$")
 _API_VERSIONS = re.compile(r"^/v1/items/[0-9]+/versions$")
-_SPA_ROUTE = re.compile(r"^/(?:explore|changes|sources|sources/new|admin/sources|admin/sources/new|admin/sources/[a-z][a-z0-9-]{2,99}/edit|items/[0-9]+|cves/CVE-[0-9]{4}-[0-9]{4,})$")
-_ADMIN_ROUTE = re.compile(r"^/v1/admin/(?:session|catalog|sources|audits|sources/[a-z][a-z0-9-]{2,99}(?:/settings|/probe)?)$")
+_SPA_ROUTE = re.compile(r"^/(?:explore|changes|sources|sources/new|admin/sources|admin/sources/new|admin/reports|admin/sources/[a-z][a-z0-9-]{2,99}/edit|items/[0-9]+|cves/CVE-[0-9]{4}-[0-9]{4,})$")
+_ADMIN_ROUTE = re.compile(
+    r"^/v1/admin/(?:session|catalog|sources|audits|report-templates|"
+    r"report-runs(?:/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12})?|"
+    r"report-schedules(?:/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12})?|"
+    r"sources/[a-z][a-z0-9-]{2,99}(?:/settings|/probe)?)$"
+)
+_ADMIN_SOURCE_KEY = re.compile(r"^/v1/admin/sources/[a-z][a-z0-9-]{2,99}$")
+_ADMIN_SOURCE_SETTINGS = re.compile(r"^/v1/admin/sources/[a-z][a-z0-9-]{2,99}/settings$")
+_ADMIN_SOURCE_PROBE = re.compile(r"^/v1/admin/sources/[a-z][a-z0-9-]{2,99}/probe$")
+_ADMIN_RUN_DETAIL = re.compile(
+    r"^/v1/admin/report-runs/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+_ADMIN_SCHEDULE_DETAIL = re.compile(
+    r"^/v1/admin/report-schedules/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 _REPORT_INDEX = re.compile(r"^/reports/$")
 _REPORT_ARTICLE = re.compile(
     r"^/reports/(?:security|cve)/(?=[a-z0-9-]{1,128}/)"
@@ -239,7 +257,29 @@ class AccessAssertionMiddleware:
         if path in ("/mcp", "/mcp/"):
             return True
         if _ADMIN_ROUTE.fullmatch(path):
-            return method in ("GET", "POST", "PUT", "PATCH")
+            if path in {
+                "/v1/admin/session", "/v1/admin/catalog", "/v1/admin/audits",
+                "/v1/admin/report-templates", "/v1/admin/report-runs",
+                "/v1/admin/report-schedules",
+            }:
+                if path == "/v1/admin/report-runs":
+                    return method in ("GET", "POST")
+                if path == "/v1/admin/report-schedules":
+                    return method in ("GET", "POST")
+                return method == "GET"
+            if path == "/v1/admin/sources":
+                return method in ("GET", "POST")
+            if _ADMIN_SOURCE_KEY.fullmatch(path):
+                return method == "PUT"
+            if _ADMIN_SOURCE_SETTINGS.fullmatch(path):
+                return method == "PATCH"
+            if _ADMIN_SOURCE_PROBE.fullmatch(path):
+                return method == "POST"
+            if _ADMIN_RUN_DETAIL.fullmatch(path):
+                return method == "GET"
+            if _ADMIN_SCHEDULE_DETAIL.fullmatch(path):
+                return method == "PATCH"
+            return False
         if (_REPORT_INDEX.fullmatch(path) or _REPORT_ARTICLE.fullmatch(path)
                 or _REPORT_ASSET.fullmatch(path)):
             return method in ("GET", "HEAD")
