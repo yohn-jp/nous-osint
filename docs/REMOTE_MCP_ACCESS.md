@@ -170,3 +170,7 @@ The feature is **not complete** until actual VM + Cloudflare evidence demonstrat
 ## 9. Cost model
 
 There is **no Worker request billing** in the selected architecture because there is no Worker. Cloudflare Tunnel can publish the origin without opening inbound VM ports; Cloudflare Access is subject to current account plan, seat and policy limits. Record the applicable account entitlement during deployment, not an unconditional claim of permanently free unlimited traffic.
+
+## CVE/KEV correlation
+
+`get_cve(cve_id)` is a read-only MCP tool backed by the canonical `GET /v1/cves/{cve_id}` read model. It correlates the exact CVE ID with independent source records. Only current entries in the official CISA `cisa-kev` catalog are marked `listed`; absence without a recent complete snapshot is `unknown`. The tool initiates no outside HTTP requests and makes no changes to the source registry. See [CVE/KEV correlation](CVE_KEV_CORRELATION.md).

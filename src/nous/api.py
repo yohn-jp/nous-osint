@@ -3,10 +3,11 @@ from functools import lru_cache
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from typing import Any, Literal
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Path
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 from .db import session_factory
+from .cve_queries import query_cve
 from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source
 
 app = FastAPI(title="Nous OSINT", version="0.1.0")
@@ -80,6 +81,40 @@ class ChangeResponse(APIModel):
 
 class ChangesResponse(APIModel):
     changes: list[ChangeResponse]
+
+
+class CveReferenceResponse(APIModel):
+    item_id: int
+    source: str
+    relation: Literal["kev", "record", "reference", "title_mention"]
+    kind: ItemKind
+    state: ItemState
+    title: str
+    url: str
+    last_seen_at: datetime
+    source_url: str
+    source_adapter: str
+
+
+class KevStatusResponse(APIModel):
+    status: Literal["listed", "not_listed", "unknown"]
+    catalog_as_of: datetime | None
+    catalog_fresh: bool
+    item_id: int | None
+    date_added: str | None
+    due_date: str | None
+    vendor: str | None
+    product: str | None
+    known_ransomware_campaign_use: str | None
+    source_url: str | None
+
+
+class CveResponse(APIModel):
+    cve_id: str = Field(pattern=r"^CVE-[0-9]{4}-[0-9]{4,}$")
+    canonical_url: str
+    kev: KevStatusResponse
+    references: list[CveReferenceResponse]
+    references_truncated: bool
 
 
 class StatusResponse(APIModel):
@@ -183,6 +218,13 @@ def versions(item_id: int, limit: int | None = Query(None, ge=1, le=100)):
         return [{"version": v.version, "observed_at": v.observed_at,
                  "sha256": v.sha256, "attributes": v.attributes, "provenance": v.provenance}
                 for v in db.scalars(query)]
+
+@app.get("/v1/cves/{cve_id}", response_model=CveResponse)
+def cve(cve_id: str = Path(pattern=r"^CVE-[0-9]{4}-[0-9]{4,}$", max_length=64)):
+    """Exact CVE identity and source-attributed KEV status, with no live HTTP."""
+    with session_factory()() as db:
+        return query_cve(db, cve_id)
+
 
 @app.get("/v1/changes", response_model=ChangesResponse)
 def changes(since: AwareDatetime, kind: ItemKind | None = None,

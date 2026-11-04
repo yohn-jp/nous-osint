@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api, type ItemDetail, type ItemVersion } from '../lib/api'
 import { dateLabel, kindLabel, safeExternalUrl, safeValue, stateLabel } from '../lib/presentation'
 
 const props = withDefaults(defineProps<{ itemId: number; compact?: boolean }>(), { compact: false })
 const item = ref<ItemDetail | null>(null)
 const versions = ref<ItemVersion[]>([])
+const cveIds = computed(() => {
+  if (!item.value) return []
+  const structured = item.value.attributes?.vulnerability
+  const fromStructured = (structured && typeof structured === 'object' && !Array.isArray(structured))
+    ? (structured as Record<string, unknown>).cve_id : null
+  const ids = [
+    ...(typeof fromStructured === 'string' ? [fromStructured] : []),
+    ...(item.value.title.match(/CVE-[0-9]{4}-[0-9]{4,}/g) ?? []),
+  ]
+  return [...new Set(ids.filter(value => /^CVE-[0-9]{4}-[0-9]{4,}$/.test(value) && value.length <= 64))].slice(0, 12)
+})
 const loading = ref(false)
 const error = ref('')
 let controller: AbortController | null = null
@@ -50,6 +61,17 @@ onBeforeUnmount(() => controller?.abort())
       <h2 class="q-ma-none" :class="compact ? 'text-h6' : 'text-h5'" style="line-height: 1.5; overflow-wrap: anywhere">{{ item.title }}</h2>
       <div class="text-caption text-grey-6 q-mt-md">{{ item.organization || item.source }}</div>
       <q-btn class="q-mt-lg" outline no-caps color="primary" icon-right="open_in_new" :href="safeExternalUrl(item.url)" :disable="!safeExternalUrl(item.url)" target="_blank" rel="noopener noreferrer" label="元の情報源を開く" />
+      <section v-if="cveIds.length" class="detail-section">
+        <div class="text-subtitle2 q-mb-sm">CVEとKEVの関連情報</div>
+        <div class="row q-gutter-sm">
+          <q-btn v-for="cve in cveIds" :key="cve" outline dense no-caps
+            color="primary" icon-right="open_in_new" :label="cve + ' / KEV'"
+            :to="'/cves/' + cve" />
+        </div>
+        <div class="text-caption text-grey-7 q-mt-sm">
+          CVEへの言及だけでは悪用確認を意味しません。CISA KEVとの対応は別途確認します。
+        </div>
+      </section>
       <section class="detail-section">
         <div class="text-subtitle2 q-mb-sm">出典と記録</div>
         <div class="kv-line"><div class="kv-key">情報源</div><div>{{ item.source }}</div></div>

@@ -108,6 +108,7 @@ def test_middleware_only_exposes_mcp_ui_and_allowlisted_read_api(auth):
     client = TestClient(app, base_url="https://nous.yohn.jp")
     assert client.get("/api/v1/items").status_code == 404
     assert client.get("/v1/status").status_code == 404
+    assert client.get("/v1/cves/not-a-cve").status_code == 404
     assert client.get("/").status_code == 403
     assert client.post("/mcp").status_code == 403
     response = client.post("/mcp", headers={

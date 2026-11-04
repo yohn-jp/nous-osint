@@ -26,8 +26,9 @@ _MAX_ASSERTION_LENGTH = 16_384
 _MAX_JWKS_BYTES = 128_000
 _STATIC_ASSET = re.compile(r"^/assets/[A-Za-z0-9._-]{1,255}$")
 _API_ITEM = re.compile(r"^/v1/items/[0-9]+$")
+_API_CVE = re.compile(r"^/v1/cves/CVE-[0-9]{4}-[0-9]{4,}$")
 _API_VERSIONS = re.compile(r"^/v1/items/[0-9]+/versions$")
-_SPA_ROUTE = re.compile(r"^/(?:explore|changes|sources|sources/new|admin/sources|admin/sources/new|admin/sources/[a-z][a-z0-9-]{2,99}/edit|items/[0-9]+)$")
+_SPA_ROUTE = re.compile(r"^/(?:explore|changes|sources|sources/new|admin/sources|admin/sources/new|admin/sources/[a-z][a-z0-9-]{2,99}/edit|items/[0-9]+|cves/CVE-[0-9]{4}-[0-9]{4,})$")
 _ADMIN_ROUTE = re.compile(r"^/v1/admin/(?:session|catalog|sources|audits|sources/[a-z][a-z0-9-]{2,99}(?:/settings|/probe)?)$")
 
 
@@ -231,7 +232,8 @@ class AccessAssertionMiddleware:
             return False
         if path in ("/v1/items", "/v1/sources", "/v1/changes"):
             return True
-        return bool(_API_ITEM.fullmatch(path) or _API_VERSIONS.fullmatch(path))
+        return bool(_API_ITEM.fullmatch(path) or _API_VERSIONS.fullmatch(path)
+                    or _API_CVE.fullmatch(path))
 
     @staticmethod
     def _allowed_host(headers: dict[bytes, bytes]) -> bool:

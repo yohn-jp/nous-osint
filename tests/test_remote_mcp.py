@@ -63,6 +63,9 @@ def test_read_only_tools_use_existing_api_without_default_query_sentinels(target
     assert any(item["item_id"] == record_id for item in history)
     status = target.get_source_status()
     assert any(source["id"] == key for source in status)
+    no_kev = target.get_cve("CVE-2026-1234")
+    assert no_kev["cve_id"] == "CVE-2026-1234"
+    assert no_kev["kev"]["status"] in {"unknown", "not_listed"}
 
 
 def test_mcp_http_initialize_and_tool_listing(target):
@@ -96,7 +99,7 @@ def test_mcp_http_initialize_and_tool_listing(target):
         assert response.status_code == 200, response.text
         tools = {tool["name"] for tool in response.json()["result"]["tools"]}
         assert tools == {"search_intelligence", "get_item", "get_changes",
-                         "get_source_status"}
+                         "get_source_status", "get_cve"}
 
         source_key, item_id = seed()
         called = client.post("/mcp", json={

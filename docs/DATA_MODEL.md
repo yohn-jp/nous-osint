@@ -1,6 +1,6 @@
 # Nous OSINT — Data and Source Contracts
 
-Status: **implemented through Alembic 0005**  
+Status: **implemented through Alembic 0007**  
 Updated: 2026-11-03
 
 ## 1. Data ownership
@@ -51,6 +51,7 @@ Every enabled source must define a reviewer-verifiable collection policy, owners
 | `fetch_attempts` | Append-only evidence of each network/parse attempt | `job_id`, start/end, outcome, status, final URL, error code |
 | `items` | Stable identity of a publisher record | `source_id`, `external_id` or verified canonical URL, `kind`, `first_seen_at`, `last_seen_at`, state |
 | `item_versions` | Immutable observed changes | `item_id`, sequential version, `observed_at`, `sha256`, attributes, provenance |
+| `cve_item_links` | Exact current CVE → item mapping with evidence grade (`kev`, `record`, `reference`, `title_mention`) | primary key (`item_id`, `cve_id`), indexed `cve_id`, constrained `relation`; backed by individual source records |
 
 Required item types initially: `job_posting`, `news`, `advisory`, `vulnerability`, `company_update`. A connector maps source-native fields into this shared vocabulary, preserving source-native keys in a validated namespace.
 
@@ -74,7 +75,15 @@ A claimed job has a finite lease. A worker commits the lease and releases the tr
 
 `fetch_attempts` and `item_versions` are append-only. Retention pruning, when permitted, is an explicit maintenance operation with its own audit record.
 
-## 4. Later relational layer (not MVP acceptance)
+## 4. CVE/KEV identity layer
+
+`cve_item_links` is implemented (migration 0007). A CVE ID is canonical identity;
+CISA KEV membership is a distinct, publisher-backed claim. The API returns
+`listed`, `not_listed` (only after a fresh complete CISA KEV snapshot) or
+`unknown` (no fresh complete snapshot). No CVE/NVD source content or third-party
+license is inferred from an identifier. See [CVE/KEV correlation](CVE_KEV_CORRELATION.md).
+
+## 5. Later relational layer (not MVP acceptance)
 
 - `entities`: `organization`, `product`, `technology`, `vulnerability`, `job_role`.
 - `item_entity_links`: where a source item mentions or asserts an entity, with evidence.
@@ -82,7 +91,7 @@ A claimed job has a finite lease. A worker commits the lease and releases the tr
 
 Entity resolution is conservative. Similar company names or products are not enough to merge automatically. Schema changes must be Alembic migrations; migrations run as a one-off operational action, never concurrently in all app containers.
 
-## 5. API contracts — first iteration
+## 6. API contracts — first iteration
 
 - `GET /health/live` — application process responsive.
 - `GET /health/ready` — DB connection/migrations ready.
@@ -90,11 +99,12 @@ Entity resolution is conservative. Similar company names or products are not eno
 - `GET /v1/items?kind=&source=&q=&since=&limit=&cursor=` — paginated current items; cursor-based stable ordering.
 - `GET /v1/items/{id}` — current item plus source, timestamps and provenance.
 - `GET /v1/items/{id}/versions` — revision history.
+- `GET /v1/cves/{cve_id}` — CVE identity, KEV status with freshness, and independent source references.
 - `GET /v1/changes?since=&kind=` — newly observed and changed records.
 
 Public read responses remain bounded and omit secrets or unlicensed full text. The separate Access-authorized gateway exposes limited `/v1/admin/*` source management with audit tracking; MCP and normal query routes remain read-only. See [Source Management](SOURCE_MANAGEMENT.md).
 
-## 6. Quality criteria
+## 7. Quality criteria
 
 1. Repeated fetch of an unchanged RSS item does not create a new item or version.
 2. Publisher modification creates exactly one new version under concurrent re-fetch.

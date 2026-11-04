@@ -40,6 +40,37 @@ export interface Source {
   next_due_at: string
   last_error: string | null
 }
+export interface CveReference {
+  item_id: number
+  source: string
+  relation: 'kev' | 'record' | 'reference' | 'title_mention'
+  kind: ItemKind
+  state: ItemState
+  title: string
+  url: string
+  last_seen_at: string
+  source_url: string
+  source_adapter: string
+}
+export interface KevStatus {
+  status: 'listed' | 'not_listed' | 'unknown'
+  catalog_as_of: string | null
+  catalog_fresh: boolean
+  item_id: number | null
+  date_added: string | null
+  due_date: string | null
+  vendor: string | null
+  product: string | null
+  known_ransomware_campaign_use: string | null
+  source_url: string | null
+}
+export interface CveDetail {
+  cve_id: string
+  canonical_url: string
+  kev: KevStatus
+  references: CveReference[]
+  references_truncated: boolean
+}
 export interface SourceDefinition {
   id: string
   kind: 'rss' | 'json_api' | 'html'
@@ -144,6 +175,10 @@ export const api = {
   items: (params: { q?: string | undefined; kind?: ItemKind | undefined; source?: string | undefined; limit?: number | undefined; cursor?: number | undefined }, signal?: AbortSignal) =>
     get<ItemPage>('/v1/items' + qs(params), signal),
   sources: (signal?: AbortSignal) => get<Source[]>('/v1/sources', signal),
+  cve: (id: string, signal?: AbortSignal) => {
+    if (!/^CVE-[0-9]{4}-[0-9]{4,}$/.test(id) || id.length > 64) throw new Error('Invalid CVE ID')
+    return get<CveDetail>('/v1/cves/' + id, signal)
+  },
   item: (id: number, signal?: AbortSignal) => get<ItemDetail>('/v1/items/' + id, signal),
   versions: (id: number, signal?: AbortSignal) => get<ItemVersion[]>('/v1/items/' + id + '/versions?limit=20', signal),
   adminSession: () => get<{ allowed: boolean }>('/v1/admin/session'),

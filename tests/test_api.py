@@ -23,6 +23,8 @@ def test_openapi_documents_responses_and_filters():
     ]
     assert state_schema["enum"] == ["current", "unknown", "stale", "closed"]
     assert params["limit"]["schema"]["maximum"] == 100
+    assert "/v1/cves/{cve_id}" in schema["paths"]
+    assert schema["paths"]["/v1/cves/{cve_id}"]["get"]["responses"]["200"]
 
 
 @pytest.mark.parametrize("query", [
@@ -36,6 +38,13 @@ def test_openapi_documents_responses_and_filters():
 ])
 def test_invalid_item_filters_return_422(query):
     response = client.get("/v1/items?" + query)
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("cve_id", ["NOT-CVE", "CVE-26-1234", "cve-2026-1234",
+                                    "CVE-2026-123"])
+def test_invalid_cve_identity_is_rejected(cve_id):
+    response = client.get("/v1/cves/" + cve_id)
     assert response.status_code == 422
 
 

@@ -38,7 +38,7 @@ def test_static_ui_requires_assertion_and_unknown_routes_stay_hidden(gateway):
     page = client.get("/", headers=headers)
     assert page.text == "<main>Nous UI</main>"
     assert page.headers["cache-control"] == "no-store"
-    for route in ("/explore", "/changes", "/sources", "/sources/new", "/items/3"):
+    for route in ("/explore", "/changes", "/sources", "/sources/new", "/items/3", "/cves/CVE-2026-1234"):
         page = client.get(route, headers=headers)
         assert page.status_code == 200 and page.text == "<main>Nous UI</main>"
         assert page.headers["cache-control"] == "no-store"
@@ -76,3 +76,8 @@ def test_api_proxy_forwards_only_bounded_read_queries(gateway):
     assert client.get("/v1/items?q=first&q=second", headers=headers).status_code == 400
     assert client.get("/v1/items?q=" + "x" * 2100, headers=headers).status_code == 400
     assert len(requests) == 1
+    cve = client.get("/v1/cves/CVE-2026-1234", headers=headers)
+    assert cve.status_code == 200
+    assert requests[-1].url.path == "/v1/cves/CVE-2026-1234"
+    assert client.get("/v1/cves/CVE-2026-1234?secret=yes", headers=headers).status_code == 400
+    assert client.get("/v1/cves/not-a-cve", headers=headers).status_code == 404

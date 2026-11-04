@@ -89,3 +89,11 @@ class ItemVersion(Base):
     sha256: Mapped[str] = mapped_column(String(64))
     attributes: Mapped[dict] = mapped_column(JSON)
     provenance: Mapped[dict] = mapped_column(JSON)
+
+class CveItemLink(Base):
+    """Source-backed association to an exact CVE identifier, never fuzzy identity."""
+    __tablename__ = "cve_item_links"
+    __table_args__ = (Index("ix_cve_item_links_cve_id", "cve_id"),)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id"), primary_key=True)
+    cve_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    relation: Mapped[str] = mapped_column(String(24))
