@@ -10,7 +10,7 @@ from .models import Source
 
 KINDS = {"job_posting", "news", "advisory", "vulnerability", "company_update"}
 ADAPTERS = {"rss": {"rss_v1"}, "json_api": {"json_v1", "greenhouse_jobs_v1",
-                                           "lever_jobs_v1", "ashby_jobs_v1"},
+                                           "lever_jobs_v1", "ashby_jobs_v1", "cisa_kev_v1"},
             "html": {"html_v1", "automattic_html_v1"}}
 
 class Policy(BaseModel):
@@ -75,6 +75,12 @@ class SourceConfig(BaseModel):
                     raise ValueError("Lever max_pages must fit the hourly request budget")
             elif self.max_pages != 1:
                 raise ValueError("nonpaginated ATS must use max_pages=1")
+        elif self.adapter == "cisa_kev_v1":
+            if (self.kind != "json_api" or self.item_kind != "vulnerability" or
+                    parsed.hostname != "raw.githubusercontent.com" or
+                    parsed.path != "/cisagov/kev-data/develop/known_exploited_vulnerabilities.json" or
+                    parsed.query or self.max_pages != 1):
+                raise ValueError("CISA KEV adapter requires official JSON catalog mirror")
         elif self.max_pages != 1:
             raise ValueError("max_pages is supported only by Lever job boards")
         if self.adapter == "html_v1" and not {"item", "title", "url"} <= self.selectors.keys():

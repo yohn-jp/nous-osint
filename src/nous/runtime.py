@@ -95,6 +95,8 @@ def store_item(db, source, raw, final_url):
              "updated": raw.get("updated")}
     if source.item_kind == "job_posting" and isinstance(raw.get("job"), dict):
         attrs["job"] = raw["job"]
+    if source.item_kind == "vulnerability" and isinstance(raw.get("vulnerability"), dict):
+        attrs["vulnerability"] = raw["vulnerability"]
     digest = hashlib.sha256(json.dumps(attrs, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     db.execute(insert(Item).values(source_id=source.id, external_id=external_id,
                                    canonical_url=url, kind=source.item_kind, title=title)
