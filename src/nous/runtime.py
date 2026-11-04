@@ -11,6 +11,7 @@ from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from .adapters import extract
 from .job_postings import fetch_lever_board
+from .cve_index import sync_item_cves
 from .db import session_factory
 from .fetch import fetch
 from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source, now
@@ -103,6 +104,10 @@ def store_item(db, source, raw, final_url):
                .on_conflict_do_nothing(index_elements=["source_id", "external_id"]))
     item = db.scalar(select(Item).where(Item.source_id == source.id, Item.external_id == external_id)
                      .with_for_update())
+    # Correlate CVE and KEV identities transactionally with this observation.
+    # A publisher title mention never becomes an authoritative KEV assertion.
+    if source.item_kind != "job_posting":
+        sync_item_cves(db, item, source, raw)
     item.last_seen_at = now()
     item.state = "current"
     item.organization = source.config.get("organization")
