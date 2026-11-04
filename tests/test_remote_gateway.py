@@ -1,4 +1,6 @@
 """Authenticated UI and narrowly allowlisted API gateway tests."""
+from pathlib import Path
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -53,6 +55,94 @@ def test_static_ui_requires_assertion_and_unknown_routes_stay_hidden(gateway):
         assert client.get(path, headers=headers).status_code == 404
     assert client.post("/v1/items", headers=headers).status_code == 404
     assert client.get("/", headers={**headers, "Host": "other.example"}).status_code == 404
+
+
+def test_private_reports_are_exact_read_only_routes(gateway, tmp_path, monkeypatch):
+    report_root = tmp_path / "private-report-site"
+    digest = "a" * 64
+    release = report_root / "releases" / digest
+    (release / "security" / "daily-summary").mkdir(parents=True)
+    (release / "index.html").write_text("<main>Private reports</main>")
+    (release / "security" / "daily-summary" / "index.html").write_text(
+        "<article>Private daily report</article>"
+    )
+    (release / "security" / "escape").symlink_to(tmp_path / "outside", target_is_directory=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "index.html").write_text("<main>Must remain private</main>")
+    (report_root / "_astro").mkdir(parents=True)
+    for filename in (
+        "site-0123456789abcdef.css",
+        "book-abcdef0123456789.woff2",
+        "cover-0123456789abcdef.png",
+        "cover-abcdef0123456789.webp",
+        "icon-0123456789abcdef.svg",
+        "plain.css",
+        "manifest-0123456789abcdef.json",
+    ):
+        (report_root / "_astro" / filename).write_text("static asset")
+    (report_root / "current").symlink_to(Path("releases") / digest, target_is_directory=True)
+    monkeypatch.setattr(gateway.app.app, "report_site_directory", None)
+    monkeypatch.setenv("NOUS_REPORT_SITE_DIR", str(report_root))
+
+    client = TestClient(gateway.app, base_url="https://nous.yohn.jp")
+    headers = {"Cf-Access-Jwt-Assertion": "test-assertion"}
+    denied = client.get("/reports/")
+    assert denied.status_code == 403
+    assert denied.headers["cache-control"] == "no-store"
+    assert "script-src 'none'" in denied.headers["content-security-policy"]
+    assert denied.headers["x-content-type-options"] == "nosniff"
+
+    index = client.get("/reports/", headers=headers)
+    assert index.status_code == 200
+    assert index.text == "<main>Private reports</main>"
+    assert index.headers["content-type"].startswith("text/html")
+    assert index.headers["cache-control"] == "no-store"
+    assert "style-src 'self'" in index.headers["content-security-policy"]
+    article = client.get("/reports/security/daily-summary/", headers=headers)
+    assert article.status_code == 200
+    assert article.text == "<article>Private daily report</article>"
+    head = client.head("/reports/security/daily-summary/", headers=headers)
+    assert head.status_code == 200 and head.content == b""
+
+    for filename in (
+        "site-0123456789abcdef.css",
+        "book-abcdef0123456789.woff2",
+        "cover-0123456789abcdef.png",
+        "cover-abcdef0123456789.webp",
+    ):
+        asset = client.get("/reports/_astro/" + filename, headers=headers)
+        assert asset.status_code == 200 and asset.text == "static asset"
+        assert asset.headers["cache-control"] == "no-store"
+    assert client.head("/reports/_astro/site-0123456789abcdef.css", headers=headers).status_code == 200
+
+    invalid = (
+        "/reports",
+        "/reports/current/",
+        "/reports/current/index.html",
+        "/reports/security/daily-summary/index.html",
+        "/reports/other/daily-summary/",
+        "/reports/security/" + "a" * 129 + "/",
+        "/reports/security/escape/",
+        "/reports/_astro/icon-0123456789abcdef.svg",
+        "/reports/_astro/plain.css",
+        "/reports/_astro/manifest-0123456789abcdef.json",
+        "/reports/security/%2e%2e/current/",
+        "/reports/%73ecurity/daily-summary/",
+    )
+    for path in invalid:
+        response = client.get(path, headers=headers)
+        assert response.status_code == 404, path
+        assert response.headers["cache-control"] == "no-store"
+        assert "script-src 'none'" in response.headers["content-security-policy"]
+    assert client.get("/reports/?unexpected=yes", headers=headers).status_code == 404
+    assert client.post("/reports/", headers=headers).status_code == 404
+    assert client.get("/reports/", headers={**headers, "Host": "other.example"}).status_code == 404
+
+    current = report_root / "current"
+    current.unlink()
+    current.symlink_to(outside, target_is_directory=True)
+    assert client.get("/reports/", headers=headers).status_code == 404
 
 
 def test_api_proxy_forwards_only_bounded_read_queries(gateway):

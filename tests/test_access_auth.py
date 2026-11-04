@@ -116,3 +116,47 @@ def test_middleware_only_exposes_mcp_ui_and_allowlisted_read_api(auth):
     })
     assert response.status_code == 200
     assert response.json()["subject"] == "subject-1"
+
+
+def test_report_routes_require_access_and_have_exact_path_and_method_allowlist(auth):
+    key, claims, verifier, _ = auth
+    async def upstream(scope, receive, send):
+        from starlette.responses import Response
+        response = Response("served")
+        await response(scope, receive, send)
+
+    app = AccessAssertionMiddleware(upstream, verifier)
+    client = TestClient(app, base_url="https://nous.yohn.jp")
+    assertion = jwt(key, claims)
+    allowed = (
+        ("/reports/", "GET"),
+        ("/reports/", "HEAD"),
+        ("/reports/security/daily-summary/", "GET"),
+        ("/reports/cve/cve-2026-1234/", "GET"),
+        ("/reports/_astro/site-0123456789abcdef.css", "GET"),
+    )
+    for path, method in allowed:
+        assert client.request(method, path).status_code == 403
+        response = client.request(method, path, headers={"Cf-Access-Jwt-Assertion": assertion})
+        assert response.status_code == 200, (method, path)
+
+    denied = (
+        ("GET", "/reports"),
+        ("GET", "/reports/current/"),
+        ("GET", "/reports/current/index.html"),
+        ("GET", "/reports/security/daily-summary/index.html"),
+        ("GET", "/reports/other/daily-summary/"),
+        ("GET", "/reports/security/" + "a" * 129 + "/"),
+        ("GET", "/reports/_astro/site-0123456789abcdef.svg"),
+        ("GET", "/reports/_astro/plain.css"),
+        ("GET", "/reports/?unexpected=yes"),
+        ("POST", "/reports/"),
+    )
+    for method, path in denied:
+        response = client.request(method, path, headers={"Cf-Access-Jwt-Assertion": assertion})
+        assert response.status_code == 404, (method, path)
+        assert response.headers["cache-control"] == "no-store"
+        assert "script-src 'none'" in response.headers["content-security-policy"]
+    assert client.get("/reports/", headers={
+        "Cf-Access-Jwt-Assertion": assertion, "Host": "other.example",
+    }).status_code == 404
