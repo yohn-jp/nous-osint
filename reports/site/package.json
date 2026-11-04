@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "engines": { "node": ">=24.0.0" },
-  "scripts": { "build": "astro build" },
+  "scripts": {
+    "build": "astro build",
+    "test:cve-fact": "node ./scripts/test-cve-fact-build.mjs"
+  },
   "dependencies": { "astro": "7.4.5" }
 }

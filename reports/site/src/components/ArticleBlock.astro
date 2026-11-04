@@ -7,9 +7,14 @@ interface Props {
   block: any;
   sources: any[];
   claims: any[];
+  cve?: any;
 }
 
-const { block, sources, claims } = Astro.props;
+const { block, sources, claims, cve } = Astro.props;
+const cveFactClaims = block.type === 'cve_fact'
+  ? block.claim_ids.map((id: string) => claims.find((claim: any) => claim.claim_id === id))
+    .filter((claim: any) => claim !== undefined)
+  : [];
 ---
 
 {block.type === 'paragraph' && (
@@ -53,6 +58,25 @@ const { block, sources, claims } = Astro.props;
 )}
 
 {block.type === 'source_list' && <SourceList evidenceIds={block.evidence_ids} sources={sources} />}
+
+{block.type === 'cve_fact' && cve?.id === block.cve_id && (
+  <section class="cve-fact-block" aria-label="CVEの根拠と確認済みの記述">
+    <header class="cve-fact-heading">
+      <p class="eyebrow">CVE FACT</p>
+      <h3>対象CVE: <a href={cve.canonical_url} rel="noopener noreferrer">{block.cve_id}</a></h3>
+    </header>
+    <ul class="cve-fact-claims">
+      {cveFactClaims.map((claim: any) => (
+        <li>
+          {claim.text}
+          <ClaimClassifications claimIds={[claim.claim_id]} claims={claims} />
+          <EvidenceMarks evidenceIds={claim.evidence_ids} />
+        </li>
+      ))}
+    </ul>
+    <p class="cve-fact-evidence">このCVE記述に関連する出典 <EvidenceMarks evidenceIds={block.evidence_ids} /></p>
+  </section>
+)}
 
 {block.type === 'quote' && (
   <figure class="source-quote">

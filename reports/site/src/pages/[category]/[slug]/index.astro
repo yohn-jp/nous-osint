@@ -54,7 +54,7 @@ function templateName(template: string) {
         {report.sections.map((section, index) => (
           <section class="article-section" aria-labelledby={`section-${index}`}>
             <h2 id={`section-${index}`}>{section.heading}</h2>
-            {section.blocks.map((block) => <ArticleBlock block={block} sources={report.sources} claims={report.claims} />)}
+            {section.blocks.map((block) => <ArticleBlock block={block} sources={report.sources} claims={report.claims} cve={report.cve} />)}
           </section>
         ))}
       </div>

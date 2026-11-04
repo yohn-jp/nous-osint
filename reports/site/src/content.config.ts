@@ -46,6 +46,12 @@ const block = z.discriminatedUnion('type', [
     })).min(1).max(20),
   }),
   z.strictObject({
+    type: z.literal('cve_fact'),
+    cve_id: z.string().regex(/^CVE-[0-9]{4}-[0-9]{4,}$/),
+    evidence_ids: z.array(evidenceId).min(1).max(50),
+    claim_ids: z.array(claimId).min(1).max(20),
+  }),
+  z.strictObject({
     type: z.literal('source_list'),
     evidence_ids: z.array(evidenceId).min(1).max(50),
   }),
@@ -119,6 +125,26 @@ const report = z.strictObject({
       const blockPath: (string | number)[] = ['sections', sectionIndex, 'blocks', blockIndex];
       if (item.type === 'source_list') {
         checkIds(item.evidence_ids, [...blockPath, 'evidence_ids']);
+        continue;
+      }
+      if (item.type === 'cve_fact') {
+        checkIds(item.evidence_ids, [...blockPath, 'evidence_ids']);
+        if (value.cve?.id !== item.cve_id) {
+          context.addIssue({
+            code: 'custom', path: [...blockPath, 'cve_id'],
+            message: 'CVE fact ID must match the deterministic CVE metadata',
+          });
+        }
+        for (const [claimIndex, id] of item.claim_ids.entries()) {
+          if (!claimMap.has(id)) {
+            context.addIssue({
+              code: 'custom', path: [...blockPath, 'claim_ids', claimIndex],
+              message: `Unknown claim ID ${id}`,
+            });
+          } else {
+            displayedClaims.add(id);
+          }
+        }
         continue;
       }
       const rows = item.type === 'paragraph' || item.type === 'quote'

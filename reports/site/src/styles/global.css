@@ -112,6 +112,15 @@ a:focus-visible { outline: 3px solid #e2a23f; outline-offset: 3px; border-radius
 .claim-observed { color: var(--accent); background: var(--accent-soft); }
 .claim-inference { color: var(--blue); background: var(--blue-soft); }
 .claim-unconfirmed { color: var(--gold); background: var(--gold-soft); }
+.cve-fact-block { margin: 1.5rem 0; padding: 1rem 1.15rem; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.cve-fact-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; border-bottom: 1px solid var(--line); }
+.cve-fact-heading .eyebrow { margin: 0; }
+.cve-fact-heading h3 { margin: 0 0 0.65rem; font-size: 1rem; }
+.cve-fact-claims { margin: 0.75rem 0 0; padding-left: 1.2rem; }
+.cve-fact-claims li { padding-left: 0.2rem; line-height: 1.9; }
+.cve-fact-claims li + li { margin-top: 0.5rem; }
+.cve-fact-claims li::marker { color: var(--accent); }
+.cve-fact-evidence { margin: 0.8rem 0 0; color: var(--muted); font-size: 0.78rem; }
 .table-wrap { max-width: 100%; margin: 1.4rem 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { min-width: 8rem; padding: 0.72rem 0.85rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
