@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from .adapters import extract
+from .job_postings import fetch_lever_board
 from .db import session_factory
 from .fetch import fetch
 from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source, now
@@ -68,9 +69,11 @@ def claim(factory):
             db.commit()
             return None
         earliest = current - timedelta(hours=1)
-        count = db.scalar(select(func.count()).select_from(FetchAttempt).join(FetchJob)
+        count = db.scalar(select(func.coalesce(func.sum(FetchAttempt.request_count), 0))
+                          .select_from(FetchAttempt).join(FetchJob)
                           .where(FetchJob.source_id == source.id, FetchAttempt.started_at >= earliest))
-        if count >= source.max_requests_per_hour:
+        required = source.config.get("max_pages", 1) if source.adapter == "lever_jobs_v1" else 1
+        if count + required > source.max_requests_per_hour:
             job.available_at = current + timedelta(minutes=10)
             db.commit()
             return None
@@ -90,6 +93,8 @@ def store_item(db, source, raw, final_url):
         raise ValueError("invalid item URL or title")
     attrs = {"title": title.strip(), "url": url, "published": raw.get("published"),
              "updated": raw.get("updated")}
+    if source.item_kind == "job_posting" and isinstance(raw.get("job"), dict):
+        attrs["job"] = raw["job"]
     digest = hashlib.sha256(json.dumps(attrs, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     db.execute(insert(Item).values(source_id=source.id, external_id=external_id,
                                    canonical_url=url, kind=source.item_kind, title=title)
@@ -135,13 +140,26 @@ def process(factory, job_id):
     error = None
     retry_after = None
     retryable_fetch_failure = False
+    requests_made = 0
+
+    def counted_fetch(*args):
+        nonlocal requests_made
+        requests_made += 1
+        return fetch(*args)
+
     try:
-        status, body, headers, final_url = fetch(url, etag, modified)
+        if source.adapter == "lever_jobs_v1":
+            # All pages must succeed before store_item or missing-item state
+            # changes. Lever does not use a first-page conditional ETag.
+            status, records, headers, final_url = fetch_lever_board(source, counted_fetch)
+        else:
+            status, body, headers, final_url = counted_fetch(url, etag, modified)
         if status == 304:
             outcome = "unchanged"
             records = []
         elif status == 200:
-            records = extract(source, body, final_url)
+            if source.adapter != "lever_jobs_v1":
+                records = extract(source, body, final_url)
             outcome = "success"
         elif status == 429:
             value = headers.get("retry-after")
@@ -204,7 +222,8 @@ def process(factory, job_id):
                 job.available_at = now() + timedelta(seconds=delay)
             outcome = "failure"
         db.add(FetchAttempt(job_id=job_id, started_at=started, ended_at=now(), outcome=outcome,
-                            http_status=status, final_url=final_url, error_code=error))
+                            http_status=status, final_url=final_url, error_code=error,
+                            request_count=max(requests_made, 1)))
         db.commit()
         event("fetch", source=source.source_key, outcome=outcome, status=status, error=error)
 
