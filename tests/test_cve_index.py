@@ -70,7 +70,7 @@ def test_legacy_version_relations_use_immutable_fields_and_recorded_adapter():
     title_relations = version_cve_relations(
         attributes={"title": f"Advisory references {title_id}"},
         provenance={"adapter": "rss_v1"}, external_id="advisory-1",
-        source_adapter="rss_v1", source_kind="rss",
+        source_key="legacy-vendor", source_origin="official", source_kind="rss",
     )
     assert title_relations == {title_id: "title_mention"}
 
@@ -78,7 +78,7 @@ def test_legacy_version_relations_use_immutable_fields_and_recorded_adapter():
     record_relations = version_cve_relations(
         attributes={"title": "Vendor vulnerability", "vulnerability": {"cve_id": record_id}},
         provenance={"adapter": "json_v1"}, external_id=record_id,
-        source_adapter="json_v1", source_kind="json_api",
+        source_key="legacy-vendor", source_origin="official", source_kind="json_api",
     )
     assert record_relations == {record_id: "record"}
 
@@ -87,11 +87,28 @@ def test_legacy_version_relations_use_immutable_fields_and_recorded_adapter():
             "cve_id": record_id, "known_exploited": True,
         }},
         provenance={"adapter": "cisa_kev_v1"}, external_id=record_id,
-        source_adapter="cisa_kev_v1", source_kind="json_api",
+        source_key="cisa-kev", source_origin="official", source_kind="json_api",
     )
     assert kev_relations == {record_id: "kev"}
+    # The legacy parser comes from immutable provenance; the current
+    # Source.adapter is intentionally not an input to reconstruction.
     assert version_cve_relations(
         attributes={"title": f"Advisory references {title_id}"},
-        provenance={"adapter": "json_v1"}, external_id="advisory-1",
-        source_adapter="rss_v1", source_kind="rss",
+        provenance={"adapter": "rss_v1"}, external_id="advisory-1",
+        source_key="legacy-vendor", source_origin="official", source_kind="rss",
+    ) == {title_id: "title_mention"}
+
+    # CISA authority requires the canonical source identity and official
+    # provenance in addition to a structurally valid KEV record.
+    kev_attributes = {"title": "CISA record", "vulnerability": {
+        "cve_id": record_id, "known_exploited": True,
+    }}
+    kev_provenance = {"adapter": "cisa_kev_v1"}
+    assert version_cve_relations(
+        attributes=kev_attributes, provenance=kev_provenance, external_id=record_id,
+        source_key="vendor-feed", source_origin="official", source_kind="json_api",
+    ) == {}
+    assert version_cve_relations(
+        attributes=kev_attributes, provenance=kev_provenance, external_id=record_id,
+        source_key="cisa-kev", source_origin="community", source_kind="json_api",
     ) == {}

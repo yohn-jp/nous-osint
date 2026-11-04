@@ -72,6 +72,37 @@ jobs:
       - run: pytest -q
 
 
+  cve-role-grants:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: nous
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nous"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:test@localhost:5432/nous
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install -e '.[dev]'
+      - name: Prepare disposable database at revision 0008
+        run: alembic upgrade 0008
+      - name: Verify 0009 grants through canonical non-superuser roles
+        run: python scripts/test-cve-role-grants.py
+
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

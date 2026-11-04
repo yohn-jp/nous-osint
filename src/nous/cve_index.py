@@ -21,6 +21,22 @@ def valid_cve_id(value: str) -> bool:
     return isinstance(value, str) and len(value) <= _MAX_ID_LENGTH and bool(_CVE_ID.fullmatch(value))
 
 
+def authoritative_kev_version(*, source_key: str, source_origin: str, external_id: str,
+                              attributes, provenance, cve_id: str) -> bool:
+    """Trust KEV only from the official CISA source and its recorded parser."""
+    attrs = attributes if isinstance(attributes, dict) else {}
+    recorded = provenance if isinstance(provenance, dict) else {}
+    vulnerability = attrs.get("vulnerability")
+    return (
+        source_key == "cisa-kev" and source_origin == "official" and
+        recorded.get("adapter") == "cisa_kev_v1" and
+        valid_cve_id(cve_id) and external_id == cve_id and
+        isinstance(vulnerability, dict) and
+        vulnerability.get("cve_id") == cve_id and
+        vulnerability.get("known_exploited") is True
+    )
+
+
 def cve_relations(source, raw: dict) -> dict[str, str]:
     """Map source fields to CVE IDs with evidence grades; no fuzzy matching."""
     relations = {}
@@ -63,7 +79,9 @@ def cve_relations(source, raw: dict) -> dict[str, str]:
 
 
 def version_cve_relations(*, attributes, provenance, external_id: str,
-                          source_adapter: str, source_kind: str) -> dict[str, str]:
+                          source_key: str | None = None,
+                          source_origin: str | None = None,
+                          source_kind: str) -> dict[str, str]:
     """Read a frozen relation map or derive only from this version's snapshot.
 
     Legacy item versions predate ``cve_relations``. Their version-local title,
@@ -74,25 +92,39 @@ def version_cve_relations(*, attributes, provenance, external_id: str,
     attrs = attributes if isinstance(attributes, dict) else {}
     frozen = attrs.get("cve_relations")
     if isinstance(frozen, dict):
-        return {
-            cve_id: relation for cve_id, relation in frozen.items()
-            if valid_cve_id(cve_id) and isinstance(relation, str) and relation in {
-                "kev", "record", "reference", "title_mention",
-            }
-        }
+        relations = {}
+        for cve_id, relation in frozen.items():
+            if (not valid_cve_id(cve_id) or not isinstance(relation, str) or
+                    relation not in {"kev", "record", "reference", "title_mention"}):
+                continue
+            if relation == "kev" and not authoritative_kev_version(
+                    source_key=source_key or "", source_origin=source_origin or "",
+                    external_id=external_id, attributes=attrs, provenance=provenance,
+                    cve_id=cve_id):
+                continue
+            relations[cve_id] = relation
+        return relations
     recorded_adapter = provenance.get("adapter") if isinstance(provenance, dict) else None
     if (not isinstance(recorded_adapter, str) or not recorded_adapter or
-            recorded_adapter != source_adapter or not isinstance(external_id, str)):
+            not isinstance(external_id, str)):
         return {}
     raw = dict(attrs)
     raw["id"] = external_id
     raw.setdefault("title", "")
     try:
-        return cve_relations(
+        relations = cve_relations(
             SimpleNamespace(adapter=recorded_adapter, kind=source_kind), raw,
         )
     except (TypeError, ValueError):
         return {}
+    relations = {
+        cve_id: relation for cve_id, relation in relations.items()
+        if relation != "kev" or authoritative_kev_version(
+            source_key=source_key or "", source_origin=source_origin or "",
+            external_id=external_id, attributes=attrs, provenance=provenance,
+            cve_id=cve_id)
+    }
+    return relations
 
 
 def sync_item_cves(db, item, source, raw: dict):

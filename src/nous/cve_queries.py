@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import case, func, select
-from .cve_index import cve_relations, valid_cve_id
+from .cve_index import valid_cve_id, version_cve_relations
 from .models import CveItemVersionLink, Item, ItemVersion, Source
 
 _RELATIONS = {"kev", "record", "reference", "title_mention"}
@@ -23,21 +23,12 @@ def _version_at(db, item_id: int, cutoff: datetime):
 
 def _relation_at(version: ItemVersion, item: Item, source: Source, cve_id: str):
     attrs = version.attributes if isinstance(version.attributes, dict) else {}
-    frozen = attrs.get("cve_relations")
-    if isinstance(frozen, dict):
-        relation = frozen.get(cve_id)
-        return relation if relation in _RELATIONS else None
-    # Backward-compatible conservative reconstruction for old immutable
-    # versions. Exact structured identity and title mentions remain usable;
-    # unsupported fields are not guessed from the current link row.
-    raw = dict(attrs)
-    raw["id"] = item.external_id
-    raw.setdefault("title", item.title)
-    raw.setdefault("url", item.canonical_url)
-    try:
-        relation = cve_relations(source, raw).get(cve_id)
-    except (TypeError, ValueError):
-        return None
+    relations = version_cve_relations(
+        attributes=attrs, provenance=version.provenance,
+        external_id=item.external_id, source_key=source.source_key,
+        source_origin=source.origin, source_kind=source.kind,
+    )
+    relation = relations.get(cve_id)
     return relation if relation in _RELATIONS else None
 
 
@@ -51,7 +42,7 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
 
     kev_sources = db.scalars(
         select(Source).where(Source.source_key == "cisa-kev",
-                             Source.adapter == "cisa_kev_v1",
+                             Source.origin == "official",
                              Source.last_success_at.is_not(None),
                              Source.last_success_at <= cutoff)
         .order_by(Source.last_success_at.desc()).limit(1)
@@ -104,7 +95,7 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
             continue
         attrs = version.attributes if isinstance(version.attributes, dict) else {}
         details = attrs.get("vulnerability") if isinstance(attrs.get("vulnerability"), dict) else {}
-        if relation == "kev" and source.source_key == "cisa-kev" and source.adapter == "cisa_kev_v1":
+        if relation == "kev" and source.source_key == "cisa-kev":
             if kev is None:
                 kev = {
                     "status": "listed", "catalog_as_of": catalog_as_of,

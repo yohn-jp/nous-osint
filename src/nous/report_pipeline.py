@@ -18,7 +18,7 @@ import uuid
 from jsonschema import Draft202012Validator, FormatChecker
 from sqlalchemy import select, text
 
-from .cve_index import valid_cve_id
+from .cve_index import authoritative_kev_version, valid_cve_id
 from .cve_queries import query_cve
 from .models import Item, ItemVersion, Source
 from .report_templates import resolve_template
@@ -135,8 +135,13 @@ def _evidence_record(version: ItemVersion, item: Item, source: Source, relation:
                             if allowed_values[field] is not None and str(allowed_values[field]).strip()]
             record["content_policy"]["quote_allowed"] = bool(quote_values)
             record["content_policy"]["quote_values"] = quote_values
-    if source.source_key == "cisa-kev" and source.adapter == "cisa_kev_v1" and license_id == "CC0-1.0":
-        details = attrs.get("vulnerability") if isinstance(attrs.get("vulnerability"), dict) else {}
+    vulnerability = attrs.get("vulnerability") if isinstance(attrs.get("vulnerability"), dict) else {}
+    if (relation == "kev" and license_id == "CC0-1.0" and
+            authoritative_kev_version(
+                source_key=source.source_key, source_origin=source.origin,
+                external_id=item.external_id, attributes=attrs, provenance=provenance,
+                cve_id=vulnerability.get("cve_id", ""))):
+        details = vulnerability
         permitted = ("date_added", "due_date", "vendor", "product", "ransomware_campaign_use")
         values = {key: details.get(key) for key in permitted
                   if isinstance(details.get(key), (str, int, bool))}

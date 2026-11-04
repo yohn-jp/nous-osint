@@ -20,9 +20,10 @@ import uuid
 from sqlalchemy import and_, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from .cve_index import authoritative_kev_version
 from .db import session_factory
 from .models import (
-    CveItemLink,
+    CveItemVersionLink,
     Item,
     ItemVersion,
     Report,
@@ -635,13 +636,15 @@ def _evidence_db_rows(db, report_id: str, article: dict, bundle: dict) -> list[R
         if relation in {"kev", "record", "reference", "title_mention"}:
             cve_id = bundle.get("parameters", {}).get("cve_id")
             if cve_id:
-                link = db.get(CveItemLink, (item.id, cve_id))
+                link = db.get(CveItemVersionLink, (version.id, cve_id))
                 if link is None or link.relation != relation:
                     raise ReportError("evidence_cve_relation_mismatch")
             elif relation != "record":
                 raise ReportError("evidence_relation_not_supported")
-        if relation == "kev" and (source.source_key != "cisa-kev" or
-                                    source.adapter != "cisa_kev_v1"):
+        if relation == "kev" and not authoritative_kev_version(
+                source_key=source.source_key, source_origin=source.origin,
+                external_id=item.external_id, attributes=attrs,
+                provenance=version.provenance, cve_id=bundle.get("parameters", {}).get("cve_id", "")):
             raise ReportError("kev_source_not_authoritative")
         result.append(ReportEvidence(
             report_id=report_id, evidence_id=evidence_id, item_id=item.id,
