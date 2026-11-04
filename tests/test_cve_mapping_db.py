@@ -23,13 +23,16 @@ def setup_sources():
         kev = db.scalar(select(Source).where(Source.source_key == "cisa-kev"))
         if kev is None:
             kev = Source(
-            source_key="cisa-kev", adapter="cisa_kev_v1",
-            item_kind="vulnerability", kind="json_api",
-            url="https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json",
-            config_revision="test", config={"max_concurrency": 1},
-            enabled=True, interval_minutes=360, max_requests_per_hour=4,
-            last_success_at=now(),
-        )
+                source_key="cisa-kev", adapter="cisa_kev_v1",
+                item_kind="vulnerability", kind="json_api",
+                url="https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json",
+                config_revision="test", config={"max_concurrency": 1},
+                enabled=True, interval_minutes=360, max_requests_per_hour=4,
+                last_success_at=now(),
+            )
+            db.add(kev)
+        else:
+            kev.last_success_at = now()
         vendor = Source(
             source_key="advisory-fixture-" + marker, adapter="rss_v1",
             item_kind="advisory", kind="rss",
@@ -37,9 +40,6 @@ def setup_sources():
             config_revision="test", config={"max_concurrency": 1},
             enabled=True, interval_minutes=360, max_requests_per_hour=4,
         )
-            db.add(kev)
-        else:
-            kev.last_success_at = now()
         db.add(vendor)
         db.flush()
         return_ids = (kev.id, vendor.id)
