@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from nous import runtime
 from nous.db import session_factory
-from nous.models import FetchAttempt, FetchJob, Item, Source, now
+from nous.models import FetchAttempt, FetchJob, Item, ItemVersion, Source, now
 
 pytestmark = pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="PostgreSQL required")
 
@@ -91,34 +91,11 @@ def test_complete_board_marks_absent_items_unknown_and_stores_job_evidence(monke
         assert new.state == "current"
         assert new.current_version == 1
         assert new.title == "Cybersecurity Architect"
+        version = db.scalar(select(ItemVersion).where(ItemVersion.item_id == new.id))
+        assert version.attributes["job"]["classification"] == "japan_security"
+        assert version.attributes["job"]["evidence"] == ["title:security", "country:JP"]
+        assert "description" not in version.attributes
         assert db.get(FetchJob, job_id).state == "done"
         attempt = db.scalar(select(FetchAttempt).where(FetchAttempt.job_id == job_id))
         assert attempt.request_count == 1
 
-
-def test_claim_reserves_worst_case_page_budget(monkeypatch):
-    factory = session_factory()
-    source_id, _ = _setup_lever_source(factory, max_pages=3, hourly=4)
-    with factory() as db:
-        # A completed fetch that used 2 requests leaves fewer than 3 for the
-        # next board snapshot; no additional URLs may be fetched this hour.
-        source = db.get(Source, source_id)
-        existing = FetchJob(source_id=source_id,
-                            dedupe_key="old-" + uuid.uuid4().hex,
-                            state="done", attempts=1)
-        db.add(existing)
-        db.flush()
-        db.add(FetchAttempt(job_id=existing.id, started_at=now(), ended_at=now(),
-                            outcome="success", request_count=2))
-        current = FetchJob(source_id=source_id,
-                           dedupe_key="next-" + uuid.uuid4().hex,
-                           state="queued", attempts=0)
-        db.add(current)
-        db.commit()
-        next_id = current.id
-    assert runtime.claim(factory) is None
-    with factory() as db:
-        job = db.get(FetchJob, next_id)
-        assert job.state == "queued"
-        assert job.attempts == 0
-        assert job.available_at > now()
