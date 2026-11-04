@@ -99,6 +99,23 @@ class CveItemLink(Base):
     relation: Mapped[str] = mapped_column(String(24))
 
 
+class CveItemVersionLink(Base):
+    """Immutable CVE relation captured for one source observation version."""
+    __tablename__ = "cve_item_version_links"
+    __table_args__ = (
+        Index("ix_cve_item_version_links_cve_version", "cve_id", "item_version_id"),
+        CheckConstraint(
+            "relation IN ('kev','record','reference','title_mention')",
+            name="ck_cve_item_version_link_relation",
+        ),
+    )
+    item_version_id: Mapped[int] = mapped_column(
+        ForeignKey("item_versions.id"), primary_key=True,
+    )
+    cve_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    relation: Mapped[str] = mapped_column(String(24))
+
+
 class ReportSchedule(Base):
     __tablename__ = "report_schedules"
     __table_args__ = (CheckConstraint("cadence IN ('daily','weekly')", name="ck_report_schedule_cadence"),)

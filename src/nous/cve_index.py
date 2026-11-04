@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 from sqlalchemy import delete, select
-from .models import CveItemLink
+from .models import CveItemLink, CveItemVersionLink
 
 CVE_ID_PATTERN = r"^CVE-[0-9]{4}-[0-9]{4,}$"
 _CVE_ID = re.compile(CVE_ID_PATTERN)
@@ -79,3 +79,18 @@ def sync_item_cves(db, item, source, raw: dict):
             previous.relation = relation
         else:
             db.add(CveItemLink(item_id=item.id, cve_id=cve, relation=relation))
+
+
+def record_item_version_cves(db, item_version_id: int, relations: dict[str, str]):
+    """Store exact relation grades alongside their immutable observation."""
+    if not isinstance(relations, dict):
+        raise ValueError("version CVE relations must be an object")
+    rows = []
+    for cve_id, relation in relations.items():
+        if (not valid_cve_id(cve_id) or not isinstance(relation, str) or
+                relation not in {"kev", "record", "reference", "title_mention"}):
+            raise ValueError("invalid version CVE relation")
+        rows.append(CveItemVersionLink(
+            item_version_id=item_version_id, cve_id=cve_id, relation=relation,
+        ))
+    db.add_all(rows)

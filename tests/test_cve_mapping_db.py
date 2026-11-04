@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from nous import api, runtime
+from nous.cve_index import sync_item_cves
 from nous.cve_queries import query_cve
 from nous.db import session_factory
 from nous.models import CveItemLink, Item, ItemVersion, Source, now
@@ -131,7 +132,8 @@ def test_cve_query_uses_immutable_version_at_cutoff_after_current_state_changes(
         old_observed_at = old_version.observed_at
         cutoff = old_observed_at + timedelta(seconds=1)
         current_title = "Revised title after the selected cutoff"
-        current_attributes = {**old_version.attributes, "title": current_title}
+        current_attributes = {**old_version.attributes, "title": current_title,
+                              "cve_relations": {}}
         current_version = ItemVersion(
             item_id=item.id, version=2, observed_at=cutoff + timedelta(days=1),
             sha256="c" * 64, attributes=current_attributes,
@@ -143,7 +145,12 @@ def test_cve_query_uses_immutable_version_at_cutoff_after_current_state_changes(
         item.current_hash = "c" * 64
         item.last_seen_at = cutoff + timedelta(days=1)
         db.add(current_version)
+        sync_item_cves(db, item, vendor, {
+            "id": "cutoff-fixture", "title": current_title, "url": url,
+        })
         db.commit()
+        assert db.scalar(select(CveItemLink).where(
+            CveItemLink.item_id == item.id, CveItemLink.cve_id == cutoff_cve)) is None
 
     with factory() as db:
         result = query_cve(db, cutoff_cve, observed_cutoff=cutoff)
@@ -151,6 +158,10 @@ def test_cve_query_uses_immutable_version_at_cutoff_after_current_state_changes(
                       if ref["source"] == vendor_key)
     assert historical["title"] == old_title
     assert historical["last_seen_at"] == old_observed_at
+    with factory() as db:
+        current = query_cve(db, cutoff_cve,
+                            observed_cutoff=cutoff + timedelta(days=2))
+    assert all(ref["source"] != vendor_key for ref in current["references"])
 
 
 def test_kev_unknown_vs_not_listed_requires_recent_complete_source_snapshot():

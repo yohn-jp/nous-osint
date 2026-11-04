@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import case, select
+from sqlalchemy import case, func, select
 from .cve_index import cve_relations, valid_cve_id
-from .models import CveItemLink, Item, ItemVersion, Source
+from .models import CveItemVersionLink, Item, ItemVersion, Source
 
 _RELATIONS = {"kev", "record", "reference", "title_mention"}
 
@@ -60,17 +60,30 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
     fresh = (catalog_as_of is not None and
              catalog_as_of >= cutoff - timedelta(hours=48))
 
+    latest_versions = select(
+        ItemVersion.id.label("item_version_id"),
+        ItemVersion.item_id.label("item_id"),
+        func.row_number().over(
+            partition_by=ItemVersion.item_id,
+            order_by=(ItemVersion.observed_at.desc(), ItemVersion.id.desc()),
+        ).label("version_rank"),
+    ).where(ItemVersion.observed_at <= cutoff).subquery()
     priority = case(
-        (CveItemLink.relation == "kev", 0),
-        (CveItemLink.relation == "record", 1),
-        (CveItemLink.relation == "reference", 2),
+        (CveItemVersionLink.relation == "kev", 0),
+        (CveItemVersionLink.relation == "record", 1),
+        (CveItemVersionLink.relation == "reference", 2),
         else_=3,
     )
     rows = db.execute(
-        select(CveItemLink, Item, Source)
-        .join(Item, CveItemLink.item_id == Item.id)
+        select(CveItemVersionLink, Item, Source, ItemVersion)
+        .join(latest_versions,
+              latest_versions.c.item_version_id == CveItemVersionLink.item_version_id)
+        .join(ItemVersion, ItemVersion.id == latest_versions.c.item_version_id)
+        .join(Item, ItemVersion.item_id == Item.id)
         .join(Source, Item.source_id == Source.id)
-        .where(CveItemLink.cve_id == cve_id, Item.first_seen_at <= cutoff)
+        .where(latest_versions.c.version_rank == 1,
+               CveItemVersionLink.cve_id == cve_id,
+               Item.first_seen_at <= cutoff)
         .order_by(priority, Item.id)
         .limit(51)
     ).all()
@@ -78,12 +91,9 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
     associated = []
     kev = None
     seen_items = set()
-    for link, item, source in rows:
-        version = _version_at(db, item.id, cutoff)
-        if version is None:
-            continue
+    for link, item, source, version in rows:
         relation = _relation_at(version, item, source, cve_id)
-        if relation is None:
+        if relation is None or relation != link.relation:
             continue
         attrs = version.attributes if isinstance(version.attributes, dict) else {}
         details = attrs.get("vulnerability") if isinstance(attrs.get("vulnerability"), dict) else {}
