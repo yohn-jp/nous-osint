@@ -21,7 +21,7 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    `nous-runtime-database-url` after provisioning separate `nous_api` and
    `nous_runtime` SQL roles. For remote MCP, provision a `nous_mcp` role with
    SELECT-only grants and import its URL as `nous-mcp-database-url`. After
-   migration `0008`, provision the distinct report Worker and admin grants below
+   migration `0009`, provision the distinct report Worker and admin grants below
    and import the Worker URL as `nous-report-worker-database-url`. Securely
    remove temporary files. Never put a password in Git or a Quadlet.
 4. Run `systemctl --user daemon-reload`; start `nous-db.service`. Wait for
@@ -43,7 +43,7 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    `systemctl --user enable`.
 
 For automated reports, provision the report DB roles only after `alembic upgrade
-head` has created migration `0008`. The report Worker reads only the source
+head` has created migration `0009`. The report Worker reads only the source
 observation tables it needs and has no DELETE privilege:
 
 ```sql
@@ -167,16 +167,21 @@ manifest hash, and inner database/site archive hashes. Validate it with:
 scripts/restore-test.sh ~/.local/state/nous-osint/backups/<backup>.backup.gpg
 ```
 
-The restore check decrypts the framed stream: the DB dump goes directly to an
-isolated PostgreSQL container and the site archive goes into a disposable
-rootless Podman volume. It verifies schema and row counts, DB/site active digest,
-the release manifest, each HTML page and asset hash, then removes the temporary
-container, volumes, secret and tmpfs password. A successful check verifies this
-artifact in an isolated environment; it is not a full VM restore rehearsal.
+The restore check accepts the current framed `.backup.gpg` stream and legacy
+`.tar.gpg` report backups. It decrypts both formats incrementally: the DB dump
+goes directly to an isolated PostgreSQL container and the site archive goes into
+a disposable rootless Podman volume. No decrypted archive or dump is staged on
+disk. It verifies schema and row counts, DB/site active digest, the release
+manifest, each HTML page and asset hash, then removes the temporary container,
+volumes, secret and tmpfs password. Run
+`.venv/bin/python scripts/test-restore-formats.py` to create a disposable database
+using the current Alembic migrations, build encrypted fixtures in memory, and
+exercise both restore formats against real rootless Podman/PostgreSQL containers.
+The fixture uses synthetic source data; this is not a full VM restore rehearsal.
 Keep a verified off-VM copy of the decryption key; the backup host's public key
 alone cannot restore data. Never copy live PGDATA as a generic archive. Do not
-commit dumps or keys. A database-only `.dump.gpg` from the old format is rejected
-by this restore check because it has no report-site volume.
+commit dumps or keys. A database-only `.dump.gpg` is rejected because it has no
+report-site volume.
 
 The report DB snapshot and filesystem archive are not a kernel-level atomic
 cross-resource snapshot. The report Worker is stopped for the entire capture,

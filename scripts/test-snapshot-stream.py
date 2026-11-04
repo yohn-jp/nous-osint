@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#!/usr/bin/env python3
 """Exercise snapshot-dump's bounded stream path with a synthetic Podman fixture."""
 
 from __future__ import annotations

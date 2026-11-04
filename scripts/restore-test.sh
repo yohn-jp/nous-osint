@@ -8,8 +8,13 @@ for command_name in gpg sha256sum cut python3 podman seq sleep findmnt mktemp; d
 done
 
 archive=${1:-}
-[[ -n "$archive" && -f "$archive" ]] || fail "usage: restore-test.sh BACKUP.backup.gpg [MANIFEST.json.gpg]"
-manifest=${2:-${archive%.backup.gpg}.manifest.json.gpg}
+[[ -n "$archive" && -f "$archive" ]] || fail "usage: restore-test.sh BACKUP.backup.gpg|BACKUP.tar.gpg [MANIFEST.json.gpg]"
+case "$archive" in
+  *.backup.gpg) default_manifest=${archive%.backup.gpg}.manifest.json.gpg ;;
+  *.tar.gpg) default_manifest=${archive%.tar.gpg}.manifest.json.gpg ;;
+  *) fail "backup must end in .backup.gpg or .tar.gpg" ;;
+esac
+manifest=${2:-$default_manifest}
 [[ -f "$manifest" ]] || fail "encrypted backup manifest not found: $manifest"
 [[ $(findmnt -n -o FSTYPE /dev/shm 2>/dev/null || true) == tmpfs ]] \
   || fail "/dev/shm must be a tmpfs; refusing plaintext secret staging on persistent storage"
@@ -27,8 +32,13 @@ import sys
 
 with open(sys.argv[1], encoding="utf-8") as stream:
     value = json.load(stream)
-if value.get("format") != "nous-report-site-backup-stream-v1":
-    raise SystemExit("unsupported or legacy backup format")
+archive_format = value.get("format")
+if archive_format == "nous-report-site-backup-stream-v1":
+    backup_kind, suffix = "stream", ".backup.gpg"
+elif archive_format == "nous-report-site-backup-v1":
+    backup_kind, suffix = "tar", ".tar.gpg"
+else:
+    raise SystemExit("unsupported or database-only backup format")
 counts = value.get("counts")
 site = value.get("report_site")
 checksums = value.get("checksums")
@@ -57,14 +67,14 @@ for digest in (database_sha, site_sha, archive_sha):
     if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
         raise SystemExit("backup checksum is invalid")
 artifact = value.get("artifact")
-if not isinstance(artifact, str) or "/" in artifact or "\\" in artifact or not artifact.endswith(".backup.gpg"):
+if not isinstance(artifact, str) or "/" in artifact or "\\" in artifact or not artifact.endswith(suffix):
     raise SystemExit("backup artifact name is invalid")
-print("\t".join([schema, *(str(row) for row in rows), active, str(site_files),
+print("\t".join([backup_kind, schema, *(str(row) for row in rows), active, str(site_files),
                   str(site_assets), site_manifest, database_sha, site_sha,
                   archive_sha, artifact]))
 PY
 ) || fail "backup manifest validation failed"
-IFS=$'\t' read -r schema_version expected_sources expected_items expected_versions \
+IFS=$'\t' read -r backup_kind schema_version expected_sources expected_items expected_versions \
   expected_runs expected_schedules expected_reports expected_evidence expected_digest \
   expected_site_files expected_site_assets expected_site_manifest expected_db_sha \
   expected_site_sha expected_archive_sha expected_artifact <<< "$manifest_fields"
@@ -105,111 +115,171 @@ for _ in $(seq 1 60); do
 done
 (( ready == 1 )) || fail "isolated PostgreSQL did not become ready"
 
-# Parse the encrypted framed stream. Dump and site tar bytes go directly to
-# their isolated restore processes. No plaintext archive or dump is written to
-# a host file; the site is extracted only into a disposable rootless volume.
+# Parse either the current framed stream or the previous tar bundle. Dump and
+# site bytes go directly to isolated restore processes; no decrypted archive
+# or dump is written to a host file.
 archive_parser=$(cat <<'PY'
 import hashlib
 import json
 import struct
 import subprocess
 import sys
+import tarfile
 
-manifest_path, container, site_volume, postgres_image = sys.argv[1:]
+manifest_path, container, site_volume, postgres_image, backup_kind = sys.argv[1:]
 with open(manifest_path, encoding="utf-8") as stream:
     outer = json.load(stream)
 
 source = sys.stdin.buffer
-magic = b"NOUS-REPORT-BACKUP-STREAM\x00\x01"
-expected_records = ("database.dump", "report-site.tar", "manifest.json")
 
-def exact(size, allow_eof=False):
-    chunks = bytearray()
-    while len(chunks) < size:
-        value = source.read(size - len(chunks))
-        if not value:
-            if allow_eof and not chunks:
-                return None
-            raise SystemExit("truncated backup stream")
-        chunks.extend(value)
-    return bytes(chunks)
+def verify_inner(value):
+    expected_format = (
+        "nous-report-site-backup-stream-v1" if backup_kind == "stream"
+        else "nous-report-site-backup-v1"
+    )
+    if not isinstance(value, dict) or value.get("format") != expected_format:
+        raise SystemExit("backup's internal manifest is invalid")
+    for key in ("format", "schema_version", "counts", "report_site", "checksums"):
+        if value.get(key) != outer.get(key):
+            raise SystemExit("internal and encrypted backup manifests disagree")
 
-if exact(len(magic)) != magic:
-    raise SystemExit("unsupported backup stream header")
-inner = None
-for expected_name in expected_records:
-    name_size = struct.unpack(">H", exact(2))[0]
-    if not 1 <= name_size <= 255:
-        raise SystemExit("invalid backup stream record name length")
-    try:
-        name = exact(name_size).decode("ascii")
-    except UnicodeDecodeError as exc:
-        raise SystemExit("invalid backup stream record name") from exc
-    if name != expected_name:
-        raise SystemExit("backup stream records are missing, duplicated or out of order")
-
-    if name == "manifest.json":
-        payload = bytearray()
-        process = None
-    elif name == "database.dump":
-        digest = hashlib.sha256()
-        process = subprocess.Popen([
+def restore_process(name):
+    if name == "database.dump":
+        return subprocess.Popen([
             "podman", "exec", "-i", container, "bash", "-c",
             'export PGPASSWORD="$(cat /run/secrets/db_password)"; exec pg_restore --no-owner --no-acl -U nous -d nous',
         ], stdin=subprocess.PIPE)
-    else:
-        digest = hashlib.sha256()
-        process = subprocess.Popen([
-            "podman", "run", "--rm", "-i", "--network", "none",
-            "--volume", f"{site_volume}:/site:rw", "--entrypoint", "tar",
-            postgres_image, "--no-same-owner", "-C", "/site", "-xpf", "-",
-        ], stdin=subprocess.PIPE)
+    return subprocess.Popen([
+        "podman", "run", "--rm", "-i", "--network", "none",
+        "--volume", f"{site_volume}:/site:rw", "--entrypoint", "tar",
+        postgres_image, "--no-same-owner", "-C", "/site", "-xpf", "-",
+    ], stdin=subprocess.PIPE)
 
-    total = 0
-    while True:
-        amount = struct.unpack(">I", exact(4))[0]
-        if amount == 0:
-            break
-        if amount > 8 * 1024 * 1024:
-            raise SystemExit("backup stream chunk exceeds the 8 MiB limit")
-        total += amount
-        if name == "manifest.json" and total > 1024 * 1024:
-            raise SystemExit("backup stream manifest exceeds the 1 MiB limit")
-        block = exact(amount)
-        if name == "manifest.json":
-            payload.extend(block)
+def finish_restore(name, process, digest, expected):
+    process.stdin.close()
+    if process.wait() != 0:
+        raise SystemExit(f"container restore failed for {name}")
+    if digest.hexdigest() != expected:
+        raise SystemExit(f"backup member checksum mismatch: {name}")
+
+def restore_stream():
+    magic = b"NOUS-REPORT-BACKUP-STREAM\x00\x01"
+    expected_records = ("database.dump", "report-site.tar", "manifest.json")
+
+    def exact(size, allow_eof=False):
+        chunks = bytearray()
+        while len(chunks) < size:
+            value = source.read(size - len(chunks))
+            if not value:
+                if allow_eof and not chunks:
+                    return None
+                raise SystemExit("truncated backup stream")
+            chunks.extend(value)
+        return bytes(chunks)
+
+    if exact(len(magic)) != magic:
+        raise SystemExit("unsupported backup stream header")
+    inner = None
+    for expected_name in expected_records:
+        name_size = struct.unpack(">H", exact(2))[0]
+        if not 1 <= name_size <= 255:
+            raise SystemExit("invalid backup stream record name length")
+        try:
+            name = exact(name_size).decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise SystemExit("invalid backup stream record name") from exc
+        if name != expected_name:
+            raise SystemExit("backup stream records are missing, duplicated or out of order")
+
+        payload = bytearray() if name == "manifest.json" else None
+        process = None if payload is not None else restore_process(name)
+        digest = None if payload is not None else hashlib.sha256()
+        total = 0
+        while True:
+            amount = struct.unpack(">I", exact(4))[0]
+            if amount == 0:
+                break
+            if amount > 8 * 1024 * 1024:
+                raise SystemExit("backup stream chunk exceeds the 8 MiB limit")
+            total += amount
+            if payload is not None and total > 1024 * 1024:
+                raise SystemExit("backup stream manifest exceeds the 1 MiB limit")
+            block = exact(amount)
+            if payload is not None:
+                payload.extend(block)
+            else:
+                digest.update(block)
+                try:
+                    process.stdin.write(block)
+                except BrokenPipeError as exc:
+                    process.kill()
+                    process.wait()
+                    raise SystemExit(f"restore container stopped accepting {name}") from exc
+        if total == 0:
+            raise SystemExit(f"empty backup stream record: {name}")
+        if payload is None:
+            key = "database_dump_sha256" if name == "database.dump" else "report_site_archive_sha256"
+            expected = outer.get("checksums", {}).get(key)
+            finish_restore(name, process, digest, expected)
         else:
+            inner = json.loads(payload)
+
+    if exact(1, allow_eof=True) is not None:
+        raise SystemExit("unexpected data after backup stream manifest")
+    verify_inner(inner)
+
+def restore_legacy_tar():
+    expected_names = ("manifest.json", "database.dump", "report-site.tar")
+    tar_stream = tarfile.open(fileobj=source, mode="r|")
+    inner = None
+    for expected_name in expected_names:
+        member = tar_stream.next()
+        if member is None or member.name != expected_name or not member.isfile():
+            raise SystemExit("legacy backup tar members are missing or out of order")
+        if member.name == "manifest.json":
+            if member.size > 1024 * 1024:
+                raise SystemExit("legacy backup manifest exceeds the 1 MiB limit")
+            member_stream = tar_stream.extractfile(member)
+            payload = member_stream.read(member.size + 1)
+            if len(payload) != member.size:
+                raise SystemExit("legacy backup manifest is truncated")
+            inner = json.loads(payload)
+            verify_inner(inner)
+            continue
+        if inner is None:
+            raise SystemExit("legacy backup internal manifest is missing")
+        process = restore_process(member.name)
+        digest = hashlib.sha256()
+        member_stream = tar_stream.extractfile(member)
+        remaining = member.size
+        while remaining:
+            block = member_stream.read(min(1024 * 1024, remaining))
+            if not block:
+                process.kill()
+                process.wait()
+                raise SystemExit(f"truncated legacy backup member: {member.name}")
             digest.update(block)
             try:
                 process.stdin.write(block)
             except BrokenPipeError as exc:
                 process.kill()
                 process.wait()
-                raise SystemExit(f"restore container stopped accepting {name}") from exc
-    if total == 0:
-        raise SystemExit(f"empty backup stream record: {name}")
-    if process is not None:
-        process.stdin.close()
-        if process.wait() != 0:
-            raise SystemExit(f"container restore failed for {name}")
-        checksum = digest.hexdigest()
-        key = "database_dump_sha256" if name == "database.dump" else "report_site_archive_sha256"
-        if not isinstance(outer.get("checksums"), dict) or checksum != outer["checksums"].get(key):
-            raise SystemExit(f"backup member checksum mismatch: {name}")
-    else:
-        inner = json.loads(payload)
+                raise SystemExit(f"restore container stopped accepting {member.name}") from exc
+            remaining -= len(block)
+        key = "database_dump_sha256" if member.name == "database.dump" else "report_site_archive_sha256"
+        expected = outer.get("checksums", {}).get(key)
+        finish_restore(member.name, process, digest, expected)
+    if tar_stream.next() is not None:
+        raise SystemExit("legacy backup tar contains an unexpected extra member")
 
-if exact(1, allow_eof=True) is not None:
-    raise SystemExit("unexpected data after backup stream manifest")
-if not isinstance(inner, dict) or inner.get("format") != "nous-report-site-backup-stream-v1":
-    raise SystemExit("backup stream manifest is invalid")
-for key in ("format", "schema_version", "counts", "report_site", "checksums"):
-    if inner.get(key) != outer.get(key):
-        raise SystemExit("inner and encrypted backup manifests disagree")
+if backup_kind == "stream":
+    restore_stream()
+else:
+    restore_legacy_tar()
 PY
 )
 if ! gpg --batch --quiet --decrypt -- "$archive" \
-      | python3 -c "$archive_parser" "$manifest_plain" "$container" "$site_volume" "$image"; then
+      | python3 -c "$archive_parser" "$manifest_plain" "$container" "$site_volume" "$image" "$backup_kind"; then
   fail "decrypt, stream, checksum or restore failed"
 fi
 

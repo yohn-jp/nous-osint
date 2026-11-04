@@ -149,13 +149,19 @@ published=1
 
 # Retain N days; prune only matching encrypted artifact/manifest pairs.
 while IFS= read -r -d '' old_archive; do
-  old_manifest=${old_archive%.backup.gpg}.manifest.json.gpg
+  case "$old_archive" in
+    *.backup.gpg) old_manifest=${old_archive%.backup.gpg}.manifest.json.gpg ;;
+    *.tar.gpg) old_manifest=${old_archive%.tar.gpg}.manifest.json.gpg ;;
+    *) continue ;;
+  esac
   rm -f -- "$old_archive" "$old_manifest"
 done < <(find "$backup_dir" -maxdepth 1 -type f \
-  -name 'nous-osint-*.backup.gpg' -mtime "+$((retention_days - 1))" -print0)
+  \( -name 'nous-osint-*.backup.gpg' -o -name 'nous-osint-*.tar.gpg' \) \
+  -mtime "+$((retention_days - 1))" -print0)
 while IFS= read -r -d '' old_manifest; do
-  old_archive=${old_manifest%.manifest.json.gpg}.backup.gpg
-  [[ -e "$old_archive" ]] || rm -f -- "$old_manifest"
+  artifact_base=${old_manifest%.manifest.json.gpg}
+  [[ -e "$artifact_base.backup.gpg" || -e "$artifact_base.tar.gpg" ]] \
+    || rm -f -- "$old_manifest"
 done < <(find "$backup_dir" -maxdepth 1 -type f \
   -name 'nous-osint-*.manifest.json.gpg' -mtime "+$((retention_days - 1))" -print0)
 
