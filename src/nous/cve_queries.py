@@ -18,7 +18,8 @@ def query_cve(db, cve_id: str):
         raise ValueError("invalid CVE identifier")
 
     kev_sources = db.scalars(
-        select(Source).where(Source.adapter == "cisa_kev_v1",
+        select(Source).where(Source.source_key == "cisa-kev",
+                             Source.adapter == "cisa_kev_v1",
                              Source.last_success_at.is_not(None))
         .order_by(Source.last_success_at.desc()).limit(1)
     ).all()
@@ -46,7 +47,8 @@ def query_cve(db, cve_id: str):
     associated = []
     kev = None
     for link, item, source, version in rows:
-        if (link.relation == "kev" and source.adapter == "cisa_kev_v1" and
+        if (link.relation == "kev" and source.source_key == "cisa-kev" and
+                source.adapter == "cisa_kev_v1" and
                 item.state == "current"):
             # Preserve only approved bounded CISA fields, not raw descriptions
             # or content from linked publishers.

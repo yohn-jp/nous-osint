@@ -20,8 +20,10 @@ def setup_sources():
     factory = session_factory()
     marker = uuid.uuid4().hex[:10]
     with factory() as db:
-        kev = Source(
-            source_key="kev-fixture-" + marker, adapter="cisa_kev_v1",
+        kev = db.scalar(select(Source).where(Source.source_key == "cisa-kev"))
+        if kev is None:
+            kev = Source(
+            source_key="cisa-kev", adapter="cisa_kev_v1",
             item_kind="vulnerability", kind="json_api",
             url="https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json",
             config_revision="test", config={"max_concurrency": 1},
@@ -35,7 +37,10 @@ def setup_sources():
             config_revision="test", config={"max_concurrency": 1},
             enabled=True, interval_minutes=360, max_requests_per_hour=4,
         )
-        db.add_all([kev, vendor])
+            db.add(kev)
+        else:
+            kev.last_success_at = now()
+        db.add(vendor)
         db.flush()
         return_ids = (kev.id, vendor.id)
         db.commit()
@@ -134,14 +139,15 @@ def test_kev_unknown_vs_not_listed_requires_recent_complete_source_snapshot():
 
 
 def test_non_cisa_source_cannot_assert_kev_via_title():
+    unrelated_cve = "CVE-2026-67892"
     factory, _, vendor_id = setup_sources()
     with factory() as db:
         vendor = db.get(Source, vendor_id)
         runtime.store_item(db, vendor, {
-            "id": CVE, "title": f"Known exploit discussed: {CVE}",
+            "id": unrelated_cve, "title": f"Known exploit discussed: {unrelated_cve}",
             "url": "https://vendor.example/security/advisory-2",
         }, vendor.url)
         db.commit()
-    response = api.cve(CVE)
+    response = api.cve(unrelated_cve)
     assert response["kev"]["status"] == "not_listed"
     assert all(ref["relation"] != "kev" for ref in response["references"])
