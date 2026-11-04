@@ -843,6 +843,8 @@ def schedule_due(factory):
         count = 0
         for schedule in due:
             slot = schedule.next_slot_at
+            if slot.tzinfo is None:
+                slot = slot.replace(tzinfo=timezone.utc)
             next_slot = _slot_next(slot, schedule.cadence, schedule.timezone)
             # Emit at most one recent missed slot. Older slots are advanced
             # without generating a retrospective catch-up storm.
@@ -852,6 +854,7 @@ def schedule_due(factory):
                 slot_local = slot.astimezone(__import__("zoneinfo").ZoneInfo(schedule.timezone))
                 if schedule.template_id == "security-daily":
                     raw["target_date"] = slot_local.date().isoformat()
+                    raw["timezone"] = schedule.timezone
                 params = normalize_parameters(schedule.template_id, raw, now=slot)
                 key = "schedule:" + hashlib.sha256(
                     f"{schedule.id}\0{slot.isoformat()}".encode()
