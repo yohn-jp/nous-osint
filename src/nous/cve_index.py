@@ -9,6 +9,7 @@ import re
 from types import SimpleNamespace
 from sqlalchemy import delete, select
 from .models import CveItemLink, CveItemVersionLink
+from .registry import ADAPTERS
 
 CVE_ID_PATTERN = r"^CVE-[0-9]{4}-[0-9]{4,}$"
 _CVE_ID = re.compile(CVE_ID_PATTERN)
@@ -80,8 +81,7 @@ def cve_relations(source, raw: dict) -> dict[str, str]:
 
 def version_cve_relations(*, attributes, provenance, external_id: str,
                           source_key: str | None = None,
-                          source_origin: str | None = None,
-                          source_kind: str) -> dict[str, str]:
+                          source_origin: str | None = None) -> dict[str, str]:
     """Read a frozen relation map or derive only from this version's snapshot.
 
     Legacy item versions predate ``cve_relations``. Their version-local title,
@@ -108,12 +108,18 @@ def version_cve_relations(*, attributes, provenance, external_id: str,
     if (not isinstance(recorded_adapter, str) or not recorded_adapter or
             not isinstance(external_id, str)):
         return {}
+    # Source.kind can change when a custom feed is reconfigured. The adapter
+    # recorded with this immutable observation determines its original kind.
+    historical_kinds = [kind for kind, adapters in ADAPTERS.items()
+                        if recorded_adapter in adapters]
+    if len(historical_kinds) != 1:
+        return {}
     raw = dict(attrs)
     raw["id"] = external_id
     raw.setdefault("title", "")
     try:
         relations = cve_relations(
-            SimpleNamespace(adapter=recorded_adapter, kind=source_kind), raw,
+            SimpleNamespace(adapter=recorded_adapter, kind=historical_kinds[0]), raw,
         )
     except (TypeError, ValueError):
         return {}

@@ -39,8 +39,7 @@ def upgrade():
     )
     rows = connection.execute(sa.text("""
         SELECT version.id AS item_version_id, version.attributes, version.provenance,
-               item.external_id, source.source_key, source.origin AS source_origin,
-               source.kind AS source_kind
+               item.external_id, source.source_key, source.origin AS source_origin
         FROM item_versions AS version
         JOIN items AS item ON item.id = version.item_id
         JOIN sources AS source ON source.id = item.source_id
@@ -51,7 +50,7 @@ def upgrade():
         relations = version_cve_relations(
             attributes=row["attributes"], provenance=row["provenance"],
             external_id=row["external_id"], source_key=row["source_key"],
-            source_origin=row["source_origin"], source_kind=row["source_kind"],
+            source_origin=row["source_origin"],
         )
         batch.extend({
             "item_version_id": row["item_version_id"],

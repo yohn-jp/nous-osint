@@ -88,14 +88,14 @@ def test_legacy_snapshot_without_frozen_map_keeps_current_and_historical_referen
     provenance = {"adapter": "rss_v1", "source_url": "https://vendor.example/rss"}
     relations = version_cve_relations(
         attributes=attrs, provenance=provenance, external_id="legacy-advisory",
-        source_key="legacy-vendor", source_origin="official", source_kind="rss",
+        source_key="legacy-vendor", source_origin="official",
     )
 
     with factory() as db:
         source = Source(
             # The current adapter changed after this legacy observation; its
             # relation must still come from the recorded rss_v1 provenance.
-            source_key="legacy-vendor", kind="rss", adapter="json_v1",
+            source_key="legacy-vendor", kind="json_api", adapter="json_v1",
             item_kind="advisory", url="https://vendor.example/rss",
             config_revision="fixture", config={}, enabled=True,
             interval_minutes=60, max_requests_per_hour=4,
@@ -103,7 +103,7 @@ def test_legacy_snapshot_without_frozen_map_keeps_current_and_historical_referen
         db.add(source)
         db.flush()
         item = Item(
-            source_id=source.id, external_id="legacy-advisory",
+            source_id=source.id, external_id=cve_id,
             canonical_url=attrs["url"], kind="advisory", title=attrs["title"],
             state="current", first_seen_at=observed_at, last_seen_at=observed_at,
             current_version=1, current_hash="c" * 64,

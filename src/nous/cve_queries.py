@@ -26,7 +26,7 @@ def _relation_at(version: ItemVersion, item: Item, source: Source, cve_id: str):
     relations = version_cve_relations(
         attributes=attrs, provenance=version.provenance,
         external_id=item.external_id, source_key=source.source_key,
-        source_origin=source.origin, source_kind=source.kind,
+        source_origin=source.origin,
     )
     relation = relations.get(cve_id)
     return relation if relation in _RELATIONS else None

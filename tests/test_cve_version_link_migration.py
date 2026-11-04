@@ -62,11 +62,11 @@ def test_0009_backfill_uses_recorded_adapter_after_source_adapter_changes():
         metadata.create_all(engine)
         with engine.begin() as connection:
             old_source_id = connection.execute(insert(sources).values(
-                source_key="legacy-vendor", kind="rss", origin="official",
+                source_key="legacy-vendor", kind="json_api", origin="official",
                 adapter="json_v1",
             ).returning(sources.c.id)).scalar_one()
             old_item_id = connection.execute(insert(items).values(
-                source_id=old_source_id, external_id="legacy-advisory",
+                source_id=old_source_id, external_id="CVE-2026-12345",
             ).returning(items.c.id)).scalar_one()
             old_version_id = connection.execute(insert(versions).values(
                 item_id=old_item_id,
