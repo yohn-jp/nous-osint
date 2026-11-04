@@ -115,3 +115,20 @@ def test_database_failure_after_promotion_restores_previous_release(publication,
         assert state.active_digest == before
         assert state.pending_digest is None
         assert state.pending_run_id is None
+
+
+def test_corrupt_active_release_is_rebuilt_at_the_same_digest(publication):
+    factory, _claim, _bundle, _article = publication
+    site_root = worker.public_root()
+    digest = worker._current_digest(site_root)
+    index = site_root / "releases" / digest / "index.html"
+    index.chmod(0o644)
+    index.write_text("<html>corrupted</html>", encoding="utf-8")
+    assert not worker._verify_release(site_root, digest)
+
+    repaired = worker.ensure_current_release(factory)
+
+    assert repaired == digest
+    assert worker._current_digest(site_root) == digest
+    assert worker._verify_release(site_root, digest)
+    assert index.read_text(encoding="utf-8") == "<html><body>fixture index</body></html>"

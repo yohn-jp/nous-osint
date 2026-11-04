@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
+import ctypes
+import errno
 import fcntl
 import hashlib
 import json
@@ -51,6 +53,8 @@ _HEARTBEAT_SECONDS = 30
 _MAX_ARCHIVE_REPORTS = 1000
 _DIGEST = re.compile(r"^[a-f0-9]{64}$")
 _SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_AT_FDCWD = -100
+_RENAME_EXCHANGE = 2
 
 
 class LeaseLost(RuntimeError):
@@ -343,12 +347,54 @@ def _site_articles(db, candidate: dict | None = None) -> list[dict]:
     return values
 
 
+def _exchange_directories(left: Path, right: Path):
+    """Atomically replace an existing release directory without a broken pointer."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise ReportError("release_atomic_repair_unavailable")
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p,
+                          ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    result = renameat2(
+        _AT_FDCWD, os.fsencode(left), _AT_FDCWD, os.fsencode(right), _RENAME_EXCHANGE,
+    )
+    if result != 0:
+        code = ctypes.get_errno()
+        if code in (errno.ENOSYS, errno.EINVAL, errno.EOPNOTSUPP):
+            raise ReportError("release_atomic_repair_unavailable")
+        raise OSError(code, os.strerror(code), str(right))
+
+
+def _remove_release_tree(path: Path):
+    """Make a swapped-out immutable release removable, then delete it safely."""
+    if path.is_symlink():
+        path.unlink()
+        return
+    if not path.exists():
+        return
+    for child in path.rglob("*"):
+        if child.is_symlink():
+            continue
+        try:
+            child.chmod(0o700 if child.is_dir() else 0o600)
+        except OSError:
+            pass
+    try:
+        path.chmod(0o700)
+    except OSError:
+        pass
+    shutil.rmtree(path)
+
+
 def _write_release(site_root: Path, dist: Path, assets: list[Path], digest: str) -> dict:
     if not _DIGEST.fullmatch(digest):
         raise ReportError("release_digest_invalid")
     release_dir = site_root / "releases" / digest
     temp_release = site_root / "releases" / (".stage-" + uuid.uuid4().hex)
-    if not release_dir.exists():
+    if release_dir.exists() and (release_dir.is_symlink() or not release_dir.is_dir()):
+        raise ReportError("release_path_unsafe")
+    if not release_dir.exists() or not _verify_release(site_root, digest):
         temp_release.mkdir(mode=0o700)
         try:
             for source in sorted(dist.rglob("*.html")):
@@ -361,21 +407,30 @@ def _write_release(site_root: Path, dist: Path, assets: list[Path], digest: str)
                                     key=lambda p: len(p.parts), reverse=True):
                 directory.chmod(0o555)
             temp_release.chmod(0o555)
-            os.replace(temp_release, release_dir)
+            if release_dir.exists():
+                _exchange_directories(temp_release, release_dir)
+                _remove_release_tree(temp_release)
+            else:
+                os.replace(temp_release, release_dir)
         except Exception:
-            shutil.rmtree(temp_release, ignore_errors=True)
+            if temp_release.exists():
+                try:
+                    _remove_release_tree(temp_release)
+                except OSError:
+                    pass
             raise
-    elif release_dir.is_symlink() or not release_dir.is_dir():
-        raise ReportError("release_path_unsafe")
 
     for source in assets:
         if source.is_symlink() or not re.fullmatch(r"[A-Za-z0-9._-]{1,255}", source.name):
             raise ReportError("release_asset_name_unsafe")
         target = site_root / "_astro" / source.name
+        if target.is_symlink() or (target.exists() and not target.is_file()):
+            raise ReportError("release_asset_collision")
         if target.exists():
-            if target.is_symlink() or not target.is_file() or hashlib.sha256(target.read_bytes()).digest() != hashlib.sha256(source.read_bytes()).digest():
-                raise ReportError("release_asset_collision")
+            matches = hashlib.sha256(target.read_bytes()).digest() == hashlib.sha256(source.read_bytes()).digest()
         else:
+            matches = False
+        if not matches:
             temp_asset = target.with_name(target.name + ".tmp-" + uuid.uuid4().hex)
             shutil.copyfile(source, temp_asset)
             temp_asset.chmod(0o444)
