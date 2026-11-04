@@ -96,7 +96,17 @@ Start `nous-report-worker.service` only after the `nous-report-worker-database-u
 Podman secret and named volume units exist. The container is rootless, has a
 read-only root filesystem, mounts no Podman socket and exposes no listener. It
 runs `python -m nous.report_worker`; its bundled Node/Astro dependencies are used
-only for one-shot static builds.
+only for one-shot static builds. The image explicitly sets
+`NOUS_REPORTS_DIR=/app/reports`: installed Python packages otherwise resolve
+`__file__` under site-packages, not the application checkout. Astro's
+`cacheDir` is a writable per-build project directory, and npm/tmp build cache
+is placed under the private volume; do not make the image's read-only
+`node_modules` writable or remove the Quadlet's `/tmp` size limit. A
+PR image smoke check builds an empty Astro site with a read-only root filesystem
+and the same 128 MiB `/tmp` tmpfs as production. After deploying the reviewed
+image digest, remove any previous local override that dropped `size=128m`,
+then start and verify `nous-report-worker.service` and the `/reports/` index.
+This smoke check does not prove owner-authenticated Codex article generation.
 
 The owner must authenticate the official CLI inside the private Codex volume.
 Run the product-supported device flow as the isolated child identity, using a

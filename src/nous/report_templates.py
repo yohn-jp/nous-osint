@@ -18,7 +18,7 @@ _TEMPLATE_FIELDS = {
     "window_policy", "evidence_limits", "outline", "quality_rules", "publish_policy",
 }
 _SLUG = re.compile(r"^[a-z][a-z0-9-]{1,79}$")
-_DEFAULT_DIR = Path(__file__).resolve().parents[2] / "reports" / "templates"
+_DEFAULT_DIR = Path(os.getenv("NOUS_REPORTS_DIR", str(Path(__file__).resolve().parents[2] / "reports"))) / "templates"
 
 
 def _templates_dir() -> Path:

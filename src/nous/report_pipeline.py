@@ -23,7 +23,7 @@ from .cve_queries import query_cve
 from .models import Item, ItemVersion, Source
 from .report_templates import resolve_template
 
-_REPORTS_DIR = Path(__file__).resolve().parents[2] / "reports"
+_REPORTS_DIR = Path(os.getenv("NOUS_REPORTS_DIR", str(Path(__file__).resolve().parents[2] / "reports"))).resolve()
 _SCHEMA_DIR = _REPORTS_DIR / "schemas"
 _SITE_DIR = _REPORTS_DIR / "site"
 _METADATA_LIMIT = 300
@@ -810,7 +810,7 @@ def build_static_release(articles: list[dict], staging_root: Path) -> tuple[Path
     """One-shot static Astro build; only renderer-owned HTML reaches release."""
     staging_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     project = staging_root / ("astro-" + uuid.uuid4().hex)
-    ignore = shutil.ignore_patterns("node_modules", ".astro", "dist")
+    ignore = shutil.ignore_patterns("node_modules", ".astro", ".astro-cache", "dist")
     shutil.copytree(_SITE_DIR, project, ignore=ignore)
     node_modules = _SITE_DIR / "node_modules"
     if not node_modules.is_dir():
@@ -822,16 +822,24 @@ def build_static_release(articles: list[dict], staging_root: Path) -> tuple[Path
         filename = article["slug"] + ".json"
         (content_dir / filename).write_bytes(_json_bytes(article))
     out = staging_root / ("dist-" + uuid.uuid4().hex)
+    # The installed dependencies live on a read-only image layer. Keep all
+    # runtime build caches and temporary files in the private writable volume,
+    # never in node_modules or the size-limited /tmp tmpfs.
+    cache_root = staging_root / ("cache-" + uuid.uuid4().hex)
+    cache_root.mkdir(mode=0o700)
     command = ["npm", "run", "build", "--", "--outDir", str(out)]
     env = {"PATH": os.getenv("PATH", "/usr/local/bin:/usr/bin:/bin"),
            "HOME": os.getenv("HOME", "/tmp"), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
-           "ASTRO_TELEMETRY_DISABLED": "1"}
+           "ASTRO_TELEMETRY_DISABLED": "1",
+           "npm_config_cache": str(cache_root), "TMPDIR": str(cache_root)}
     try:
         result = subprocess.run(command, cwd=project, stdin=subprocess.DEVNULL,
                                 capture_output=True, text=True, timeout=180,
                                 env=env, check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ReportError("astro_build_failed", retryable=True) from exc
+    finally:
+        shutil.rmtree(cache_root, ignore_errors=True)
     if result.returncode:
         # Build output may include article titles. Never put it in journal logs.
         raise ReportError("astro_build_failed", retryable=True)
