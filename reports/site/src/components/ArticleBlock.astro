@@ -1,18 +1,21 @@
 ---
 import EvidenceMarks from './EvidenceMarks.astro';
 import SourceList from './SourceList.astro';
+import ClaimClassifications from './ClaimClassifications.astro';
 
 interface Props {
   block: any;
   sources: any[];
+  claims: any[];
 }
 
-const { block, sources } = Astro.props;
+const { block, sources, claims } = Astro.props;
 ---
 
 {block.type === 'paragraph' && (
   <p class="article-paragraph">
     {block.text}
+    <ClaimClassifications claimIds={block.claim_ids} claims={claims} />
     <EvidenceMarks evidenceIds={block.evidence_ids} />
   </p>
 )}
@@ -22,6 +25,7 @@ const { block, sources } = Astro.props;
     {block.items.map((item: any) => (
       <li>
         {item.text}
+        <ClaimClassifications claimIds={item.claim_ids} claims={claims} />
         <EvidenceMarks evidenceIds={item.evidence_ids} />
       </li>
     ))}
@@ -36,7 +40,10 @@ const { block, sources } = Astro.props;
         {block.rows.map((row: any) => (
           <tr>
             {row.cells.map((cell: string, index: number) => (
-              <td>{cell}{index === row.cells.length - 1 && <EvidenceMarks evidenceIds={row.evidence_ids} />}</td>
+              <td>{cell}{index === row.cells.length - 1 && <>
+                <ClaimClassifications claimIds={row.claim_ids} claims={claims} />
+                <EvidenceMarks evidenceIds={row.evidence_ids} />
+              </>}</td>
             ))}
           </tr>
         ))}
@@ -50,6 +57,9 @@ const { block, sources } = Astro.props;
 {block.type === 'quote' && (
   <figure class="source-quote">
     <blockquote>{block.text}</blockquote>
-    <figcaption><EvidenceMarks evidenceIds={block.evidence_ids} /></figcaption>
+    <figcaption>
+      <ClaimClassifications claimIds={block.claim_ids} claims={claims} />
+      <EvidenceMarks evidenceIds={block.evidence_ids} />
+    </figcaption>
   </figure>
 )}
