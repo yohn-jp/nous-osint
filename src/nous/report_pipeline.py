@@ -27,7 +27,7 @@ _REPORTS_DIR = Path(__file__).resolve().parents[2] / "reports"
 _SCHEMA_DIR = _REPORTS_DIR / "schemas"
 _SITE_DIR = _REPORTS_DIR / "site"
 _METADATA_LIMIT = 300
-_ALLOWED_BLOCKS = {"paragraph", "bullet_list", "fact_table", "source_list", "quote"}
+_ALLOWED_BLOCKS = {"paragraph", "bullet_list", "fact_table", "source_list", "cve_fact", "quote"}
 _UNSAFE_TEXT = re.compile(r"(?:<\/?[a-z!]|https?://|javascript:|data:|\bon\w+\s*=)", re.I)
 _EXPLOIT_TEXT = re.compile(r"(?:悪用|エクスプロイト|exploit|ransomware|ランサムウェア)", re.I)
 
@@ -437,6 +437,27 @@ def validate_article(article: object, *, template_id: str, bundle: dict,
         for block in section["blocks"]:
             if block["type"] == "source_list":
                 continue
+            if block["type"] == "cve_fact":
+                context = bundle.get("cve_context") or {}
+                if (template_id != "cve-kev-deep-dive" or
+                        block["cve_id"] != context.get("cve_id")):
+                    raise ReportError("cve_fact_context_mismatch")
+                cve_evidence = {
+                    row["evidence_id"] for row in bundle["evidence"]
+                    if row["relation"] in {"kev", "record", "reference", "title_mention"}
+                }
+                if any(evidence_id not in cve_evidence for evidence_id in block["evidence_ids"]):
+                    raise ReportError("cve_fact_evidence_mismatch")
+                if any(claim_id not in article_claims for claim_id in block["claim_ids"]):
+                    raise ReportError("displayed_text_claim_unverified")
+                claims = [article_claims[claim_id] for claim_id in block["claim_ids"]]
+                expected_evidence = sorted({
+                    evidence_id for claim in claims for evidence_id in claim["evidence_ids"]
+                })
+                if sorted(block["evidence_ids"]) != expected_evidence:
+                    raise ReportError("displayed_evidence_does_not_match_claims")
+                displayed_claims.update(block["claim_ids"])
+                continue
             entries = [block] if block["type"] in {"paragraph", "quote"} else (
                 block.get("items", []) if block["type"] == "bullet_list" else
                 block.get("rows", []) if block["type"] == "fact_table" else [])
@@ -494,8 +515,8 @@ def validate_article(article: object, *, template_id: str, bundle: dict,
 _ROLE_PROMPTS = {
     "plan": "企画担当です。出力schemaに従い記事の価値を判定してください。根拠が足りなければ decision=skip にしてください。",
     "fact_check": "独立した事実検証担当です。主張を根拠IDごとに評価し、観測事実・推論・未確認を厳格に区別してください。claim_idはC001から連番で固定し、根拠IDを一つ以上付けます。rejectは推測を含む重大な断定に使います。",
-    "draft": "執筆担当です。与えられた根拠の範囲だけで日本語記事を構成してください。claim文はfact_checkのtextを一字一句使い、claim_id・classification・evidence_idsを維持します。各表示テキストblockにはclaim_idsと、関連claimのevidence_ids全てを付けます。paragraph/bulletの表示文はclaim文そのもの、fact_tableの行はclaim文をcellsを' | 'で連結した文字列と一致させます。title・dek・summaryの各文も、fact_checkで承認されたclaimの文と一字一句一致させます。原文の転載や外部取材、KEV状態の独自判定はせず、HTML/Markdown/URLを使いません。",
-    "edit": "推敲担当です。並び・重複だけを直し、fact_check済みのclaim_id・claim文・classification・evidence_idsを一字一句変更せず維持してください。表示ブロック文はclaim文そのもののままにし、claim_idsとevidence_idsの対応も維持します。title・dek・summaryもfact_check済みclaimの文をそのまま使います。新しい主張・事実・URL・HTML・Markdown構文を追加せず、source/cve metadataも出力しません。",
+    "draft": "執筆担当です。与えられた根拠の範囲だけで日本語記事を構成してください。claim文はfact_checkのtextを一字一句使い、claim_id・classification・evidence_idsを維持します。各表示テキストblockにはclaim_idsと、関連claimのevidence_ids全てを付けます。paragraph/bulletの表示文はclaim文そのもの、fact_tableの行はclaim文をcellsを' | 'で連結した文字列と一致させます。cve-kev-deep-diveでcve_factを使う場合は、cve_idにbundle.cve_context.cve_id、evidence_idsに表示するclaimの根拠ID全て、claim_idsに表示するclaim ID全てを指定します。title・dek・summaryの各文も、fact_checkで承認されたclaimの文と一字一句一致させます。原文の転載や外部取材、KEV状態の独自判定はせず、HTML/Markdown/URLを使いません。",
+    "edit": "推敲担当です。並び・重複だけを直し、fact_check済みのclaim_id・claim文・classification・evidence_idsを一字一句変更せず維持してください。表示ブロック文はclaim文そのもののままにし、claim_idsとevidence_idsの対応も維持します。cve_factがある場合はcve_id・claim_ids・evidence_idsを変更せず維持します。title・dek・summaryもfact_check済みclaimの文をそのまま使います。新しい主張・事実・URL・HTML・Markdown構文を追加せず、source/cve metadataも出力しません。",
 }
 
 

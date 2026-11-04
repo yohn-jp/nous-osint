@@ -61,6 +61,42 @@ def fact_check_for(text="公式アドバイザリには影響対象の更新が�
             "revision_request": [], "summary": "一次情報メタデータと対応しています。"}
 
 
+def cve_fact_fixture(*, cve_id="CVE-2026-12345"):
+    bundle = evidence_bundle("cve-kev-deep-dive")
+    bundle["parameters"] = {
+        "cve_id": cve_id, "period_days": 30,
+        "window_start": "2026-10-01T00:00:00+00:00",
+        "window_end": "2026-11-04T00:00:00+00:00",
+    }
+    bundle["evidence"][0]["relation"] = "reference"
+    bundle["cve_context"] = {
+        "cve_id": cve_id, "kev_status": "unknown", "catalog_as_of": None,
+        "catalog_fresh": False, "canonical_url": f"https://www.cve.org/CVERecord?id={cve_id}",
+        "catalog_source_url": None,
+    }
+    text = "公式記録には対象CVEの参照情報が掲載されています。"
+    article = {
+        "schema_version": 1, "template_id": "cve-kev-deep-dive", "language": "ja",
+        "title": text, "dek": text, "summary": [text],
+        "sections": [
+            {"heading": "CVEの確認情報", "blocks": [{
+                "type": "cve_fact", "cve_id": cve_id,
+                "evidence_ids": ["E001"], "claim_ids": ["C001"],
+            }]},
+            {"heading": "出典", "blocks": [{
+                "type": "source_list", "evidence_ids": ["E001"],
+            }]},
+        ],
+        "claims": [{"claim_id": "C001", "text": text, "classification": "observed",
+                    "evidence_ids": ["E001"]}],
+    }
+    fact_check = {"claims": [{
+        "claim_id": "C001", "text": text, "classification": "observed",
+        "evidence_ids": ["E001"], "assessment": "supported",
+    }], "revision_request": [], "summary": "根拠IDに対応しています。"}
+    return bundle, article, fact_check
+
+
 class FixtureRunner:
     model = "fixture-only"
 
@@ -205,5 +241,41 @@ def test_exploitation_claim_requires_a_fresh_cisa_catalog():
                                "classification": "observed", "evidence_ids": ["E001"],
                                "assessment": "supported"}]}
     with pytest.raises(ReportError, match="unsupported_exploitation_claim"):
+        validate_article(article, template_id="cve-kev-deep-dive", bundle=bundle,
+                         fact_check=fact_check)
+
+
+def test_cve_fact_passes_full_fixture_editorial_pipeline():
+    bundle, article, fact_check = cve_fact_fixture()
+    plan = {
+        "decision": "publish", "thesis": "公式記録の参照情報を整理します。",
+        "audience": "脆弱性対応担当者", "outline": ["CVEの確認情報", "出典"],
+        "evidence_ids": ["E001"], "reason": "対象CVEに紐づく一次情報があります。",
+    }
+    runner = FixtureRunner({
+        "plan": plan, "fact_check": fact_check, "draft": article, "edit": article,
+    })
+
+    final, model = run_editorial_pipeline(
+        bundle, template_id="cve-kev-deep-dive", run_id="cve-fact-fixture",
+        runner=runner, persist_stage=lambda *_args: None,
+    )
+
+    assert runner.calls == ["plan", "fact_check", "draft", "edit"]
+    assert model == "fixture-only"
+    assert final["sections"][0]["blocks"][0] == article["sections"][0]["blocks"][0]
+    assert final["cve"]["id"] == "CVE-2026-12345"
+
+
+def test_cve_fact_requires_matching_bundle_id_and_visible_claim_evidence():
+    bundle, article, fact_check = cve_fact_fixture()
+    article["sections"][0]["blocks"][0]["cve_id"] = "CVE-2026-54321"
+    with pytest.raises(ReportError, match="cve_fact_context_mismatch"):
+        validate_article(article, template_id="cve-kev-deep-dive", bundle=bundle,
+                         fact_check=fact_check)
+
+    bundle, article, fact_check = cve_fact_fixture()
+    article["sections"][0]["blocks"][0]["evidence_ids"] = ["E002"]
+    with pytest.raises(ReportError, match="invalid_evidence_reference"):
         validate_article(article, template_id="cve-kev-deep-dive", bundle=bundle,
                          fact_check=fact_check)
