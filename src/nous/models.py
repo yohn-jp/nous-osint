@@ -57,6 +57,7 @@ class FetchAttempt(Base):
     ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     outcome: Mapped[str] = mapped_column(String(30))
     http_status: Mapped[int | None] = mapped_column(Integer)
+    request_count: Mapped[int] = mapped_column(Integer, default=1)
     final_url: Mapped[str | None] = mapped_column(Text)
     error_code: Mapped[str | None] = mapped_column(String(100))
 

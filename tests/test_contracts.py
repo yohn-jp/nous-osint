@@ -117,6 +117,6 @@ def test_new_official_catalog_sources_are_disabled_and_rights_explicit():
         assert source.policy.attribution and source.policy.attribution.strip()
         assert source.policy.content_storage == "metadata_only"
     sie = configs["sie-japan-careers"]
-    assert sie.adapter == "json_v1" and sie.json_path == "jobs"
-    assert sie.field_map["url"] == "absolute_url"
+    assert sie.adapter == "greenhouse_jobs_v1" and sie.item_kind == "job_posting"
+    assert sie.max_pages == 1
     assert all(config.policy.license_id for config in configs.values())

@@ -1,7 +1,7 @@
 # Adapter selection — first-party security intelligence and Japanese security hiring
 
-Research baseline: **2026-11-04**. This is a design decision for the
-**missing** adapter behavior, not an implemented data connector.
+Research baseline: **2026-11-04**. This document tracks what is implemented
+in the stacked native-ATS PR versus candidate connectors not yet implemented.
 
 ## What current adapters can do
 
@@ -14,10 +14,19 @@ Research baseline: **2026-11-04**. This is a design decision for the
 - `html_v1` uses `BeautifulSoup` and declarative selectors, without a
   browser or cross-page crawl. Site-specific scripts are discouraged.
 
-The first official-catalog addition includes **nine disabled candidates**:
-eight RSS feeds and one Greenhouse JSON board. Enabling a board with this
-adapter ingests **all** its published positions, without domestic-security
-filtering. This is a known limitation, not a hidden feature.
+The catalog addition includes nine disabled candidates. On this native-ATS
+branch, `sie-japan-careers` now uses `greenhouse_jobs_v1`, filtering for
+explicitly Japan-based security roles. `lever_jobs_v1` and `ashby_jobs_v1`
+are available for per-instance Admin UI registration without shipping
+hypothetical company board URLs. The filtering is deterministic, conservative
+and records its location/title/department evidence.
+
+Lever pagination uses the production SSRF-safe HTTPX fetcher with bounded
+requests and explicit page-budget accounting; partial boards are never
+committed. This intentionally does **not** instantiate a separate dlt
+HTTP session or a second data pipeline. Dlt RESTClient remains the candidate
+for NVD and more complex cursor-based APIs after an adapter can preserve the
+verified-address fetch boundary and job-state transactions.
 
 ## Proposed OSS stack
 
@@ -61,8 +70,8 @@ connector implementation per source family.
    publisher API/JSON-LD/embedded structured data; otherwise choose a
    bounded static crawler with selectors. A browser is the final fallback.
 
-The SIE Japan Greenhouse board is in the current catalog only as a
-disabled raw-board source to validate this workflow.
+The SIE Japan Greenhouse board remains disabled. The native adapter is present,
+but live extraction and publisher rights still require independent validation.
 
 Publisher documentation:
 - https://docs.greenhouse.io/job-board
@@ -108,12 +117,17 @@ Publisher documentation:
 
 ## Recommended implementation sequence
 
-**First:** keep RSS+single-page Greenhouse with existing parsers, probe each
-new definition, and validate per-publisher rights. **Next:** build one
-versioned `job_postings_v1` mapping/filtering component, then add a
-paginated public ATS source using one OSS pagination engine.
-**Then:** add `vulnerability_dataset_v1` for KEV/NVD/CVE/OSV and a
-separate EPSS enrichment flow. **Finally:** consider Scrapy/Playwright for
-selected public recruitment sites that have neither documented APIs nor
-static structured data. Each phase uses the current storage, scheduling
-and security contract.
+**Implemented (stacked PR):** Greenhouse, Lever and Ashby metadata
+normalization, Japan/security filtering, verified official endpoints,
+bounded Lever paging, and in-instance custom source registration. HTTPX,
+Pydantic, JSON and the existing PostgreSQL scheduler are reused. No extra
+scraping framework is necessary for publisher-provided native APIs.
+
+**Next:** introduce `vulnerability_dataset_v1` for CISA KEV and NVD first,
+then CVE List and OSV full/delta sources, with separate EPSS enrichment.
+Assess the dlt RESTClient only where its pagination/cursor support can be
+integrated without bypassing the existing safe fetcher.
+**Later:** adopt Scrapy for selected approved HRMOS/HERP HTML pages that
+have no supported feeds, JSON-LD or published APIs; Playwright only if
+static parsing cannot work. Each phase retains the canonical scheduler,
+security contract and history.

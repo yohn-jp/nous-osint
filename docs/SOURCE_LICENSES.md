@@ -37,7 +37,7 @@ technical collection constraints, **not** a legal opinion.
 | `google-cloud-security-bulletins` | [Google Cloud Security Bulletins](https://docs.cloud.google.com/support/bulletins) | XML link on official Google Cloud support page; no general feed republishing license established | Disabled, probe pending |
 | `cloudflare-security-research` | [Cloudflare Security RSS](https://blog.cloudflare.com/tag/security/) | [Cloudflare website terms](https://www.cloudflare.com/website-terms/); no license to mirror blog posts asserted | Disabled, probe pending |
 | `fortinet-psirt` | [Fortinet PSIRT RSS](https://fortiguard.fortinet.com/psirt_policy) | Provider's PSIRT policy references the feed, but RSS reachability and content reuse rights remain unproven | Disabled, probe pending |
-| `sie-japan-careers` | [SIE Japan jobs](https://job-boards.greenhouse.io/siei) | [Greenhouse public Job Board API](https://docs.greenhouse.io/job-board) allows unauthenticated GET, **not** a blanket redistribution license. Original job postings remain publisher-owned | Disabled, probe and categorization pending |
+| `sie-japan-careers` | [SIE Japan jobs](https://job-boards.greenhouse.io/siei) | [Greenhouse public Job Board API](https://docs.greenhouse.io/job-board) allows unauthenticated GET, **not** a blanket redistribution license. Original job postings remain publisher-owned | Disabled; native Japan/security categorization implemented, live probe pending |
 
 These are **catalog candidates**, not approved or enabled ingestion. The
 official publisher pages or documented endpoints were inspected, but this
@@ -67,8 +67,8 @@ means `NOASSERTION` until an upstream rights review updates the declaration.
 4. Activate only the explicitly reviewed source in the private Admin UI.
    Do not automatically activate new catalogs after image upgrades.
 5. Measure first scheduled fetch and source history in the live instance.
-   For job boards, a generic feed is not a validated `Japan/security` feed:
-   add typed location/role filtering before enabling a focused job stream.
+   Native ATS job boards use evidence-based `Japan/security` filtering;
+   confirm the provider's actual job geography, coverage and policy before enabling.
 
 License notices for third-party **software dependencies** are a separate
 distribution compliance question; their licenses do not govern publisher

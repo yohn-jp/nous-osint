@@ -2,8 +2,12 @@ import json
 from urllib.parse import urljoin
 import feedparser
 from bs4 import BeautifulSoup
+from .job_postings import extract_jobs
 
 def extract(source, content, base_url):
+    if getattr(source, "adapter", None) in (
+            "greenhouse_jobs_v1", "lever_jobs_v1", "ashby_jobs_v1"):
+        return extract_jobs(source.adapter, content)
     kind = source.kind
     if kind == "rss":
         feed = feedparser.parse(content)

@@ -9,7 +9,8 @@ from sqlalchemy import select
 from .models import Source
 
 KINDS = {"job_posting", "news", "advisory", "vulnerability", "company_update"}
-ADAPTERS = {"rss": {"rss_v1"}, "json_api": {"json_v1"},
+ADAPTERS = {"rss": {"rss_v1"}, "json_api": {"json_v1", "greenhouse_jobs_v1",
+                                           "lever_jobs_v1", "ashby_jobs_v1"},
             "html": {"html_v1", "automattic_html_v1"}}
 
 class Policy(BaseModel):
@@ -41,6 +42,7 @@ class SourceConfig(BaseModel):
     interval_minutes: int = Field(ge=15)
     max_requests_per_hour: int = Field(ge=1, le=60)
     max_concurrency: int = Field(ge=1, le=4)
+    max_pages: int = Field(default=1, ge=1, le=10)
     enabled: bool
     policy: Policy
     selectors: dict[str, str] = Field(default_factory=dict)
@@ -57,6 +59,24 @@ class SourceConfig(BaseModel):
             raise ValueError("invalid source kind or endpoint")
         if self.policy.content_storage != "metadata_only" or not self.policy.note.strip():
             raise ValueError("unreviewed policy")
+        ats_hosts = {
+            "greenhouse_jobs_v1": ("boards-api.greenhouse.io", r"^/v1/boards/[a-zA-Z0-9_-]+/jobs$"),
+            "lever_jobs_v1": ("api.lever.co", r"^/v0/postings/[a-zA-Z0-9_-]+$"),
+            "ashby_jobs_v1": ("api.ashbyhq.com", r"^/posting-api/job-board/[a-zA-Z0-9_-]+$"),
+        }
+        if self.adapter in ats_hosts:
+            import re
+            host, path = ats_hosts[self.adapter]
+            if (self.kind != "json_api" or self.item_kind != "job_posting" or
+                    parsed.hostname != host or not re.fullmatch(path, parsed.path)):
+                raise ValueError("ATS adapter must use its official public GET endpoint")
+            if self.adapter == "lever_jobs_v1":
+                if self.max_pages > self.max_requests_per_hour:
+                    raise ValueError("Lever max_pages must fit the hourly request budget")
+            elif self.max_pages != 1:
+                raise ValueError("nonpaginated ATS must use max_pages=1")
+        elif self.max_pages != 1:
+            raise ValueError("max_pages is supported only by Lever job boards")
         if self.adapter == "html_v1" and not {"item", "title", "url"} <= self.selectors.keys():
             raise ValueError("HTML selectors required")
         return self

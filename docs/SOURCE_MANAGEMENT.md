@@ -101,6 +101,28 @@ source configuration. Source deletion and arbitrary command/script execution
 are deliberately not exposed. Source URLs remain subject to the production
 SSRF-safe fetcher and constrained extraction adapters.
 
+## Native ATS job sources (Greenhouse, Lever and Ashby)
+
+The native job adapters `greenhouse_jobs_v1`, `lever_jobs_v1`, and
+`ashby_jobs_v1` read public, unauthenticated publisher endpoints only.
+They keep stable posting IDs, titles, source URLs, published/updated dates,
+department/location and evidence of Japan/security classification, without
+retaining the posting description. Ambiguous countries and unrelated roles
+are not silently classified as domestic security jobs.
+
+To add an instance-local board, select **JSON API** and one of the three
+native adapters in **管理 → カスタムソースを追加**. Use a publisher's official
+board GET URL. Lever allows `max_pages` of 1–10 (100 records per page);
+it must fit the per-hour request budget and the worker will reject a
+partially fetched board. Missing postings are marked unknown only after
+a fully successful enumeration, never closed from a failed request.
+The admin UI stores new sources disabled; probe and review rights before
+manually enabling.
+
+Publisher API references: https://docs.greenhouse.io/job-board,
+https://github.com/lever/postings-api,
+https://developers.ashbyhq.com/docs/public-job-posting-api.
+
 ## Source rights and extension plan
 
 All bundled source definitions must be assessed independently of Nous's MIT

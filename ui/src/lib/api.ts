@@ -50,6 +50,7 @@ export interface SourceDefinition {
   interval_minutes: number
   max_requests_per_hour: number
   max_concurrency: number
+  max_pages?: number
   enabled: boolean
   policy: { reviewed_at: string; terms_url?: string | null; robots_url?: string | null; content_storage: 'metadata_only'; note: string; license_id?: string; license_url?: string | null; attribution?: string | null }
   json_path?: string | null
