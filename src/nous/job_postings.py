@@ -227,6 +227,8 @@ def fetch_lever_board(source, fetcher):
     for page in range(max_pages):
         url = lever_page_url(source.url, offset=page * limit, limit=limit)
         status, body, headers, last_url = fetcher(url, None, None)
+        if status == 304:
+            raise ValueError("unexpected conditional response from unconditional Lever board fetch")
         if status != 200:
             return status, [], headers, last_url
         raw_page = _records("lever_jobs_v1", body)

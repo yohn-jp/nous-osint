@@ -16,6 +16,7 @@ import yaml
 
 from .adapters import extract
 from .fetch import fetch
+from .job_postings import fetch_lever_board
 from .registry import KINDS, SourceConfig, load_registry
 
 _FIELD_NAMES = {"id", "url", "title", "published", "updated"}
@@ -34,11 +35,18 @@ def _pairs(values: list[str], *, allowed: set[str], label: str) -> dict[str, str
 
 def probe(config: SourceConfig) -> dict:
     """Bounded GET + parse + source record sanity; never expose source bodies."""
-    status, body, _, final_url = fetch(config.url)
+    if config.adapter == "lever_jobs_v1":
+        runtime_source = SimpleNamespace(
+            url=config.url, config=config.model_dump(), adapter=config.adapter
+        )
+        status, rows, _, _ = fetch_lever_board(runtime_source, fetch)
+    else:
+        status, body, _, final_url = fetch(config.url)
+        if status == 200:
+            rows = extract(SimpleNamespace(kind=config.kind, adapter=config.adapter,
+                                           config=config.model_dump()), body, final_url)
     if status != 200:
         raise ValueError(f"upstream HTTP status {status}; probe needs 200")
-    rows = extract(SimpleNamespace(kind=config.kind, adapter=config.adapter,
-                                   config=config.model_dump()), body, final_url)
     if not isinstance(rows, list) or not rows:
         raise ValueError("extractor returned no entries")
     valid = 0
@@ -72,6 +80,7 @@ def main(argv=None):
     parser.add_argument("--interval-minutes", type=int, default=360)
     parser.add_argument("--max-requests-per-hour", type=int, default=4)
     parser.add_argument("--max-concurrency", type=int, default=1)
+    parser.add_argument("--max-pages", type=int, default=1)
     parser.add_argument("--reviewed-at", help="YYYY-MM-DD, reviewed by operator")
     parser.add_argument("--terms-url")
     parser.add_argument("--robots-url")
@@ -114,7 +123,8 @@ def main(argv=None):
             "adapter": adapter, "item_kind": args.item_kind,
             "organization": args.organization, "interval_minutes": args.interval_minutes,
             "max_requests_per_hour": args.max_requests_per_hour,
-            "max_concurrency": args.max_concurrency, "enabled": False,
+            "max_concurrency": args.max_concurrency, "max_pages": args.max_pages,
+            "enabled": False,
             "policy": {"reviewed_at": args.reviewed_at, "terms_url": args.terms_url,
                        "robots_url": args.robots_url, "content_storage": "metadata_only",
                        "note": args.policy_note},

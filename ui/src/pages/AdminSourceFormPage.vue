@@ -8,6 +8,10 @@ const editId = computed(() => typeof route.params.id === 'string' ? route.params
 const editing = computed(() => !!editId.value)
 const id = ref('')
 const kind = ref<'rss' | 'json_api' | 'html'>('rss')
+type JsonAdapter = 'json_v1' | 'greenhouse_jobs_v1' | 'lever_jobs_v1' | 'ashby_jobs_v1'
+const jsonAdapter = ref<JsonAdapter>('json_v1')
+const nativeJobAdapter = computed(() => kind.value === 'json_api' && jsonAdapter.value !== 'json_v1')
+const maxPages = ref(1)
 const url = ref('')
 const itemKind = ref<SourceDefinition['item_kind']>('advisory')
 const organization = ref('')
@@ -53,6 +57,10 @@ onMounted(async () => {
     const c = source.config
     id.value = c.id
     kind.value = c.kind
+    if (['json_v1', 'greenhouse_jobs_v1', 'lever_jobs_v1', 'ashby_jobs_v1'].includes(c.adapter)) {
+      jsonAdapter.value = c.adapter as JsonAdapter
+    }
+    maxPages.value = c.max_pages ?? 1
     url.value = c.url
     itemKind.value = c.item_kind
     organization.value = c.organization || ''
@@ -79,9 +87,10 @@ async function submit() {
   try {
     const config: SourceDefinition = {
       id: id.value.trim(), kind: kind.value, url: url.value.trim(),
-      adapter: kind.value === 'rss' ? 'rss_v1' : kind.value === 'json_api' ? 'json_v1' : 'html_v1',
-      item_kind: itemKind.value, interval_minutes: interval.value,
+      adapter: kind.value === 'rss' ? 'rss_v1' : kind.value === 'json_api' ? jsonAdapter.value : 'html_v1',
+      item_kind: nativeJobAdapter.value ? 'job_posting' : itemKind.value, interval_minutes: interval.value,
       max_requests_per_hour: hourly.value, max_concurrency: concurrent.value,
+      max_pages: jsonAdapter.value === 'lever_jobs_v1' && nativeJobAdapter.value ? maxPages.value : 1,
       enabled: editing.value ? enabled.value : false,
       policy: {
         reviewed_at: reviewedAt.value,
@@ -91,7 +100,7 @@ async function submit() {
       },
     }
     if (organization.value.trim()) config.organization = organization.value.trim()
-    if (kind.value === 'json_api') {
+    if (kind.value === 'json_api' && !nativeJobAdapter.value) {
       config.json_path = jsonPath.value.trim() || null
       config.field_map = linesToMap(fieldMap.value)
     }
@@ -125,9 +134,20 @@ async function submit() {
         <div class="col-12 col-sm-6"><q-input v-model.trim="organization" outlined dense label="提供組織（任意）" maxlength="200" /></div>
       </div>
       <template v-if="kind === 'json_api'">
-        <div class="text-weight-bold q-mt-lg q-mb-md">JSONの抽出設定</div>
-        <q-input v-model.trim="jsonPath" outlined dense label="配列へのパス（例: results.items）" class="q-mb-md" />
-        <q-input v-model="fieldMap" outlined autogrow type="textarea" label="フィールド対応" hint="例: id=uuid、title=headline。1行に1項目。" />
+        <div class="text-weight-bold q-mt-lg q-mb-md">JSONの抽出方式</div>
+        <q-select v-model="jsonAdapter" outlined dense emit-value map-options class="q-mb-md"
+          :options="[{label:'一般JSON',value:'json_v1'},{label:'Greenhouse 公開求人（国内セキュリティ）',value:'greenhouse_jobs_v1'},{label:'Lever 公開求人（国内セキュリティ）',value:'lever_jobs_v1'},{label:'Ashby 公開求人（国内セキュリティ）',value:'ashby_jobs_v1'}]" />
+        <template v-if="!nativeJobAdapter">
+          <q-input v-model.trim="jsonPath" outlined dense label="配列へのパス（例: results.items）" class="q-mb-md" />
+          <q-input v-model="fieldMap" outlined autogrow type="textarea" label="フィールド対応" hint="例: id=uuid、title=headline。1行に1項目。" />
+        </template>
+        <q-banner v-else class="bg-grey-2 text-grey-9 q-mb-md">
+          提供元の公式公開GETエンドポイントのみ対応します。国内勤務地と技術系セキュリティ職種を判定し、求人本文は保存しません。
+          募集終了は確認済みの完全取得時だけ反映します。
+        </q-banner>
+        <q-input v-if="jsonAdapter === 'lever_jobs_v1'" v-model.number="maxPages" type="number"
+          outlined dense label="最大ページ数（1〜10・1ページ100件）"
+          :rules="[v => Number.isInteger(v) && v >= 1 && v <= 10 && v <= hourly || '最大ページ数は1〜10かつ時間あたり要求数以下']" />
       </template>
       <template v-if="kind === 'html'">
         <div class="text-weight-bold q-mt-lg q-mb-md">HTMLのCSSセレクタ</div>
