@@ -277,6 +277,7 @@ jobs:
             --tmpfs /tmp:rw,nosuid,nodev,noexec,size=128m \
             --tmpfs /var/lib/nous-reports/private:rw,nosuid,nodev,size=512m \
             --entrypoint python ghcr.io/yohn-jp/nous-osint-reports:main -c '
+          import json
           from pathlib import Path
           from nous.report_pipeline import _SCHEMA_DIR, _SITE_DIR, build_static_release
           from nous.report_templates import resolve_template
@@ -288,8 +289,13 @@ jobs:
           dist, assets, digest = build_static_release([], root)
           assert (dist / "index.html").is_file()
           assert len(digest) == 64
+          fixture = json.loads((_SITE_DIR / "test-fixtures" / "cve-fact.json").read_text())
+          article_dist, article_assets, article_digest = build_static_release([fixture], root)
+          assert (article_dist / "index.html").is_file()
+          assert (article_dist / "cve" / fixture["slug"] / "index.html").is_file()
+          assert len(article_digest) == 64
           assert not list(root.glob("cache-*"))
-          print("Production report Worker: empty Astro site built with a read-only root filesystem")
+          print("Production report Worker: empty index and populated CVE article built under read-only rootfs")
           '
       - name: Record immutable report Worker image reference
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
