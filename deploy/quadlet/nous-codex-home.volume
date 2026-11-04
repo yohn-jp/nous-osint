@@ -1,0 +1,5 @@
+[Unit]
+Description=Private persistent Codex authentication home
+
+[Volume]
+VolumeName=nous-codex-home

@@ -124,17 +124,20 @@ class ReportRun(Base):
         CheckConstraint(
             "state IN ('queued','leased','running','validating','publishing','published',"
             "'skipped','failed','cancelled')", name="ck_report_run_state"),
+        CheckConstraint("trigger IN ('manual','scheduled')", name="ck_report_run_trigger"),
         Index("ix_report_runs_queue", "state", "available_at", "created_at"),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     schedule_id: Mapped[str | None] = mapped_column(ForeignKey("report_schedules.id"))
     schedule_slot: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     trigger: Mapped[str] = mapped_column(String(16))
+    created_by: Mapped[str | None] = mapped_column(String(256))
     template_id: Mapped[str] = mapped_column(String(80))
     template_revision: Mapped[str] = mapped_column(String(64))
     template_snapshot: Mapped[dict] = mapped_column(JSON)
     parameters: Mapped[dict] = mapped_column(JSON)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), unique=True)
+    request_sha256: Mapped[str | None] = mapped_column(String(64))
     state: Mapped[str] = mapped_column(String(24), default="queued")
     stage: Mapped[str] = mapped_column(String(32), default="queued")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
@@ -145,6 +148,7 @@ class ReportRun(Base):
     bundle_sha256: Mapped[str | None] = mapped_column(String(64))
     bundle_path: Mapped[str | None] = mapped_column(Text)
     stage_artifacts: Mapped[dict] = mapped_column(JSON, default=dict)
+    report_id: Mapped[str | None] = mapped_column(String(36))
     error_code: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -189,3 +193,20 @@ class ReportEvidence(Base):
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     relation: Mapped[str] = mapped_column(String(24))
+
+
+class ReportSiteState(Base):
+    """Single durable pointer digest for recoverable current-release promotion."""
+    __tablename__ = "report_site_state"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_report_site_state_singleton"),
+        CheckConstraint(
+            "(pending_digest IS NULL AND pending_run_id IS NULL) OR "
+            "(pending_digest IS NOT NULL AND pending_run_id IS NOT NULL)",
+            name="ck_report_site_state_pending_pair"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    active_digest: Mapped[str] = mapped_column(String(64))
+    pending_digest: Mapped[str | None] = mapped_column(String(64))
+    pending_run_id: Mapped[str | None] = mapped_column(String(36))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

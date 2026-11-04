@@ -34,11 +34,13 @@ def upgrade():
         sa.Column("schedule_id", sa.String(36), sa.ForeignKey("report_schedules.id")),
         sa.Column("schedule_slot", sa.DateTime(timezone=True)),
         sa.Column("trigger", sa.String(16), nullable=False),
+        sa.Column("created_by", sa.String(256)),
         sa.Column("template_id", sa.String(80), nullable=False),
         sa.Column("template_revision", sa.String(64), nullable=False),
         sa.Column("template_snapshot", sa.JSON(), nullable=False),
         sa.Column("parameters", sa.JSON(), nullable=False),
         sa.Column("idempotency_key", sa.String(128), unique=True),
+        sa.Column("request_sha256", sa.String(64)),
         sa.Column("state", sa.String(24), nullable=False),
         sa.Column("stage", sa.String(32), nullable=False),
         sa.Column("attempts", sa.Integer(), nullable=False),
@@ -49,6 +51,7 @@ def upgrade():
         sa.Column("bundle_sha256", sa.String(64)),
         sa.Column("bundle_path", sa.Text()),
         sa.Column("stage_artifacts", sa.JSON(), nullable=False),
+        sa.Column("report_id", sa.String(36)),
         sa.Column("error_code", sa.String(64)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True)),
@@ -57,6 +60,7 @@ def upgrade():
         sa.CheckConstraint(
             "state IN ('queued','leased','running','validating','publishing','published',"
             "'skipped','failed','cancelled')", name="ck_report_run_state"),
+        sa.CheckConstraint("trigger IN ('manual','scheduled')", name="ck_report_run_trigger"),
     )
     op.create_index("ix_report_runs_queue", "report_runs",
                     ["state", "available_at", "created_at"])
@@ -99,8 +103,23 @@ def upgrade():
     )
     op.create_index("ix_report_evidence_item_version", "report_evidence", ["item_version_id"])
 
+    op.create_table(
+        "report_site_state",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("active_digest", sa.String(64), nullable=False),
+        sa.Column("pending_digest", sa.String(64)),
+        sa.Column("pending_run_id", sa.String(36)),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint("id = 1", name="ck_report_site_state_singleton"),
+        sa.CheckConstraint(
+            "(pending_digest IS NULL AND pending_run_id IS NULL) OR "
+            "(pending_digest IS NOT NULL AND pending_run_id IS NOT NULL)",
+            name="ck_report_site_state_pending_pair"),
+    )
+
 
 def downgrade():
+    op.drop_table("report_site_state")
     op.drop_index("ix_report_evidence_item_version", table_name="report_evidence")
     op.drop_table("report_evidence")
     op.drop_table("reports")

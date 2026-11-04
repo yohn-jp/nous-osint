@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from nous import api, runtime
+from nous.cve_queries import query_cve
 from nous.db import session_factory
 from nous.models import CveItemLink, Item, ItemVersion, Source, now
 
@@ -47,13 +48,13 @@ def setup_sources():
     return factory, *return_ids
 
 
-def kev_raw():
+def kev_raw(cve_id=CVE):
     return {
-        "id": CVE, "title": "Example Product Vulnerability",
-        "url": f"https://www.cve.org/CVERecord?id={CVE}",
+        "id": cve_id, "title": "Example Product Vulnerability",
+        "url": f"https://www.cve.org/CVERecord?id={cve_id}",
         "published": "2026-11-03T00:00:00Z",
         "vulnerability": {
-            "cve_id": CVE, "vendor": "Example Inc", "product": "Platform",
+            "cve_id": cve_id, "vendor": "Example Inc", "product": "Platform",
             "known_exploited": True, "date_added": "2026-11-03",
             "due_date": "2026-11-12", "ransomware_campaign_use": "Unknown",
             "catalog_version": "2026.11.04",
@@ -63,20 +64,22 @@ def kev_raw():
 
 def test_cve_kev_query_preserves_two_independent_sources_and_provenance():
     factory, kev_id, vendor_id = setup_sources()
+    test_cve = f"CVE-2026-{int(uuid.uuid4().hex[:8], 16)}"
+    updated_cve = f"CVE-2026-{int(uuid.uuid4().hex[:8], 16)}"
     with factory() as db:
         kev = db.get(Source, kev_id)
         vendor = db.get(Source, vendor_id)
-        runtime.store_item(db, kev, kev_raw(), kev.url)
+        runtime.store_item(db, kev, kev_raw(test_cve), kev.url)
         runtime.store_item(db, vendor, {
-            "id": "vendor-issue", "title": f"Security fixes for {CVE}",
+            "id": "vendor-issue", "title": f"Security fixes for {test_cve}",
             "url": "https://vendor.example/security/advisory-1",
         }, vendor.url)
         db.commit()
     with TestClient(api.app) as client:
-        response = client.get("/v1/cves/" + CVE)
+        response = client.get("/v1/cves/" + test_cve)
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["cve_id"] == CVE
+    assert payload["cve_id"] == test_cve
     assert payload["kev"]["status"] == "listed"
     assert payload["kev"]["catalog_fresh"] is True
     assert payload["kev"]["vendor"] == "Example Inc"
@@ -89,7 +92,7 @@ def test_cve_kev_query_preserves_two_independent_sources_and_provenance():
         vendor = db.get(Source, vendor_id)
         runtime.store_item(db, vendor, {
             "id": "vendor-issue",
-            "title": "Security fixes for CVE-2026-67891",
+            "title": f"Security fixes for {updated_cve}",
             "url": "https://vendor.example/security/advisory-1",
         }, vendor.url)
         db.commit()
@@ -101,15 +104,53 @@ def test_cve_kev_query_preserves_two_independent_sources_and_provenance():
             ItemVersion.item_id == vendor_item.id)).all()) == 2
         refs = db.scalars(select(CveItemLink).where(
             CveItemLink.item_id == vendor_item.id)).all()
-        assert [(r.cve_id, r.relation) for r in refs] == [
-            ("CVE-2026-67891", "title_mention")
-        ]
-    old = api.cve(CVE)
-    new = api.cve("CVE-2026-67891")
+        assert [(r.cve_id, r.relation) for r in refs] == [(updated_cve, "title_mention")]
+    old = api.cve(test_cve)
+    new = api.cve(updated_cve)
     assert len(old["references"]) == 1
     assert len(new["references"]) == 1
     assert new["kev"]["status"] == "not_listed"
     assert new["references"][0]["relation"] == "title_mention"
+
+
+def test_cve_query_uses_immutable_version_at_cutoff_after_current_state_changes():
+    factory, _, vendor_id = setup_sources()
+    cutoff_cve = f"CVE-2026-{int(uuid.uuid4().hex[:8], 16)}"
+    old_title = f"Security fixes for {cutoff_cve}"
+    url = "https://vendor.example/security/cutoff-fixture"
+    with factory() as db:
+        vendor = db.get(Source, vendor_id)
+        vendor_key = vendor.source_key
+        runtime.store_item(db, vendor, {
+            "id": "cutoff-fixture", "title": old_title, "url": url,
+        }, vendor.url)
+        db.commit()
+        item = db.scalar(select(Item).where(Item.source_id == vendor_id,
+                                            Item.external_id == "cutoff-fixture"))
+        old_version = db.scalar(select(ItemVersion).where(ItemVersion.item_id == item.id))
+        old_observed_at = old_version.observed_at
+        cutoff = old_observed_at + timedelta(seconds=1)
+        current_title = "Revised title after the selected cutoff"
+        current_attributes = {**old_version.attributes, "title": current_title}
+        current_version = ItemVersion(
+            item_id=item.id, version=2, observed_at=cutoff + timedelta(days=1),
+            sha256="c" * 64, attributes=current_attributes,
+            provenance=old_version.provenance,
+        )
+        item.current_version = 2
+        item.state = "closed"
+        item.title = current_title
+        item.current_hash = "c" * 64
+        item.last_seen_at = cutoff + timedelta(days=1)
+        db.add(current_version)
+        db.commit()
+
+    with factory() as db:
+        result = query_cve(db, cutoff_cve, observed_cutoff=cutoff)
+    historical = next(ref for ref in result["references"]
+                      if ref["source"] == vendor_key)
+    assert historical["title"] == old_title
+    assert historical["last_seen_at"] == old_observed_at
 
 
 def test_kev_unknown_vs_not_listed_requires_recent_complete_source_snapshot():

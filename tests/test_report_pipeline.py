@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 import pytest
 
 from nous.report_pipeline import (
@@ -42,9 +40,9 @@ def evidence_bundle(template_id="security-daily"):
 def article_for(bundle, *, text="公式アドバイザリには影響対象の更新が記載されています。"):
     return {
         "schema_version": 1, "template_id": bundle["template_id"], "language": "ja",
-        "title": "確認された更新情報と対応上の論点",
-        "dek": "観測できた情報と、その範囲での分析を区別して整理します。",
-        "summary": ["本稿は取得済みの公開メタデータを根拠IDと結び付けて紹介します。"],
+        "title": text,
+        "dek": text,
+        "summary": [text],
         "sections": [
             {"heading": "確認された事実", "blocks": [{
                 "type": "paragraph", "text": text, "evidence_ids": ["E001"],
@@ -152,3 +150,60 @@ def test_fact_claim_must_be_displayed_verbatim_and_linked_to_same_evidence():
     with pytest.raises(ReportError, match="displayed_text_claim_unverified"):
         validate_article(article, template_id="security-daily", bundle=bundle,
                          fact_check=fact_check_for())
+
+
+@pytest.mark.parametrize("field,code", [
+    ("title", "title_not_supported_by_verified_claim"),
+    ("dek", "dek_not_supported_by_verified_claim"),
+    ("summary", "summary_not_supported_by_verified_claim"),
+])
+def test_fabricated_editorial_header_is_rejected(field, code):
+    bundle = evidence_bundle()
+    article = article_for(bundle)
+    article[field] = (["未確認の侵害が複数組織で発生したことを示すまとめです。"]
+                      if field == "summary"
+                      else "未確認の侵害が複数組織で発生したことを示す見出しです。")
+    with pytest.raises(ReportError, match=code):
+        validate_article(article, template_id="security-daily", bundle=bundle,
+                         fact_check=fact_check_for())
+
+
+def test_exploitation_claim_requires_a_fresh_cisa_catalog():
+    bundle = evidence_bundle("cve-kev-deep-dive")
+    bundle["parameters"] = {"cve_id": "CVE-2026-12345", "period_days": 30,
+                            "window_start": "2026-10-01T00:00:00+00:00",
+                            "window_end": "2026-11-04T00:00:00+00:00"}
+    bundle["evidence"][0].update({
+        "source_key": "cisa-kev", "relation": "kev",
+        "content_policy": {"storage": "metadata_only", "license_id": "CC0-1.0",
+                            "quote_allowed": False, "quote_values": [],
+                            "dataset_license": "CC0-1.0"},
+    })
+    text = "この脆弱性は攻撃者によって広く悪用されています。"
+    bundle["cve_context"] = {
+        "cve_id": "CVE-2026-12345", "kev_status": "listed",
+        "catalog_as_of": "2026-11-04T00:00:00+00:00", "catalog_fresh": False,
+        "canonical_url": "https://www.cve.org/CVERecord?id=CVE-2026-12345",
+        "catalog_source_url": "https://catalog.example/kev.json",
+    }
+    article = {
+        "schema_version": 1, "template_id": "cve-kev-deep-dive", "language": "ja",
+        "title": text, "dek": text, "summary": [text],
+        "sections": [
+            {"heading": "確認された事実", "blocks": [{
+                "type": "paragraph", "text": text,
+                "evidence_ids": ["E001"], "claim_ids": ["C001"],
+            }]},
+            {"heading": "出典", "blocks": [{
+                "type": "source_list", "evidence_ids": ["E001"],
+            }]},
+        ],
+        "claims": [{"claim_id": "C001", "text": text, "classification": "observed",
+                    "evidence_ids": ["E001"]}],
+    }
+    fact_check = {"claims": [{"claim_id": "C001", "text": text,
+                               "classification": "observed", "evidence_ids": ["E001"],
+                               "assessment": "supported"}]}
+    with pytest.raises(ReportError, match="unsupported_exploitation_claim"):
+        validate_article(article, template_id="cve-kev-deep-dive", bundle=bundle,
+                         fact_check=fact_check)

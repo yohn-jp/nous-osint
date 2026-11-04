@@ -11,6 +11,8 @@ from functools import lru_cache
 import re
 from pathlib import Path
 from datetime import datetime, time, timedelta, timezone
+import hashlib
+import json
 from typing import Any, Literal
 import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -138,7 +140,11 @@ class ReportScheduleCreate(BaseModel):
 
 class ReportScheduleUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    enabled: bool
+    enabled: bool | None = None
+    cadence: Literal["daily", "weekly"] | None = None
+    local_time: str | None = Field(default=None, pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+    timezone: str | None = Field(default=None, min_length=1, max_length=64)
+    parameters: dict[str, Any] | None = None
 
 
 @app.get("/v1/admin/session")
@@ -320,24 +326,33 @@ def report_templates():
 @app.post("/v1/admin/report-runs", status_code=202)
 def create_report_run(body: ReportRunCreate, request: Request):
     try:
-        template = resolve_template(body.template_id)
-        parameters = normalize_parameters(body.template_id, body.parameters, now=now())
-    except (KeyError, TypeError, ValueError) as exc:
+        request_bytes = json.dumps({
+            "template_id": body.template_id, "parameters": body.parameters,
+        }, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError) as exc:
         raise HTTPException(422, "invalid report template parameters") from exc
+    request_sha256 = hashlib.sha256(request_bytes).hexdigest()
     key = body.idempotency_key or str(uuid.uuid4())
-    current = now()
     factory = _factory()
     with factory() as db:
         existing = db.scalar(select(ReportRun).where(ReportRun.idempotency_key == key))
         if existing is not None:
-            if (existing.template_id != body.template_id or existing.parameters != parameters or
-                    existing.template_revision != template["revision_key"]):
+            if existing.request_sha256 != request_sha256:
                 raise HTTPException(409, "idempotency key is already used for different input")
             return {"run_id": existing.id, "state": existing.state}
+    try:
+        template = resolve_template(body.template_id)
+        parameters = normalize_parameters(body.template_id, body.parameters, now=now())
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(422, "invalid report template parameters") from exc
+    current = now()
+    with factory() as db:
         row = ReportRun(
             id=str(uuid.uuid4()), trigger="manual", created_by=request.state.access_identity.subject,
             template_id=body.template_id, template_revision=template["revision_key"],
             template_snapshot=template, parameters=parameters, idempotency_key=key,
+            request_sha256=request_sha256,
             state="queued", stage="queued", attempts=0, available_at=current,
             stage_artifacts={}, created_at=current,
         )
@@ -347,9 +362,7 @@ def create_report_run(body: ReportRunCreate, request: Request):
         except IntegrityError as exc:
             db.rollback()
             existing = db.scalar(select(ReportRun).where(ReportRun.idempotency_key == key))
-            if (existing is not None and existing.template_id == body.template_id and
-                    existing.parameters == parameters and
-                    existing.template_revision == template["revision_key"]):
+            if existing is not None and existing.request_sha256 == request_sha256:
                 return {"run_id": existing.id, "state": existing.state}
             raise HTTPException(409, "idempotency key is already used") from exc
         return {"run_id": row.id, "state": row.state}
@@ -462,7 +475,54 @@ def update_report_schedule(schedule_id: str, changes: ReportScheduleUpdate):
             ReportSchedule.id == schedule_id).with_for_update())
         if row is None:
             raise HTTPException(404, "report schedule not found")
-        row.enabled = changes.enabled
+        supplied = changes.model_fields_set
+        if not supplied:
+            raise HTTPException(422, "at least one schedule setting is required")
+        if any(name in supplied and getattr(changes, name) is None
+               for name in ("enabled", "cadence", "local_time", "timezone")):
+            raise HTTPException(422, "schedule settings cannot be null")
+        enabled = changes.enabled if "enabled" in supplied else row.enabled
+        cadence = changes.cadence if "cadence" in supplied else row.cadence
+        timezone_name = changes.timezone if "timezone" in supplied else row.timezone
+        local_time = changes.local_time if "local_time" in supplied else row.local_time
+        parameters = changes.parameters if "parameters" in supplied else row.parameters
+        if parameters is None or set(parameters) - {"category"}:
+            raise HTTPException(422, "unsupported schedule parameters")
+        try:
+            zone = ZoneInfo(timezone_name)
+            resolve_template(row.template_id, row.template_snapshot)
+            normalized = normalize_parameters(row.template_id, {
+                "timezone": timezone_name, "category": parameters.get("category"),
+            }, now=now())
+        except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError) as exc:
+            raise HTTPException(422, "invalid report schedule") from exc
+        config_changed = any(name in supplied for name in (
+            "cadence", "local_time", "timezone", "parameters"))
+        row.enabled = enabled
+        row.cadence = cadence
+        row.timezone = timezone_name
+        row.local_time = local_time
+        row.parameters = {"category": normalized["category"]}
+        if config_changed or (enabled and row.next_slot_at <= now()):
+            current = now()
+            wall_time = time.fromisoformat(local_time)
+            local_current = current.astimezone(zone)
+            reference = row.next_slot_at.astimezone(zone)
+            if cadence == "weekly":
+                days = (reference.weekday() - local_current.weekday()) % 7
+                candidate = datetime.combine(
+                    local_current.date() + timedelta(days=days), wall_time, tzinfo=zone)
+                if candidate.astimezone(timezone.utc) <= current:
+                    candidate += timedelta(days=7)
+            else:
+                candidate = datetime.combine(local_current.date(), wall_time, tzinfo=zone)
+                if candidate.astimezone(timezone.utc) <= current:
+                    candidate += timedelta(days=1)
+            # ZoneInfo accepts nonexistent DST wall times by attaching an
+            # offset; reject those rather than silently shifting a schedule.
+            if candidate.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None) != candidate.replace(tzinfo=None):
+                raise HTTPException(422, "local time does not exist in the selected timezone")
+            row.next_slot_at = candidate.astimezone(timezone.utc)
         row.updated_at = now()
         db.commit()
         return _schedule_row(row)

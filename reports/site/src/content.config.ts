@@ -162,6 +162,18 @@ const report = z.strictObject({
   if (displayedClaims.size !== claimMap.size || [...claimMap.keys()].some((id) => !displayedClaims.has(id))) {
     context.addIssue({ code: 'custom', path: ['claims'], message: 'Every verified claim must be shown exactly in an article block' });
   }
+  const verifiedText = new Set([...claimMap.values()].map((item) => item.text.trim()));
+  if (!verifiedText.has(value.title.trim())) {
+    context.addIssue({ code: 'custom', path: ['title'], message: 'Title must exactly match a verified claim' });
+  }
+  if (!verifiedText.has(value.dek.trim())) {
+    context.addIssue({ code: 'custom', path: ['dek'], message: 'Dek must exactly match a verified claim' });
+  }
+  for (const [index, summary] of value.summary.entries()) {
+    if (!verifiedText.has(summary.trim())) {
+      context.addIssue({ code: 'custom', path: ['summary', index], message: 'Summary must exactly match a verified claim' });
+    }
+  }
   if (value.cve) checkIds(value.cve.evidence_ids, ['cve', 'evidence_ids']);
   for (const [index, summary] of value.summary.entries()) checkText(summary, ['summary', index]);
   checkText(value.title, ['title']);

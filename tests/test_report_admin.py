@@ -85,6 +85,33 @@ def test_manual_run_rejects_invalid_or_open_ended_parameters(managed, payload):
     assert write(client, "POST", "/v1/admin/report-runs", payload).status_code == 422
 
 
+def test_cve_idempotency_reuses_normalized_window_across_retry(managed, monkeypatch):
+    from nous import admin
+
+    client, factory = managed
+    first = datetime(2026, 11, 4, 1, tzinfo=timezone.utc)
+    later = datetime(2026, 11, 5, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(admin, "now", lambda: first)
+    body = {
+        "template_id": "cve-kev-deep-dive",
+        "parameters": {"cve_id": "CVE-2026-12345", "period_days": 30},
+        "idempotency_key": "cve-stable-window",
+    }
+    created = write(client, "POST", "/v1/admin/report-runs", body)
+    assert created.status_code == 202
+    with factory() as db:
+        original_window = db.get(ReportRun, created.json()["run_id"]).parameters
+
+    monkeypatch.setattr(admin, "now", lambda: later)
+    retry = write(client, "POST", "/v1/admin/report-runs", body)
+    assert retry.status_code == 202
+    assert retry.json()["run_id"] == created.json()["run_id"]
+    with factory() as db:
+        assert db.get(ReportRun, created.json()["run_id"]).parameters == original_window
+    changed = {**body, "parameters": {"cve_id": "CVE-2026-12345", "period_days": 29}}
+    assert write(client, "POST", "/v1/admin/report-runs", changed).status_code == 409
+
+
 def test_schedule_create_toggle_and_strict_validation(managed):
     client, factory = managed
     body = {
@@ -97,8 +124,13 @@ def test_schedule_create_toggle_and_strict_validation(managed):
     assert schedule["parameters"] == {"category": "advisory"}
     assert schedule["enabled"] is True
     updated = write(client, "PATCH", f"/v1/admin/report-schedules/{schedule['id']}",
-                    {"enabled": False})
+                    {"enabled": False, "cadence": "weekly", "timezone": "UTC",
+                     "local_time": "09:15", "parameters": {"category": "vulnerability"}})
     assert updated.status_code == 200 and updated.json()["enabled"] is False
+    assert updated.json()["cadence"] == "weekly"
+    assert updated.json()["timezone"] == "UTC"
+    assert updated.json()["local_time"] == "09:15"
+    assert updated.json()["parameters"] == {"category": "vulnerability"}
     assert client.get("/v1/admin/report-schedules").json()["schedules"][0]["enabled"] is False
     assert write(client, "POST", "/v1/admin/report-schedules", {
         **body, "timezone": "UTC", "parameters": {"category": "https://evil.example"},
@@ -106,6 +138,8 @@ def test_schedule_create_toggle_and_strict_validation(managed):
     assert write(client, "POST", "/v1/admin/report-schedules", {
         **body, "template_id": "cve-kev-deep-dive",
     }).status_code == 422
+    assert write(client, "PATCH", f"/v1/admin/report-schedules/{schedule['id']}",
+                 {"timezone": "../etc"}).status_code == 422
 
 
 def test_run_detail_publication_url_only_for_validated_report(managed):
