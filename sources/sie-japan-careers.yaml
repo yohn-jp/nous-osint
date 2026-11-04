@@ -1,0 +1,21 @@
+id: sie-japan-careers
+kind: json_api
+url: https://boards-api.greenhouse.io/v1/boards/siei/jobs
+adapter: json_v1
+item_kind: job_posting
+organization: 'Sony Interactive Entertainment Inc. (Japan)'
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+json_path: jobs
+field_map:
+  url: absolute_url
+  updated: updated_at
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: 'NOASSERTION'
+  attribution: 'Sony Interactive Entertainment / Greenhouse'
+  terms_url: https://docs.greenhouse.io/job-board
+  content_storage: metadata_only
+  note: 'Public SIE Japan Greenhouse job board; security positions are present, but this generic JSON adapter imports ALL published jobs. Requires downstream Japan/security classification before enabling for a security-only feed. Public API availability is not a data redistribution license; retain posting IDs, titles and links only.'

@@ -1,0 +1,17 @@
+id: debian-security-advisories
+kind: rss
+url: https://www.debian.org/security/dsa
+adapter: rss_v1
+item_kind: advisory
+organization: 'Debian Security Team'
+interval_minutes: 240
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: 'NOASSERTION'
+  license_url: https://www.debian.org/license
+  attribution: 'Debian Project / Software in the Public Interest'
+  content_storage: metadata_only
+  note: 'Official DSA RSS published by Debian. Debian web content has mixed-age MIT/GPL and older OPL terms; feed is not relicensed by Nous. Store title, source link and date only; check original notices for attribution.'

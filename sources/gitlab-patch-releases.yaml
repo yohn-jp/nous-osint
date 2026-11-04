@@ -1,0 +1,16 @@
+id: gitlab-patch-releases
+kind: rss
+url: https://docs.gitlab.com/releases/patch-releases.xml
+adapter: rss_v1
+item_kind: advisory
+organization: 'GitLab'
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: 'NOASSERTION'
+  attribution: 'GitLab'
+  content_storage: metadata_only
+  note: 'Official GitLab patch release RSS (current docs.gitlab.com endpoint, replacing historical about.gitlab.com feed). Includes nonsecurity patches; titles and links only. Upstream feed rights not assumed to match GitLab code licensing.'

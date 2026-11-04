@@ -19,6 +19,9 @@
 
 ## Source administration
 
+Bundled source definitions and their publication licenses are separate from Nous's MIT license. See [Source Rights and Licensing](docs/SOURCE_LICENSES.md) and the [OSS Adapter Evaluation](docs/ADAPTER_EVALUATION.md) before activating third-party feeds.
+
+
 Nous ships an official Git-maintained source catalog and also supports **per-instance custom sources** through an Access-authorized Admin UI. The database owns runtime enablement, budgets, custom definitions and audit history. GitHub credentials are **not** needed to administer a private installation. See [Source Management](docs/SOURCE_MANAGEMENT.md) for deployment prerequisites and security boundaries.
 
 ## Architecture documents
