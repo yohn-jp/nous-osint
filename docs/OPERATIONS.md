@@ -20,9 +20,10 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    `nous-api-database-url` and
    `nous-runtime-database-url` after provisioning separate `nous_api` and
    `nous_runtime` SQL roles. For remote MCP, provision a `nous_mcp` role with
-   SELECT-only grants and import its URL as `nous-mcp-database-url`. After
-   migration `0009`, provision the distinct report Worker and admin grants below
-   and import the Worker URL as `nous-report-worker-database-url`. Securely
+   SELECT-only grants and import its URL as `nous-mcp-database-url`. Provision
+   `nous_report_worker` before migration `0009` so its conditional CVE-link
+   grant can apply. Create `nous_admin` before applying the report admin grants
+   below. Import the Worker URL as `nous-report-worker-database-url`. Securely
    remove temporary files. Never put a password in Git or a Quadlet.
 4. Run `systemctl --user daemon-reload`; start `nous-db.service`. Wait for
    `podman exec nous-db pg_isready -U nous -d nous` to succeed.
@@ -42,12 +43,13 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    `default.target.wants` links; generated units cannot be enabled with
    `systemctl --user enable`.
 
-For automated reports, provision the report DB roles only after `alembic upgrade
-head` has created migration `0009`. The report Worker reads only the source
-observation tables it needs and has no DELETE privilege:
+After role creation and `alembic upgrade head` has created migration `0009`,
+apply the report and admin table grants below. Create `nous_report_worker`
+before migration `0009` so its conditional CVE-link grant applies; then run
+these report-table grants. The report Worker reads only the source observation
+tables it needs and has no DELETE privilege:
 
 ```sql
-CREATE ROLE nous_report_worker LOGIN PASSWORD '<generate-outside-repository>';
 GRANT CONNECT ON DATABASE nous TO nous_report_worker;
 GRANT USAGE ON SCHEMA public TO nous_report_worker;
 GRANT SELECT ON sources, items, item_versions, cve_item_links TO nous_report_worker;
@@ -58,6 +60,29 @@ GRANT SELECT, INSERT, UPDATE ON report_site_state TO nous_report_worker;
 GRANT SELECT, INSERT, UPDATE ON report_runs, report_schedules TO nous_admin;
 GRANT SELECT ON reports TO nous_admin;
 ```
+
+Migration `0009` conditionally grants access to the immutable CVE relation table
+when these pre-existing roles are present. If a role is provisioned after the
+migration, apply only these table grants as the database owner:
+
+```sql
+GRANT INSERT ON cve_item_version_links TO nous_runtime;
+GRANT SELECT ON cve_item_version_links TO nous_api, nous_mcp, nous_report_worker;
+```
+
+The collection runtime needs INSERT to record relations for new observations.
+The API, remote MCP and report Worker need SELECT to display or analyze them.
+Do not grant UPDATE, DELETE, TRUNCATE or blanket default privileges on this
+table. Existing grants on other tables remain as provisioned above.
+
+To verify the migration grant boundary, use a separate disposable database
+migrated through `0008`. Set `DATABASE_URL` or `DATABASE_URL_FILE` to its admin
+URL and run `.venv/bin/python scripts/test-cve-role-grants.py`. The script
+creates the four canonical roles with temporary passwords, upgrades the
+database through `0009`, tests each grant through that role's own connection,
+then removes the roles and any fixture rows. Do not run it against the shared
+application database; the URL must allow role creation and connections from the
+test process.
 
 The Access-subject allowlist still gates the admin API; `nous_admin` receives no
 write grant on `reports` or `report_evidence`. Do not add blanket default
