@@ -1,0 +1,58 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const entries = await getCollection('reports');
+const reports = entries.map(({ data }) => data).sort(
+  (left, right) => new Date(right.published_at).getTime() - new Date(left.published_at).getTime(),
+);
+const base = import.meta.env.BASE_URL;
+const categoryName = (category: string) => category === 'cve' ? 'CVE / KEV' : 'Security';
+function dateLabel(value: string) {
+  return new Intl.DateTimeFormat('ja-JP', {
+    dateStyle: 'long', timeZone: 'Asia/Tokyo',
+  }).format(new Date(value));
+}
+---
+
+<BaseLayout title="インテリジェンスレポート">
+  <section class="index-hero" aria-labelledby="page-title">
+    <p class="eyebrow">SOURCE-BASED ANALYSIS</p>
+    <h1 id="page-title">インテリジェンス<br /><span>レポート</span></h1>
+    <p class="hero-copy">
+      収集した公開情報をもとに、確認された事実と分析を分けてまとめています。
+      出典と観測時刻から原資料を確認できます。
+    </p>
+    <div class="hero-rule" aria-hidden="true"><span></span></div>
+    <p class="report-count">{reports.length} 件のレポート</p>
+  </section>
+
+  {reports.length > 0 ? (
+    <section class="report-grid" aria-label="公開中のレポート">
+      {reports.map((report, index) => (
+        <article class={`report-card ${index === 0 ? 'report-card-featured' : ''}`}>
+          <div class="card-meta">
+            <span class={`category-pill category-${report.category}`}>{categoryName(report.category)}</span>
+            <time datetime={report.published_at}>{dateLabel(report.published_at)}</time>
+          </div>
+          <h2>
+            <a href={report.url}>{report.title}</a>
+          </h2>
+          <p class="card-dek">{report.dek}</p>
+          <ul class="card-summary">
+            {report.summary.map((line) => <li>{line}</li>)}
+          </ul>
+          <a class="card-read-link" href={report.url}>
+            レポートを読む <span aria-hidden="true">→</span>
+          </a>
+        </article>
+      ))}
+    </section>
+  ) : (
+    <section class="empty-state" aria-label="レポート一覧">
+      <p class="eyebrow">NO REPORTS YET</p>
+      <h2>現在、公開中のレポートはありません。</h2>
+      <p>対象期間に確認できる根拠がそろったときに掲載されます。</p>
+    </section>
+  )}
+</BaseLayout>

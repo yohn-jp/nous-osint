@@ -1,0 +1,70 @@
+---
+interface Source {
+  evidence_id: string;
+  source_key: string;
+  relation: 'record' | 'reference' | 'kev' | 'title_mention';
+  title: string;
+  publisher_url: string;
+  observed_at: string;
+  published_at: string | null;
+  license_id: string;
+}
+
+interface Props {
+  evidenceIds: string[];
+  sources: Source[];
+}
+
+const { evidenceIds, sources } = Astro.props;
+const selected = evidenceIds.map((id) => sources.find((source) => source.evidence_id === id))
+  .filter((source): source is Source => source !== undefined);
+const publisherNames: Record<string, string> = {
+  'aws-security-bulletins': 'AWS',
+  'automattic-jobs': 'Automattic',
+  'cisa-advisories': 'CISA',
+  'cisa-kev': 'CISA KEV',
+  'cloudflare-jobs': 'Cloudflare',
+  'cloudflare-security-research': 'Cloudflare',
+  'debian-lts-advisories': 'Debian LTS',
+  'debian-security-advisories': 'Debian Security',
+  'fortinet-psirt': 'Fortinet PSIRT',
+  'github-advisories': 'GitHub Security Advisories',
+  'gitlab-patch-releases': 'GitLab',
+  'google-cloud-security-bulletins': 'Google Cloud',
+  'jpcert-alerts': 'JPCERT/CC',
+  'jpcert-notices': 'JPCERT/CC',
+  'jvn-ipedia-updates': 'JVN iPedia',
+  'meta-engineering': 'Meta',
+  'sie-japan-careers': 'Sony Interactive Entertainment',
+  'ubuntu-security-notices': 'Ubuntu Security',
+};
+function publisherName(source: Source) {
+  return publisherNames[source.source_key] ?? new URL(source.publisher_url).hostname.replace(/^www\./, '');
+}
+function dateLabel(value: string) {
+  return new Intl.DateTimeFormat('ja-JP', {
+    dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Tokyo',
+  }).format(new Date(value));
+}
+---
+
+{selected.length > 0 && (
+  <ol class="source-list">
+    {selected.map((source) => (
+      <li id={`source-${source.evidence_id}`} class="source-entry">
+        <span class="source-id">{source.evidence_id}</span>
+        <div class="source-copy">
+          <a class="source-title" href={source.publisher_url} rel="noopener noreferrer">
+            {source.title}
+          </a>
+          <div class="source-meta">
+            <span>{publisherName(source)}</span>
+            <span>観測 {dateLabel(source.observed_at)}</span>
+            {source.published_at && <span>公開 {dateLabel(source.published_at)}</span>}
+            <span>{source.relation === 'title_mention' ? 'タイトル中の言及' : '出典'}</span>
+          </div>
+        </div>
+      </li>
+    ))}
+  </ol>
+)}

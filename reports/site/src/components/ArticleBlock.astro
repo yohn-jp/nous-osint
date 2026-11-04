@@ -1,0 +1,55 @@
+---
+import EvidenceMarks from './EvidenceMarks.astro';
+import SourceList from './SourceList.astro';
+
+interface Props {
+  block: any;
+  sources: any[];
+}
+
+const { block, sources } = Astro.props;
+---
+
+{block.type === 'paragraph' && (
+  <p class="article-paragraph">
+    {block.text}
+    <EvidenceMarks evidenceIds={block.evidence_ids} />
+  </p>
+)}
+
+{block.type === 'bullet_list' && (
+  <ul class="article-list">
+    {block.items.map((item: any) => (
+      <li>
+        {item.text}
+        <EvidenceMarks evidenceIds={item.evidence_ids} />
+      </li>
+    ))}
+  </ul>
+)}
+
+{block.type === 'fact_table' && (
+  <div class="table-wrap" role="region" aria-label="根拠付きの事実表" tabindex="0">
+    <table>
+      <thead><tr>{block.headers.map((header: string) => <th scope="col">{header}</th>)}</tr></thead>
+      <tbody>
+        {block.rows.map((row: any) => (
+          <tr>
+            {row.cells.map((cell: string, index: number) => (
+              <td>{cell}{index === row.cells.length - 1 && <EvidenceMarks evidenceIds={row.evidence_ids} />}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
+
+{block.type === 'source_list' && <SourceList evidenceIds={block.evidence_ids} sources={sources} />}
+
+{block.type === 'quote' && (
+  <figure class="source-quote">
+    <blockquote>{block.text}</blockquote>
+    <figcaption><EvidenceMarks evidenceIds={block.evidence_ids} /></figcaption>
+  </figure>
+)}

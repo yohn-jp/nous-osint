@@ -1,0 +1,74 @@
+---
+import { getCollection } from 'astro:content';
+import ArticleBlock from '../../../components/ArticleBlock.astro';
+import KevPanel from '../../../components/KevPanel.astro';
+import SourceList from '../../../components/SourceList.astro';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('reports');
+  return entries.map(({ data }) => ({
+    params: { category: data.category, slug: data.slug },
+    props: { report: data },
+  }));
+}
+
+const { report } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const categoryName = report.category === 'cve' ? 'CVE / KEV' : 'Security';
+function dateLabel(value: string) {
+  return new Intl.DateTimeFormat('ja-JP', {
+    dateStyle: 'long', timeZone: 'Asia/Tokyo',
+  }).format(new Date(value));
+}
+function templateName(template: string) {
+  return template === 'cve-kev-deep-dive' ? 'CVE evidence review' : 'Daily security intelligence';
+}
+---
+
+<BaseLayout title={report.title} description={report.dek}>
+  <article class="report-article">
+    <nav class="breadcrumbs" aria-label="パンくずリスト">
+      <a href={base}>レポート一覧</a>
+      <span aria-hidden="true">/</span>
+      <span>{categoryName}</span>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-kicker">
+        <span class={`category-pill category-${report.category}`}>{categoryName}</span>
+        <span>{templateName(report.template_id)}</span>
+      </div>
+      <time class="article-date" datetime={report.published_at}>公開 {dateLabel(report.published_at)}</time>
+      <h1>{report.title}</h1>
+      <p class="article-dek">{report.dek}</p>
+      <ul class="article-summary">
+        {report.summary.map((line) => <li>{line}</li>)}
+      </ul>
+    </header>
+
+    {report.cve && <KevPanel cve={report.cve} sources={report.sources} />}
+
+    <div class="article-columns">
+      <div class="article-body">
+        {report.sections.map((section, index) => (
+          <section class="article-section" aria-labelledby={`section-${index}`}>
+            <h2 id={`section-${index}`}>{section.heading}</h2>
+            {section.blocks.map((block) => <ArticleBlock block={block} sources={report.sources} />)}
+          </section>
+        ))}
+      </div>
+      <aside class="article-sources" aria-labelledby="sources-heading">
+        <p class="eyebrow">PRIMARY REFERENCES</p>
+        <h2 id="sources-heading">参照した出典</h2>
+        <p class="sources-intro">各資料のタイトル、公開元、Nousでの観測時刻を示しています。</p>
+        <SourceList evidenceIds={report.sources.map((source) => source.evidence_id)} sources={report.sources} />
+      </aside>
+    </div>
+
+    <footer class="article-footer">
+      <a href={base}>← レポート一覧へ戻る</a>
+      <span>記事は保存された出典メタデータと観測時点に基づきます。</span>
+    </footer>
+  </article>
+</BaseLayout>

@@ -1,0 +1,56 @@
+---
+import EvidenceMarks from './EvidenceMarks.astro';
+
+interface Props {
+  cve: {
+    id: string;
+    kev_status: 'listed' | 'not_listed' | 'unknown';
+    catalog_as_of: string | null;
+    catalog_fresh: boolean;
+    canonical_url: string;
+    catalog_source_url: string | null;
+    evidence_ids: string[];
+  };
+  sources: any[];
+}
+
+const { cve, sources } = Astro.props;
+const status = {
+  listed: { label: '掲載記録あり', className: 'status-listed' },
+  not_listed: { label: 'スナップショットで未掲載', className: 'status-not-listed' },
+  unknown: { label: '状態不明', className: 'status-unknown' },
+}[cve.kev_status];
+function dateLabel(value: string) {
+  return new Intl.DateTimeFormat('ja-JP', {
+    dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Tokyo',
+  }).format(new Date(value));
+}
+---
+
+<aside class="kev-panel" aria-labelledby="kev-heading">
+  <div class="kev-panel-heading">
+    <div>
+      <p class="eyebrow">CISA KEV CATALOG</p>
+      <h2 id="kev-heading">KEV カタログの観測</h2>
+    </div>
+    <span class={`status-badge ${status.className}`}>{status.label}</span>
+  </div>
+  <dl class="kev-facts">
+    <div><dt>CVE</dt><dd><a href={cve.canonical_url} rel="noopener noreferrer">{cve.id}</a></dd></div>
+    <div><dt>カタログ鮮度</dt><dd>{cve.catalog_fresh ? '48時間以内の取得' : '48時間を超過、または取得記録なし'}</dd></div>
+    <div><dt>観測時刻</dt><dd>{cve.catalog_as_of ? dateLabel(cve.catalog_as_of) : '記録なし'}</dd></div>
+  </dl>
+  <p class="kev-caveat">
+    {cve.kev_status === 'unknown'
+      ? '新しい完全なカタログを確認できないため、状態を判定できません。'
+      : cve.kev_status === 'not_listed'
+        ? 'この時点のスナップショットでは掲載を確認できませんでした。未掲載は悪用されていない証明ではありません。'
+        : cve.catalog_fresh
+          ? 'CISA KEV カタログに掲載された観測があります。'
+          : '過去のCISA KEV掲載記録があります。現在のカタログ状態は更新されている可能性があります。'}
+  </p>
+  <div class="kev-links">
+    {cve.catalog_source_url && <a href={cve.catalog_source_url} rel="noopener noreferrer">CISA KEV カタログ</a>}
+    {cve.evidence_ids.length > 0 && <EvidenceMarks evidenceIds={cve.evidence_ids} />}
+  </div>
+</aside>
