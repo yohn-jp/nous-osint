@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["decision", "thesis", "audience", "outline", "evidence_ids", "reason"],
+  "properties": {
+    "decision": {"enum": ["publish", "skip"]},
+    "thesis": {"type": "string", "maxLength": 500},
+    "audience": {"type": "string", "minLength": 4, "maxLength": 120},
+    "outline": {"type": "array", "maxItems": 8, "items": {"type": "string", "minLength": 2, "maxLength": 120}},
+    "evidence_ids": {"type": "array", "uniqueItems": true, "maxItems": 50, "items": {"type": "string", "pattern": "^E[0-9]{3}$"}},
+    "reason": {"type": "string", "minLength": 5, "maxLength": 400}
+  }
+}

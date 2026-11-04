@@ -1,0 +1,27 @@
+---
+interface Claim {
+  claim_id: string;
+  classification: 'observed' | 'inference' | 'unconfirmed';
+}
+
+interface Props {
+  claimIds: string[];
+  claims: Claim[];
+}
+
+const { claimIds, claims } = Astro.props;
+const labels = {
+  observed: { text: '観測事実', className: 'claim-observed' },
+  inference: { text: '推論', className: 'claim-inference' },
+  unconfirmed: { text: '未確認', className: 'claim-unconfirmed' },
+};
+const classifications = claimIds.map((id) => claims.find((claim) => claim.claim_id === id))
+  .filter((claim): claim is Claim => claim !== undefined)
+  .map((claim) => ({ ...labels[claim.classification], id: claim.claim_id }));
+---
+
+<span class="claim-classifications">
+  {classifications.map((claim) => (
+    <span class={`claim-classification ${claim.className}`}>{claim.text}</span>
+  ))}
+</span>

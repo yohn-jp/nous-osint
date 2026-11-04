@@ -120,6 +120,72 @@ export interface Change {
 }
 export interface ChangesPage { changes: Change[] }
 
+export type ReportTemplateId = 'security-daily' | 'cve-kev-deep-dive'
+export type ReportRunState = 'queued' | 'leased' | 'running' | 'validating' | 'publishing'
+  | 'published' | 'skipped' | 'failed' | 'cancelled'
+
+export interface ReportTemplate {
+  id: ReportTemplateId
+  revision: number
+  revision_key: string
+  title: string
+  category: 'security' | 'cve'
+  parameters_schema: Record<string, unknown>
+  evidence_limits: Record<string, number>
+  outline: string[]
+}
+
+export interface ReportRunListItem {
+  run_id: string
+  template_id: ReportTemplateId
+  created_at: string
+  trigger: 'manual' | 'scheduled'
+  state: ReportRunState
+  stage: string
+  attempts: number
+  error_code: string | null
+  published_url: string | null
+}
+
+export interface ReportRun extends ReportRunListItem {
+  parameters: Record<string, unknown>
+  stages: Record<string, string>
+}
+
+export interface ReportRunsPage {
+  runs: ReportRunListItem[]
+  next_cursor: string | null
+}
+
+export interface ReportSchedule {
+  id: string
+  template_id: 'security-daily'
+  template_revision: string
+  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null }
+  timezone: string
+  cadence: 'daily' | 'weekly'
+  local_time: string
+  next_slot_at: string
+  enabled: boolean
+  created_at: string
+}
+
+export interface ReportSchedulesPage { schedules: ReportSchedule[] }
+
+export interface CreateReportRun {
+  template_id: ReportTemplateId
+  parameters: Record<string, string | number | null>
+  idempotency_key?: string
+}
+
+export interface CreateReportSchedule {
+  template_id: 'security-daily'
+  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null }
+  timezone: string
+  cadence: 'daily' | 'weekly'
+  local_time: string
+}
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError' }
 }
@@ -161,8 +227,8 @@ async function mutation<T>(path: string, method: 'POST' | 'PUT' | 'PATCH', paylo
     body: JSON.stringify(payload),
   })
   if (!response.ok) {
-    const message = response.status === 409 ? 'ソースIDまたは設定が競合しています。'
-      : response.status === 422 ? 'ソース定義または接続検証に失敗しました。'
+    const message = response.status === 409 ? '設定が競合しています。'
+      : response.status === 422 ? '入力内容を確認してください。'
       : response.status === 401 || response.status === 403 ? '管理者権限を確認してください。'
       : response.status >= 500 ? '管理APIが利用できません。設定とDB接続を確認してください。'
       : '操作に失敗しました。'
@@ -190,6 +256,22 @@ export const api = {
   adminSettings: (id: string, settings: { enabled?: boolean; interval_minutes?: number; max_requests_per_hour?: number; max_concurrency?: number }) =>
     mutation<ManagedSource>('/v1/admin/sources/' + encodeURIComponent(id) + '/settings', 'PATCH', settings),
   adminProbe: (id: string) => mutation<ProbeResult>('/v1/admin/sources/' + encodeURIComponent(id) + '/probe', 'POST'),
+  adminReportTemplates: () => get<ReportTemplate[]>('/v1/admin/report-templates'),
+  adminReportRuns: (params: { limit?: number; cursor?: string } = {}) =>
+    get<ReportRunsPage>('/v1/admin/report-runs' + qs(params)),
+  adminReportRun: (id: string) => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error('Invalid report run ID')
+    return get<ReportRun>('/v1/admin/report-runs/' + encodeURIComponent(id))
+  },
+  adminCreateReportRun: (request: CreateReportRun) =>
+    mutation<{ run_id: string; state: ReportRunState }>('/v1/admin/report-runs', 'POST', request),
+  adminReportSchedules: () => get<ReportSchedulesPage>('/v1/admin/report-schedules'),
+  adminCreateReportSchedule: (request: CreateReportSchedule) =>
+    mutation<ReportSchedule>('/v1/admin/report-schedules', 'POST', request),
+  adminUpdateReportSchedule: (id: string, changes: { enabled: boolean }) => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error('Invalid report schedule ID')
+    return mutation<ReportSchedule>('/v1/admin/report-schedules/' + encodeURIComponent(id), 'PATCH', changes)
+  },
   changes: (params: { since: string; kind?: ItemKind | undefined; limit?: number | undefined }, signal?: AbortSignal) =>
     get<ChangesPage>('/v1/changes' + qs(params), signal),
 }

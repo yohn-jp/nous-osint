@@ -1,0 +1,35 @@
+[Unit]
+Description=Nous automated report scheduler and Worker
+Requires=nous-db.service
+After=nous-db.service
+
+[Container]
+Image=ghcr.io/yohn-jp/nous-osint-reports@sha256:REPLACE_AFTER_CI
+ContainerName=nous-report-worker
+Network=nous.network
+Secret=nous-report-worker-database-url,type=mount,target=/run/secrets/database_url,uid=0,gid=0,mode=0400
+Environment=DATABASE_URL_FILE=/run/secrets/database_url
+Environment=NOUS_CODEX_HOME=/var/lib/nous-codex
+Environment=NOUS_CODEX_EXPECTED_VERSION=0.166.0
+Environment=NOUS_CODEX_UID=10002
+Environment=NOUS_CODEX_GID=10002
+Environment=NOUS_REPORT_PRIVATE_DIR=/var/lib/nous-reports/private
+Environment=NOUS_REPORT_SITE_DIR=/var/lib/nous-reports/site
+Environment=PYTHONDONTWRITEBYTECODE=1
+Volume=nous-report-site.volume:/var/lib/nous-reports/site:rw
+Volume=nous-report-private.volume:/var/lib/nous-reports/private:rw
+Volume=nous-codex-home.volume:/var/lib/nous-codex:rw
+Exec=python -m nous.report_worker
+User=0:0
+ReadOnly=true
+Tmpfs=/tmp:rw,nosuid,nodev,noexec,size=128m
+NoNewPrivileges=true
+PodmanArgs=--memory=2g --cpus=2 --pids-limit=256
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

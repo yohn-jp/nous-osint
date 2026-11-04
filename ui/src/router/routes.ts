@@ -12,6 +12,7 @@ const routes: RouteRecordRaw[] = [{
     { path: 'sources', name: 'sources', component: () => import('../pages/SourcesPage.vue') },
     { path: 'sources/new', name: 'source-onboarding', component: () => import('../pages/SourceOnboardingPage.vue') },
     { path: 'admin/sources', name: 'admin-sources', component: () => import('../pages/AdminSourcesPage.vue') },
+    { path: 'admin/reports', name: 'admin-reports', component: () => import('../pages/AdminReportsPage.vue') },
     { path: 'admin/sources/new', name: 'admin-new', component: () => import('../pages/AdminSourceFormPage.vue') },
     { path: 'admin/sources/:id/edit', name: 'admin-edit', component: () => import('../pages/AdminSourceFormPage.vue') },
   ],

@@ -1,0 +1,49 @@
+ARG PYTHON_BASE=docker.io/library/python@sha256:1148dbb014615300fa7e713b2f94f550c0d1c69780c0805f84f093ceee34dd0b
+ARG NODE_BASE=docker.io/library/node:24-bookworm-slim@sha256:a43f7fc3e52e87d12a905f46eea0275def84ca8f2981a5b53fed44d7fb398ee0
+
+FROM ${NODE_BASE} AS astro-build
+WORKDIR /app/reports/site
+COPY reports/site/package.json reports/site/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY reports/site/ ./
+RUN npm run build
+
+FROM ${PYTHON_BASE}
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ASTRO_TELEMETRY_DISABLED=1 \
+    npm_config_cache=/tmp/npm-cache \
+    NOUS_CODEX_EXPECTED_VERSION=0.166.0 \
+    NOUS_CODEX_HOME=/var/lib/nous-codex \
+    NOUS_REPORT_PRIVATE_DIR=/var/lib/nous-reports/private \
+    NOUS_REPORT_SITE_DIR=/var/lib/nous-reports/site
+WORKDIR /app
+COPY pyproject.toml /app/
+COPY src /app/src
+RUN pip install --no-cache-dir . \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates util-linux \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node and npm are needed only while the Python Worker builds a release. There
+# is no Node service or listener in this image.
+COPY --from=astro-build /usr/local/bin/node /usr/local/bin/node
+COPY --from=astro-build /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && npm --version \
+    && npm install --global --no-audit --no-fund @openai/codex@0.166.0 \
+    && test "$(codex --version)" = "codex-cli 0.166.0"
+
+COPY alembic.ini /app/alembic.ini
+COPY migrations /app/migrations
+COPY sources /app/sources
+COPY reports /app/reports
+COPY --from=astro-build /app/reports/site/node_modules /app/reports/site/node_modules
+RUN test -f /app/reports/schemas/article-v1.schema.json \
+    && test -d /app/reports/site/node_modules/astro
+
+# Root inside the dedicated rootless container reads its Podman secret and
+# prepares private volume permissions; Codex itself is dropped to UID/GID 10002.
+USER 0:0
+CMD ["python", "-m", "nous.report_worker"]

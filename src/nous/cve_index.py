@@ -6,8 +6,10 @@ adapter; mentions and other vulnerability records are not exploitation claims.
 from __future__ import annotations
 
 import re
+from types import SimpleNamespace
 from sqlalchemy import delete, select
-from .models import CveItemLink
+from .models import CveItemLink, CveItemVersionLink
+from .registry import ADAPTERS
 
 CVE_ID_PATTERN = r"^CVE-[0-9]{4}-[0-9]{4,}$"
 _CVE_ID = re.compile(CVE_ID_PATTERN)
@@ -18,6 +20,22 @@ _MAX_ID_LENGTH = 64
 
 def valid_cve_id(value: str) -> bool:
     return isinstance(value, str) and len(value) <= _MAX_ID_LENGTH and bool(_CVE_ID.fullmatch(value))
+
+
+def authoritative_kev_version(*, source_key: str, source_origin: str, external_id: str,
+                              attributes, provenance, cve_id: str) -> bool:
+    """Trust KEV only from the official CISA source and its recorded parser."""
+    attrs = attributes if isinstance(attributes, dict) else {}
+    recorded = provenance if isinstance(provenance, dict) else {}
+    vulnerability = attrs.get("vulnerability")
+    return (
+        source_key == "cisa-kev" and source_origin == "official" and
+        recorded.get("adapter") == "cisa_kev_v1" and
+        valid_cve_id(cve_id) and external_id == cve_id and
+        isinstance(vulnerability, dict) and
+        vulnerability.get("cve_id") == cve_id and
+        vulnerability.get("known_exploited") is True
+    )
 
 
 def cve_relations(source, raw: dict) -> dict[str, str]:
@@ -61,6 +79,60 @@ def cve_relations(source, raw: dict) -> dict[str, str]:
     return relations
 
 
+def version_cve_relations(*, attributes, provenance, external_id: str,
+                          source_key: str | None = None,
+                          source_origin: str | None = None) -> dict[str, str]:
+    """Read a frozen relation map or derive only from this version's snapshot.
+
+    Legacy item versions predate ``cve_relations``. Their version-local title,
+    structured vulnerability fields, immutable external ID, and recorded
+    adapter can still support the canonical relation rules. Current link rows
+    are deliberately not consulted because they cannot reconstruct as-of state.
+    """
+    attrs = attributes if isinstance(attributes, dict) else {}
+    frozen = attrs.get("cve_relations")
+    if isinstance(frozen, dict):
+        relations = {}
+        for cve_id, relation in frozen.items():
+            if (not valid_cve_id(cve_id) or not isinstance(relation, str) or
+                    relation not in {"kev", "record", "reference", "title_mention"}):
+                continue
+            if relation == "kev" and not authoritative_kev_version(
+                    source_key=source_key or "", source_origin=source_origin or "",
+                    external_id=external_id, attributes=attrs, provenance=provenance,
+                    cve_id=cve_id):
+                continue
+            relations[cve_id] = relation
+        return relations
+    recorded_adapter = provenance.get("adapter") if isinstance(provenance, dict) else None
+    if (not isinstance(recorded_adapter, str) or not recorded_adapter or
+            not isinstance(external_id, str)):
+        return {}
+    # Source.kind can change when a custom feed is reconfigured. The adapter
+    # recorded with this immutable observation determines its original kind.
+    historical_kinds = [kind for kind, adapters in ADAPTERS.items()
+                        if recorded_adapter in adapters]
+    if len(historical_kinds) != 1:
+        return {}
+    raw = dict(attrs)
+    raw["id"] = external_id
+    raw.setdefault("title", "")
+    try:
+        relations = cve_relations(
+            SimpleNamespace(adapter=recorded_adapter, kind=historical_kinds[0]), raw,
+        )
+    except (TypeError, ValueError):
+        return {}
+    relations = {
+        cve_id: relation for cve_id, relation in relations.items()
+        if relation != "kev" or authoritative_kev_version(
+            source_key=source_key or "", source_origin=source_origin or "",
+            external_id=external_id, attributes=attrs, provenance=provenance,
+            cve_id=cve_id)
+    }
+    return relations
+
+
 def sync_item_cves(db, item, source, raw: dict):
     """Replace only this item's current links in its normal observation TX."""
     target = cve_relations(source, raw)
@@ -79,3 +151,18 @@ def sync_item_cves(db, item, source, raw: dict):
             previous.relation = relation
         else:
             db.add(CveItemLink(item_id=item.id, cve_id=cve, relation=relation))
+
+
+def record_item_version_cves(db, item_version_id: int, relations: dict[str, str]):
+    """Store exact relation grades alongside their immutable observation."""
+    if not isinstance(relations, dict):
+        raise ValueError("version CVE relations must be an object")
+    rows = []
+    for cve_id, relation in relations.items():
+        if (not valid_cve_id(cve_id) or not isinstance(relation, str) or
+                relation not in {"kev", "record", "reference", "title_mention"}):
+            raise ValueError("invalid version CVE relation")
+        rows.append(CveItemVersionLink(
+            item_version_id=item_version_id, cve_id=cve_id, relation=relation,
+        ))
+    db.add_all(rows)

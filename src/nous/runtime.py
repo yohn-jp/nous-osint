@@ -11,7 +11,7 @@ from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from .adapters import extract
 from .job_postings import fetch_lever_board
-from .cve_index import sync_item_cves
+from .cve_index import cve_relations, record_item_version_cves, sync_item_cves
 from .db import session_factory
 from .fetch import fetch
 from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source, now
@@ -98,6 +98,10 @@ def store_item(db, source, raw, final_url):
         attrs["job"] = raw["job"]
     if source.item_kind == "vulnerability" and isinstance(raw.get("vulnerability"), dict):
         attrs["vulnerability"] = raw["vulnerability"]
+    if source.item_kind != "job_posting":
+        # Freeze exact CVE identities/relation grades into this immutable
+        # observation so cutoff queries do not inherit a later link mutation.
+        attrs["cve_relations"] = cve_relations(source, raw)
     digest = hashlib.sha256(json.dumps(attrs, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     db.execute(insert(Item).values(source_id=source.id, external_id=external_id,
                                    canonical_url=url, kind=source.item_kind, title=title)
@@ -118,11 +122,14 @@ def store_item(db, source, raw, final_url):
         item.current_hash = digest
         item.title = title
         item.canonical_url = url
-        db.add(ItemVersion(item_id=item.id, version=item.current_version, sha256=digest,
-                           attributes=attrs, provenance={"source_url": source.url,
-                           "final_url": final_url, "item_url": url,
-                           "retrieved_at": now().isoformat(), "adapter": source.adapter,
-                           "extraction_method": "deterministic_parser"}))
+        version = ItemVersion(item_id=item.id, version=item.current_version, sha256=digest,
+                              attributes=attrs, provenance={"source_url": source.url,
+                              "final_url": final_url, "item_url": url,
+                              "retrieved_at": now().isoformat(), "adapter": source.adapter,
+                              "extraction_method": "deterministic_parser"})
+        db.add(version)
+        db.flush()
+        record_item_version_cves(db, version.id, attrs.get("cve_relations", {}))
 
 def parse_timestamp(value):
     if not isinstance(value, str):

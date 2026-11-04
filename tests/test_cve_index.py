@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from nous.cve_index import cve_relations, valid_cve_id
+from nous.cve_index import cve_relations, valid_cve_id, version_cve_relations
 
 
 def test_cve_identity_is_strict():
@@ -63,3 +63,70 @@ def test_too_many_title_ids_fail_without_partial_links():
     raw = {"title": " ".join(f"CVE-2026-{n:04d}" for n in range(1000, 1034))}
     with pytest.raises(ValueError, match="too many"):
         cve_relations(source, raw)
+
+
+def test_legacy_version_relations_use_immutable_fields_and_recorded_adapter():
+    title_id = "CVE-2026-12345"
+    title_relations = version_cve_relations(
+        attributes={"title": f"Advisory references {title_id}"},
+        provenance={"adapter": "rss_v1"}, external_id="advisory-1",
+        source_key="legacy-vendor", source_origin="official",
+    )
+    assert title_relations == {title_id: "title_mention"}
+
+    record_id = "CVE-2026-67890"
+    record_relations = version_cve_relations(
+        attributes={"title": "Vendor vulnerability", "vulnerability": {"cve_id": record_id}},
+        provenance={"adapter": "json_v1"}, external_id=record_id,
+        source_key="legacy-vendor", source_origin="official",
+    )
+    assert record_relations == {record_id: "record"}
+
+    kev_relations = version_cve_relations(
+        attributes={"title": "CISA record", "vulnerability": {
+            "cve_id": record_id, "known_exploited": True,
+        }},
+        provenance={"adapter": "cisa_kev_v1"}, external_id=record_id,
+        source_key="cisa-kev", source_origin="official",
+    )
+    assert kev_relations == {record_id: "kev"}
+    # The legacy parser comes from immutable provenance; the current
+    # Source.adapter is intentionally not an input to reconstruction.
+    assert version_cve_relations(
+        attributes={"title": f"Advisory references {title_id}"},
+        provenance={"adapter": "rss_v1"}, external_id="advisory-1",
+        source_key="legacy-vendor", source_origin="official",
+    ) == {title_id: "title_mention"}
+
+    # CISA authority requires the canonical source identity and official
+    # provenance in addition to a structurally valid KEV record.
+    kev_attributes = {"title": "CISA record", "vulnerability": {
+        "cve_id": record_id, "known_exploited": True,
+    }}
+    kev_provenance = {"adapter": "cisa_kev_v1"}
+    assert version_cve_relations(
+        attributes=kev_attributes, provenance=kev_provenance, external_id=record_id,
+        source_key="vendor-feed", source_origin="official",
+    ) == {}
+    assert version_cve_relations(
+        attributes=kev_attributes, provenance=kev_provenance, external_id=record_id,
+        source_key="cisa-kev", source_origin="community",
+    ) == {}
+
+def test_legacy_record_grade_uses_recorded_adapter_kind_not_current_source_kind():
+    cve_id = "CVE-2026-45678"
+    attrs = {"title": f"Advisory mentions {cve_id}"}
+    # The immutable RSS GUID may itself be a CVE ID. It is not a native JSON
+    # record even if an operator later changes this source to a JSON adapter.
+    assert version_cve_relations(
+        attributes=attrs, provenance={"adapter": "rss_v1"}, external_id=cve_id,
+        source_key="custom-vendor", source_origin="custom",
+    ) == {cve_id: "title_mention"}
+    assert version_cve_relations(
+        attributes=attrs, provenance={"adapter": "json_v1"}, external_id=cve_id,
+        source_key="custom-vendor", source_origin="custom",
+    ) == {cve_id: "record"}
+    assert version_cve_relations(
+        attributes=attrs, provenance={"adapter": "unrecognized_adapter"}, external_id=cve_id,
+        source_key="custom-vendor", source_origin="custom",
+    ) == {}

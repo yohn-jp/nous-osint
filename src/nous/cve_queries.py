@@ -8,81 +8,147 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import case, select
-from .cve_index import valid_cve_id
-from .models import CveItemLink, Item, ItemVersion, Source
+from sqlalchemy import case, func, select
+from .cve_index import valid_cve_id, version_cve_relations
+from .models import CveItemVersionLink, Item, ItemVersion, Source
+
+_RELATIONS = {"kev", "record", "reference", "title_mention"}
 
 
-def query_cve(db, cve_id: str):
+def _version_at(db, item_id: int, cutoff: datetime):
+    return db.scalar(select(ItemVersion).where(
+        ItemVersion.item_id == item_id, ItemVersion.observed_at <= cutoff
+    ).order_by(ItemVersion.observed_at.desc(), ItemVersion.id.desc()).limit(1))
+
+
+def _relation_at(version: ItemVersion, item: Item, source: Source, cve_id: str):
+    attrs = version.attributes if isinstance(version.attributes, dict) else {}
+    relations = version_cve_relations(
+        attributes=attrs, provenance=version.provenance,
+        external_id=item.external_id, source_key=source.source_key,
+        source_origin=source.origin,
+    )
+    relation = relations.get(cve_id)
+    return relation if relation in _RELATIONS else None
+
+
+def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
     if not valid_cve_id(cve_id):
         raise ValueError("invalid CVE identifier")
+    cutoff = observed_cutoff or datetime.now(timezone.utc)
+    if cutoff.tzinfo is None:
+        raise ValueError("CVE observation cutoff must be timezone-aware")
+    cutoff = cutoff.astimezone(timezone.utc)
 
     kev_sources = db.scalars(
         select(Source).where(Source.source_key == "cisa-kev",
-                             Source.adapter == "cisa_kev_v1",
-                             Source.last_success_at.is_not(None))
+                             Source.origin == "official",
+                             Source.last_success_at.is_not(None),
+                             Source.last_success_at <= cutoff)
         .order_by(Source.last_success_at.desc()).limit(1)
     ).all()
     catalog_as_of = kev_sources[0].last_success_at if kev_sources else None
     fresh = (catalog_as_of is not None and
-             catalog_as_of >= datetime.now(timezone.utc) - timedelta(hours=48))
+             catalog_as_of >= cutoff - timedelta(hours=48))
 
+    candidate_item_ids = select(ItemVersion.item_id).join(
+        CveItemVersionLink,
+        CveItemVersionLink.item_version_id == ItemVersion.id,
+    ).where(CveItemVersionLink.cve_id == cve_id).distinct()
+    latest_versions = select(
+        ItemVersion.id.label("item_version_id"),
+        ItemVersion.item_id.label("item_id"),
+        func.row_number().over(
+            partition_by=ItemVersion.item_id,
+            order_by=(ItemVersion.observed_at.desc(), ItemVersion.id.desc()),
+        ).label("version_rank"),
+    ).where(
+        ItemVersion.observed_at <= cutoff,
+        ItemVersion.item_id.in_(candidate_item_ids),
+    ).subquery()
     priority = case(
-        (CveItemLink.relation == "kev", 0),
-        (CveItemLink.relation == "record", 1),
-        (CveItemLink.relation == "reference", 2),
+        (CveItemVersionLink.relation == "kev", 0),
+        (CveItemVersionLink.relation == "record", 1),
+        (CveItemVersionLink.relation == "reference", 2),
         else_=3,
     )
     rows = db.execute(
-        select(CveItemLink, Item, Source, ItemVersion)
-        .join(Item, CveItemLink.item_id == Item.id)
+        select(CveItemVersionLink, Item, Source, ItemVersion)
+        .join(latest_versions,
+              latest_versions.c.item_version_id == CveItemVersionLink.item_version_id)
+        .join(ItemVersion, ItemVersion.id == latest_versions.c.item_version_id)
+        .join(Item, ItemVersion.item_id == Item.id)
         .join(Source, Item.source_id == Source.id)
-        .outerjoin(ItemVersion, (ItemVersion.item_id == Item.id) &
-                   (ItemVersion.version == Item.current_version))
-        .where(CveItemLink.cve_id == cve_id)
-        .order_by(priority, Item.last_seen_at.desc(), Item.id)
+        .where(latest_versions.c.version_rank == 1,
+               CveItemVersionLink.cve_id == cve_id,
+               Item.first_seen_at <= cutoff)
+        .order_by(priority, Item.id)
         .limit(51)
     ).all()
 
     associated = []
     kev = None
+    seen_items = set()
     for link, item, source, version in rows:
-        if (link.relation == "kev" and source.source_key == "cisa-kev" and
-                source.adapter == "cisa_kev_v1" and
-                item.state == "current"):
-            # Preserve only approved bounded CISA fields, not raw descriptions
-            # or content from linked publishers.
-            details = (version.attributes.get("vulnerability", {})
-                       if version and isinstance(version.attributes, dict) else {})
-            if not isinstance(details, dict):
-                details = {}
+        relation = _relation_at(version, item, source, cve_id)
+        if relation is None or relation != link.relation:
+            continue
+        attrs = version.attributes if isinstance(version.attributes, dict) else {}
+        details = attrs.get("vulnerability") if isinstance(attrs.get("vulnerability"), dict) else {}
+        if relation == "kev" and source.source_key == "cisa-kev":
             if kev is None:
                 kev = {
-                    "status": "listed",
-                    "catalog_as_of": catalog_as_of,
-                    "catalog_fresh": fresh,
-                    "item_id": item.id,
+                    "status": "listed", "catalog_as_of": catalog_as_of,
+                    "catalog_fresh": fresh, "item_id": item.id,
                     "date_added": details.get("date_added"),
                     "due_date": details.get("due_date"),
-                    "vendor": details.get("vendor"),
-                    "product": details.get("product"),
-                    "known_ransomware_campaign_use":
-                        details.get("ransomware_campaign_use"),
+                    "vendor": details.get("vendor"), "product": details.get("product"),
+                    "known_ransomware_campaign_use": details.get("ransomware_campaign_use"),
                     "source_url": source.url,
                 }
         if len(associated) < 50:
             associated.append({
-                "item_id": item.id,
-                "source": source.source_key,
-                "relation": link.relation,
-                "kind": item.kind,
-                "state": item.state,
-                "title": item.title,
-                "url": item.canonical_url,
-                "last_seen_at": item.last_seen_at,
-                "source_url": source.url,
+                "item_id": item.id, "source": source.source_key,
+                "relation": relation, "kind": item.kind,
+                "state": item.state, "title": attrs.get("title", item.title),
+                "url": attrs.get("url", item.canonical_url),
+                "last_seen_at": version.observed_at, "source_url": source.url,
                 "source_adapter": source.adapter,
             })
+            seen_items.add(item.id)
+
+    # The authoritative CISA row is also looked up by its normalized exact ID,
+    # so a link retired after the cutoff cannot erase a historical listing.
+    if kev_sources:
+        cisa = kev_sources[0]
+        kev_item = db.scalar(select(Item).where(
+            Item.source_id == cisa.id, Item.external_id == cve_id,
+            Item.first_seen_at <= cutoff))
+        if kev_item is not None:
+            kev_version = _version_at(db, kev_item.id, cutoff)
+            relation = (_relation_at(kev_version, kev_item, cisa, cve_id)
+                        if kev_version else None)
+            if relation == "kev":
+                attrs = kev_version.attributes if isinstance(kev_version.attributes, dict) else {}
+                details = attrs.get("vulnerability") if isinstance(attrs.get("vulnerability"), dict) else {}
+                kev = {
+                    "status": "listed", "catalog_as_of": catalog_as_of,
+                    "catalog_fresh": fresh, "item_id": kev_item.id,
+                    "date_added": details.get("date_added"),
+                    "due_date": details.get("due_date"),
+                    "vendor": details.get("vendor"), "product": details.get("product"),
+                    "known_ransomware_campaign_use": details.get("ransomware_campaign_use"),
+                    "source_url": cisa.url,
+                }
+                if kev_item.id not in seen_items and len(associated) < 50:
+                    associated.insert(0, {
+                        "item_id": kev_item.id, "source": cisa.source_key,
+                        "relation": "kev", "kind": kev_item.kind,
+                        "state": kev_item.state, "title": attrs.get("title", kev_item.title),
+                        "url": attrs.get("url", kev_item.canonical_url),
+                        "last_seen_at": kev_version.observed_at,
+                        "source_url": cisa.url, "source_adapter": cisa.adapter,
+                    })
     if kev is None:
         kev = {
             "status": "not_listed" if fresh else "unknown",

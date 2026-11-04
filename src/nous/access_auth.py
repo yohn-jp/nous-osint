@@ -28,8 +28,40 @@ _STATIC_ASSET = re.compile(r"^/assets/[A-Za-z0-9._-]{1,255}$")
 _API_ITEM = re.compile(r"^/v1/items/[0-9]+$")
 _API_CVE = re.compile(r"^/v1/cves/CVE-[0-9]{4}-[0-9]{4,}$")
 _API_VERSIONS = re.compile(r"^/v1/items/[0-9]+/versions$")
-_SPA_ROUTE = re.compile(r"^/(?:explore|changes|sources|sources/new|admin/sources|admin/sources/new|admin/sources/[a-z][a-z0-9-]{2,99}/edit|items/[0-9]+|cves/CVE-[0-9]{4}-[0-9]{4,})$")
-_ADMIN_ROUTE = re.compile(r"^/v1/admin/(?:session|catalog|sources|audits|sources/[a-z][a-z0-9-]{2,99}(?:/settings|/probe)?)$")
+_SPA_ROUTE = re.compile(r"^/(?:explore|changes|sources|sources/new|admin/sources|admin/sources/new|admin/reports|admin/sources/[a-z][a-z0-9-]{2,99}/edit|items/[0-9]+|cves/CVE-[0-9]{4}-[0-9]{4,})$")
+_ADMIN_ROUTE = re.compile(
+    r"^/v1/admin/(?:session|catalog|sources|audits|report-templates|"
+    r"report-runs(?:/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12})?|"
+    r"report-schedules(?:/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12})?|"
+    r"sources/[a-z][a-z0-9-]{2,99}(?:/settings|/probe)?)$"
+)
+_ADMIN_SOURCE_KEY = re.compile(r"^/v1/admin/sources/[a-z][a-z0-9-]{2,99}$")
+_ADMIN_SOURCE_SETTINGS = re.compile(r"^/v1/admin/sources/[a-z][a-z0-9-]{2,99}/settings$")
+_ADMIN_SOURCE_PROBE = re.compile(r"^/v1/admin/sources/[a-z][a-z0-9-]{2,99}/probe$")
+_ADMIN_RUN_DETAIL = re.compile(
+    r"^/v1/admin/report-runs/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+_ADMIN_SCHEDULE_DETAIL = re.compile(
+    r"^/v1/admin/report-schedules/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+_REPORT_INDEX = re.compile(r"^/reports/$")
+_REPORT_ARTICLE = re.compile(
+    r"^/reports/(?:security|cve)/(?=[a-z0-9-]{1,128}/)"
+    r"[a-z0-9]+(?:-[a-z0-9]+)*/$"
+)
+_REPORT_ASSET = re.compile(
+    r"^/reports/_astro/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}[.-]"
+    r"[A-Za-z0-9_-]{8,64}\.(?:css|woff2?|png|webp)$"
+)
+_REPORT_CSP = (
+    "default-src 'none'; script-src 'none'; style-src 'self'; img-src 'self'; "
+    "font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; "
+    "object-src 'none'"
+)
 
 
 class AccessDenied(Exception):
@@ -225,7 +257,32 @@ class AccessAssertionMiddleware:
         if path in ("/mcp", "/mcp/"):
             return True
         if _ADMIN_ROUTE.fullmatch(path):
-            return method in ("GET", "POST", "PUT", "PATCH")
+            if path in {
+                "/v1/admin/session", "/v1/admin/catalog", "/v1/admin/audits",
+                "/v1/admin/report-templates", "/v1/admin/report-runs",
+                "/v1/admin/report-schedules",
+            }:
+                if path == "/v1/admin/report-runs":
+                    return method in ("GET", "POST")
+                if path == "/v1/admin/report-schedules":
+                    return method in ("GET", "POST")
+                return method == "GET"
+            if path == "/v1/admin/sources":
+                return method in ("GET", "POST")
+            if _ADMIN_SOURCE_KEY.fullmatch(path):
+                return method == "PUT"
+            if _ADMIN_SOURCE_SETTINGS.fullmatch(path):
+                return method == "PATCH"
+            if _ADMIN_SOURCE_PROBE.fullmatch(path):
+                return method == "POST"
+            if _ADMIN_RUN_DETAIL.fullmatch(path):
+                return method == "GET"
+            if _ADMIN_SCHEDULE_DETAIL.fullmatch(path):
+                return method == "PATCH"
+            return False
+        if (_REPORT_INDEX.fullmatch(path) or _REPORT_ARTICLE.fullmatch(path)
+                or _REPORT_ASSET.fullmatch(path)):
+            return method in ("GET", "HEAD")
         if path in ("/", "/index.html") or _STATIC_ASSET.fullmatch(path) or _SPA_ROUTE.fullmatch(path):
             return method in ("GET", "HEAD")
         if method != "GET":
@@ -249,6 +306,16 @@ class AccessAssertionMiddleware:
             return await self.app(scope, receive, send)
         path = scope.get("path", "")
         method = scope.get("method", "").upper()
+        report_path = path == "/reports" or path.startswith("/reports/")
+        raw_path = scope.get("raw_path")
+        try:
+            canonical_path = path.encode("ascii")
+        except UnicodeEncodeError:
+            canonical_path = b""
+        exact_report_request = (
+            not report_path or
+            (raw_path == canonical_path and not scope.get("query_string", b""))
+        )
 
         async def send_with_cache(message):
             if message["type"] == "http.response.start":
@@ -264,13 +331,17 @@ class AccessAssertionMiddleware:
                                else b"no-store")
                 headers_out = [(key, value) for key, value in message.get("headers", [])
                                if key.lower() not in (b"cache-control", b"cdn-cache-control",
-                                                      b"cloudflare-cdn-cache-control")]
+                                                      b"cloudflare-cdn-cache-control",
+                                                      b"content-security-policy")]
                 headers_out.extend([(b"cache-control", cache_value),
                                     (b"x-content-type-options", b"nosniff")])
+                if report_path:
+                    headers_out.append((b"content-security-policy", _REPORT_CSP.encode("ascii")))
                 message = {**message, "headers": headers_out}
             await send(message)
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
-        if not self._allowed_host(headers) or not self._allowed_path(path, method):
+        if (not self._allowed_host(headers) or not exact_report_request
+                or not self._allowed_path(path, method)):
             return await JSONResponse({"detail": "not found"}, status_code=404)(
                 scope, receive, send_with_cache
             )

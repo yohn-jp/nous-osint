@@ -34,6 +34,14 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - run: python -m pip install -e '.[dev]'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: reports/site/package-lock.json
+      - name: Install Astro dependencies used by report pipeline fixture tests
+        working-directory: reports/site
+        run: npm ci --no-audit --no-fund
       # Independent checks share a runner and execute via GitHub Actions' native
       # parallel steps. The database migration completes before the dependent
       # snapshot/pytest steps below.
@@ -55,13 +63,44 @@ jobs:
           docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "CREATE ROLE nous LOGIN"
           docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO nous; GRANT SELECT ON ALL TABLES IN SCHEMA public TO nous; GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO nous"
           docker exec "$db" psql -U postgres -d nous -v ON_ERROR_STOP=1 -c "GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO nous"
-          if ! timeout 30s docker exec -i "$db" bash -s < scripts/snapshot-dump.sh > /tmp/nous-ci.dump 2> /tmp/nous-ci.meta; then
+          if ! timeout 30s docker exec -i "$db" env NOUS_SNAPSHOT_DATABASE_ONLY=1 bash -s < scripts/snapshot-dump.sh > /tmp/nous-ci.dump 2> /tmp/nous-ci.meta; then
             cat /tmp/nous-ci.meta >&2
             exit 1
           fi
-          grep -Fq 'NOUS_SNAPSHOT_METADATA=0007|0|0|0' /tmp/nous-ci.meta
+          grep -Fq 'NOUS_SNAPSHOT_METADATA=0009|0|0|0|0|0|0|0|none' /tmp/nous-ci.meta
           docker exec -i "$db" pg_restore -l < /tmp/nous-ci.dump | grep -q sources
       - run: pytest -q
+
+
+  cve-role-grants:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: nous
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nous"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:test@localhost:5432/nous
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install -e '.[dev]'
+      - name: Prepare disposable database at revision 0008
+        run: alembic upgrade 0008
+      - name: Verify 0009 grants through canonical non-superuser roles
+        run: python scripts/test-cve-role-grants.py
 
 
   frontend:
@@ -86,8 +125,81 @@ jobs:
         run: test -f dist/spa/index.html
 
 
+  reports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install jsonschema==4.25.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: reports/site/package-lock.json
+      - name: Validate report JSON schemas
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from jsonschema import Draft202012Validator
+
+          for path in sorted(Path('reports/schemas').glob('*.schema.json')):
+              Draft202012Validator.check_schema(json.loads(path.read_text(encoding='utf-8')))
+          PY
+      - name: Install pinned Astro dependencies
+        working-directory: reports/site
+        run: npm ci --no-audit --no-fund
+      - name: Build report site
+        working-directory: reports/site
+        run: npm run build
+      - name: Check report site output and local links
+        run: |
+          test -f reports/site/dist/index.html
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          root = Path('reports/site/dist')
+          pages = sorted(root.rglob('*.html'))
+          assert pages, 'Astro emitted no HTML pages'
+
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.values = []
+              def handle_starttag(self, tag, attrs):
+                  for name, value in attrs:
+                      if name in {'href', 'src'} and value:
+                          self.values.append(value)
+
+          for page in pages:
+              parser = Links()
+              parser.feed(page.read_text(encoding='utf-8'))
+              for value in parser.values:
+                  parsed = urlsplit(value)
+                  if parsed.scheme or parsed.netloc or value.startswith('#'):
+                      continue
+                  path = parsed.path
+                  if not path:
+                      continue
+                  if path.startswith('/reports/'):
+                      target = root / path.removeprefix('/reports/')
+                  elif path.startswith('/'):
+                      continue
+                  else:
+                      target = page.parent / path
+                  if target.is_dir():
+                      target = target / 'index.html'
+                  assert target.resolve().is_relative_to(root.resolve()), f'link escapes site: {value}'
+                  assert target.is_file(), f'broken local link in {page}: {value}'
+          PY
+
+
   image:
-    needs: [check, frontend]
+    needs: [check, frontend, reports]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -127,4 +239,48 @@ jobs:
         with:
           name: nous-image-digest
           path: image-ref.txt
+          retention-days: 90
+
+
+  report-worker-image:
+    needs: [check, reports]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - name: Authenticate to GHCR on main only
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build report Worker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Containerfile.reports
+          platforms: linux/amd64
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ghcr.io/yohn-jp/nous-osint-reports:main
+          cache-from: type=gha,scope=nous-report-worker
+          cache-to: type=gha,mode=max,scope=nous-report-worker
+      - name: Record immutable report Worker image reference
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          test -n "$IMAGE_DIGEST"
+          echo "ghcr.io/yohn-jp/nous-osint-reports@$IMAGE_DIGEST" | tee report-worker-image-ref.txt
+          echo "Report Worker: ghcr.io/yohn-jp/nous-osint-reports@$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload report Worker deployment reference
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nous-report-worker-image-digest
+          path: report-worker-image-ref.txt
           retention-days: 90

@@ -8,17 +8,23 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
 
 1. Install Podman and `uidmap`; create a dedicated unprivileged `nous` account.
    Enable lingering with `loginctl enable-linger nous`.
-2. Build the application image from `Containerfile`. Record its immutable image
-   ID and insert it into the three app Quadlets. Pin PostgreSQL to its reviewed
-   registry digest. Copy the Quadlets into `~nous/.config/containers/systemd/`.
+2. Build the application image from `Containerfile` and the isolated report
+   Worker image from `Containerfile.reports`. Record each immutable image digest
+   from CI. Update the MCP and API references to the reviewed application digest
+   and the report Worker Quadlet to the report image digest. Pin PostgreSQL to
+   its reviewed registry digest. Copy the Quadlets and volume units into
+   `~nous/.config/containers/systemd/`.
 3. Create 0600 temporary files containing a randomly generated DB password and
    `postgresql+psycopg://nous:<password>@nous-db:5432/nous`. Import them as
    Podman secrets `nous-db-password`, `nous-database-url` (migrations),
    `nous-api-database-url` and
    `nous-runtime-database-url` after provisioning separate `nous_api` and
    `nous_runtime` SQL roles. For remote MCP, provision a `nous_mcp` role with
-   SELECT-only grants and import its URL as `nous-mcp-database-url`, then securely
-   remove the temporary files. Never put a password in Git or a Quadlet.
+   SELECT-only grants and import its URL as `nous-mcp-database-url`. Provision
+   `nous_report_worker` before migration `0009` so its conditional CVE-link
+   grant can apply. Create `nous_admin` before applying the report admin grants
+   below. Import the Worker URL as `nous-report-worker-database-url`. Securely
+   remove temporary files. Never put a password in Git or a Quadlet.
 4. Run `systemctl --user daemon-reload`; start `nous-db.service`. Wait for
    `podman exec nous-db pg_isready -U nous -d nous` to succeed.
 5. Run the migration as a one-off container on `nous-private` with the database
@@ -37,6 +43,77 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    `default.target.wants` links; generated units cannot be enabled with
    `systemctl --user enable`.
 
+After role creation and `alembic upgrade head` has created migration `0009`,
+apply the report and admin table grants below. Create `nous_report_worker`
+before migration `0009` so its conditional CVE-link grant applies; then run
+these report-table grants. The report Worker reads only the source observation
+tables it needs and has no DELETE privilege:
+
+```sql
+GRANT CONNECT ON DATABASE nous TO nous_report_worker;
+GRANT USAGE ON SCHEMA public TO nous_report_worker;
+GRANT SELECT ON sources, items, item_versions, cve_item_links TO nous_report_worker;
+GRANT SELECT, INSERT, UPDATE ON report_runs, report_schedules TO nous_report_worker;
+GRANT SELECT, INSERT ON reports, report_evidence TO nous_report_worker;
+GRANT SELECT, INSERT, UPDATE ON report_site_state TO nous_report_worker;
+
+GRANT SELECT, INSERT, UPDATE ON report_runs, report_schedules TO nous_admin;
+GRANT SELECT ON reports TO nous_admin;
+```
+
+Migration `0009` conditionally grants access to the immutable CVE relation table
+when these pre-existing roles are present. If a role is provisioned after the
+migration, apply only these table grants as the database owner:
+
+```sql
+GRANT INSERT ON cve_item_version_links TO nous_runtime;
+GRANT SELECT ON cve_item_version_links TO nous_api, nous_mcp, nous_report_worker;
+```
+
+The collection runtime needs INSERT to record relations for new observations.
+The API, remote MCP and report Worker need SELECT to display or analyze them.
+Do not grant UPDATE, DELETE, TRUNCATE or blanket default privileges on this
+table. Existing grants on other tables remain as provisioned above.
+
+To verify the migration grant boundary, use a separate disposable database
+migrated through `0008`. Set `DATABASE_URL` or `DATABASE_URL_FILE` to its admin
+URL and run `.venv/bin/python scripts/test-cve-role-grants.py`. The script
+creates the four canonical roles with temporary passwords, upgrades the
+database through `0009`, tests each grant through that role's own connection,
+then removes the roles and any fixture rows. Do not run it against the shared
+application database; the URL must allow role creation and connections from the
+test process.
+
+The Access-subject allowlist still gates the admin API; `nous_admin` receives no
+write grant on `reports` or `report_evidence`. Do not add blanket default
+privileges for future tables. Reapply explicit least-privilege grants after a
+migration that adds report tables. The Worker mounts `nous-report-site` read/write,
+while the MCP gateway mounts it read-only. Private stage artifacts and Codex
+state use separate persistent volumes. Keep the Worker secret role separate
+from API, MCP, collection and migration roles.
+
+Start `nous-report-worker.service` only after the `nous-report-worker-database-url`
+Podman secret and named volume units exist. The container is rootless, has a
+read-only root filesystem, mounts no Podman socket and exposes no listener. It
+runs `python -m nous.report_worker`; its bundled Node/Astro dependencies are used
+only for one-shot static builds.
+
+The owner must authenticate the official CLI inside the private Codex volume.
+Run the product-supported device flow as the isolated child identity, using a
+terminal attached to the VM:
+
+```sh
+podman exec -it --user 10002:10002 \
+  --env HOME=/var/lib/nous-codex --env CODEX_HOME=/var/lib/nous-codex \
+  nous-report-worker codex login --device-auth
+podman exec nous-report-worker codex --version
+```
+
+The expected CLI is `codex-cli 0.166.0`. Do not copy browser cookies, personal
+tokens or ChatGPT credentials into Nous. Authentication, subscription limits,
+VM networking, and the first owner-authorized generation require separate
+operator verification; they are **NOT_CHECKED** by fixture-based CI.
+
 The VM-side MCP services and read-only role were deployed and verified on
 2026-11-03, including automatic recovery and a full VM reboot. The loaded Tunnel
 route points to the MCP origin with Access required; Cloudflare resources and
@@ -49,13 +126,11 @@ connection failures. Inspect user journals with `journalctl --user -u nous-worke
 ## Backup and restore
 
 Run the backup pull from a separate, always-on backup host with SSH access to the
-VM.
-Install both `scripts/backup-pull.sh` and `scripts/snapshot-dump.sh` together on
-the backup host. The latter is streamed over SSH into the DB container. Keep its backup directory on storage outside the VM; the script streams
-`pg_dump -Fc` over SSH directly into GPG encryption, so
-no plaintext dump is written to disk. GPG must be installed on the backup host,
-and its keyring must contain a public key whose full fingerprint was verified
-out of band. Keep the matching private key separately from the backup files.
+VM. Install `scripts/backup-pull.sh` and `scripts/snapshot-dump.sh` together on
+that host. The helper is uploaded to the VM's `/dev/shm` for the duration of the
+capture. GPG must be installed on the backup host, and its keyring must contain
+a public key whose full fingerprint was verified out of band. Keep the matching
+private key separately from the backup files.
 
 ```sh
 install -d -m 700 ~/.config/nous-osint ~/.config/systemd/user ~/.local/libexec \
@@ -91,26 +166,60 @@ old encrypted dumps after a new dump and manifest have been written.
 `NOUS_BACKUP_SSH_CONFIG` can select an explicit SSH config file when the backup
 host's systemd sandbox cannot read its system-wide SSH config.
 
-The archive and schema/row counts use a single PostgreSQL exported
-repeatable-read snapshot (`pg_dump --snapshot`), not a later live query.
-Each `.dump.gpg` has a JSON manifest with schema version, row counts, and the
-encrypted artifact SHA-256. Validate it with:
+The capture stops an active report Worker and remembers whether it must restart.
+While publication is paused, it takes `pg_dump -Fc` and SQL row counts from one
+exported repeatable-read snapshot, then streams the private report-site volume.
+The database active digest must equal the volume's `current` symlink. The active
+`.manifests/<digest>.json` file map is checked against every HTML page and
+referenced static asset. A mismatch aborts the backup and still restarts a
+previously active Worker. The dump and volume archive are framed and streamed
+through bounded chunks directly to GPG; neither is staged in `/dev/shm` or on
+persistent storage. Only the uploaded helper and small metadata/manifests use
+tmpfs. The stream chunk size defaults to 1 MiB and can be set with
+`NOUS_BACKUP_STREAM_CHUNK_BYTES` from 4 KiB to 8 MiB. Both the external
+`.manifest.json.gpg` and `.backup.gpg` are encrypted to the verified recipient.
+The encrypted stream contains `database.dump`, `report-site.tar` and an
+internal manifest. Run `python3 scripts/test-snapshot-stream.py` to exercise a
+multi-megabyte fixture through the bounded stream at a 4 KiB chunk size; it
+checks the encrypted artifact and confirms no plaintext archive staging files
+or new `/dev/shm` files are created.
+
+Each external JSON manifest includes the encrypted artifact SHA-256, schema
+version, source and report-table counts, active digest, active HTML/asset counts,
+manifest hash, and inner database/site archive hashes. Validate it with:
 
 ```sh
-scripts/restore-test.sh ~/.local/state/nous-osint/backups/<backup>.dump.gpg
+scripts/restore-test.sh ~/.local/state/nous-osint/backups/<backup>.backup.gpg
 ```
 
-This decrypts into a temporary, isolated PostgreSQL container and volume,
-restores without ACL/owner assumptions, verifies all recorded row counts, then
-removes the test database resources. Keep a verified off-VM copy of the
-decryption key; the backup host's public key alone cannot restore data. Never
-copy live PGDATA as a generic archive. Do not commit dumps or keys.
+The restore check accepts the current framed `.backup.gpg` stream and legacy
+`.tar.gpg` report backups. It decrypts both formats incrementally: the DB dump
+goes directly to an isolated PostgreSQL container and the site archive goes into
+a disposable rootless Podman volume. No decrypted archive or dump is staged on
+disk. It verifies schema and row counts, DB/site active digest, the release
+manifest, each HTML page and asset hash, then removes the temporary container,
+volumes, secret and tmpfs password. Run
+`.venv/bin/python scripts/test-restore-formats.py` to create a disposable database
+using the current Alembic migrations, build encrypted fixtures in memory, and
+exercise both restore formats against real rootless Podman/PostgreSQL containers.
+The fixture uses synthetic source data; this is not a full VM restore rehearsal.
+Keep a verified off-VM copy of the decryption key; the backup host's public key
+alone cannot restore data. Never copy live PGDATA as a generic archive. Do not
+commit dumps or keys. A database-only `.dump.gpg` is rejected because it has no
+report-site volume.
 
-On 2026-11-03 the off-VM backup host produced an encrypted dump and manifest,
-then decrypted that exact artifact into an isolated PostgreSQL 18 container and
-volume. Schema `0004`, five sources, 540 items and 540 versions matched the
-manifest. The backup timer is enabled on that host; the recipient private key
-remains outside the repository under the backup user's GPG keyring.
+The report DB snapshot and filesystem archive are not a kernel-level atomic
+cross-resource snapshot. The report Worker is stopped for the entire capture,
+and the SQL active digest, `current` pointer, active manifest, page/asset hashes,
+and checksums are compared. If publication is interrupted between a filesystem
+promotion and its DB commit, the mismatch is detected and capture fails closed.
+This coordination does not freeze unrelated API writes, but the PostgreSQL dump
+and its row counts still use one database snapshot.
+
+Automated report backup/restore and owner-authenticated VM acceptance are
+**NOT_CHECKED** until an actual off-VM encrypted capture and restore plus the
+separate authorized VM procedure have been run. CI only verifies fixture and
+isolated restore paths.
 
 ## Network and sources
 

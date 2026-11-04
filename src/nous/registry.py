@@ -22,6 +22,8 @@ class Policy(BaseModel):
     license_id: str = Field(default="NOASSERTION", min_length=3, max_length=100)
     license_url: str | None = None
     attribution: str | None = Field(default=None, max_length=200)
+    report_quote_allowed: bool = False
+    report_quote_fields: list[str] = Field(default_factory=list, max_length=4)
 
     @field_validator("reviewed_at")
     @classmethod
@@ -31,6 +33,21 @@ class Policy(BaseModel):
         except (ValueError, TypeError) as exc:
             raise ValueError("policy review date must be YYYY-MM-DD") from exc
         return value
+
+    @model_validator(mode="after")
+    def report_quote_rights(self):
+        allowed = {
+            "title", "published_at", "vulnerability.date_added", "vulnerability.due_date",
+            "vulnerability.vendor", "vulnerability.product",
+            "vulnerability.ransomware_campaign_use",
+        }
+        if (len(self.report_quote_fields) != len(set(self.report_quote_fields)) or
+                any(field not in allowed for field in self.report_quote_fields) or
+                (self.report_quote_allowed and
+                 (self.license_id == "NOASSERTION" or not self.report_quote_fields)) or
+                (not self.report_quote_allowed and self.report_quote_fields)):
+            raise ValueError("report quotation needs an explicit reviewed source policy")
+        return self
 
 class SourceConfig(BaseModel):
     id: str = Field(pattern=r"^[a-z][a-z0-9-]{2,99}$")

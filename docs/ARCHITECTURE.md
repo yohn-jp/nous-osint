@@ -1,6 +1,6 @@
 # Nous OSINT — System Architecture
 
-Status: **approved implementation baseline (design only)**  
+Status: **approved single-VM implementation baseline; automated reports are being added on a feature branch**
 Target: **single Linux VM / rootless Podman / systemd Quadlet / PostgreSQL**  
 Updated: 2026-11-03
 
@@ -120,3 +120,33 @@ See [DATA_MODEL.md](DATA_MODEL.md), [QUADLET_DEPLOYMENT.md](QUADLET_DEPLOYMENT.m
 ## CVE identity and KEV evidence
 
 The PostgreSQL `cve_item_links` index (Alembic 0007) joins canonical CVE IDs to source-backed observations without merging or rewriting their item versions. CISA KEV (`cisa_kev_v1`) is the sole authoritative exploitation assertion; other source references remain evidence-graded mentions/records. Read via `/v1/cves/{cve_id}` or MCP `get_cve`. Missing/stale KEV data is not interpreted as absence of exploitation. See [CVE/KEV contract](CVE_KEV_CORRELATION.md).
+
+## Automated reports
+
+Automated report generation is a downstream, isolated workload. A dedicated
+rootless `nous-report-worker` image owns a durable SQL queue and runs the
+official Codex CLI for bounded editorial stages. That image alone receives the
+report-worker DB secret and persistent private Codex/artifact volumes. The
+Codex child runs as UID/GID 10002; the Worker process runs as container root
+inside rootless Podman only to read its root-owned secret and prepare private
+volume permissions. No Podman socket is mounted.
+
+Astro runs only as a one-shot static build inside that Worker after a candidate
+passes deterministic validation. It writes a complete release to the private
+`nous-report-site` volume. The MCP origin mounts that volume read-only and
+serves only explicitly allowed `/reports/` paths through its existing Access
+JWT boundary. The Quasar UI remains the existing browser-rendered SPA; no Node
+server, SSR process, or public content origin is introduced.
+
+PostgreSQL migration `0008` adds report runs, schedules, published article
+metadata, evidence references, and the active report-site digest. A separate
+`nous_report_worker` role reads source observations and writes only report
+tables; the Access-subject-allowlisted `nous_admin` role receives run/schedule
+management rights but cannot write published reports or evidence. The report
+volume stays private and is included with the database in encrypted backups;
+capture pauses the report Worker and verifies the SQL digest against the volume
+pointer and immutable release manifest.
+
+VM acceptance and a real owner-authenticated Codex generation remain
+**NOT_CHECKED** until performed under the separate execution authority described
+in [Automated Intelligence Reports](AUTOMATED_INTELLIGENCE_REPORTS.md).

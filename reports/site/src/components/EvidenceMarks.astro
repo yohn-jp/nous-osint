@@ -1,0 +1,11 @@
+---
+interface Props {
+  evidenceIds: string[];
+}
+
+const { evidenceIds } = Astro.props;
+---
+
+<span class="evidence-marks" aria-label="根拠">
+  {evidenceIds.map((id) => <a href={`#source-${id}`}>根拠 {id}</a>)}
+</span>
