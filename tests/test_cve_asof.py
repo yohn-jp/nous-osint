@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+from nous.cve_index import version_cve_relations
 from nous.cve_queries import query_cve
 from nous.db import Base
 from nous.models import CveItemLink, CveItemVersionLink, Item, ItemVersion, Source
@@ -72,3 +73,61 @@ def test_deleted_current_cve_link_does_not_erase_historical_reference(tmp_path):
     assert historical["references"][0]["title"] == f"Security fix references {cve_id}"
     assert historical["references"][0]["last_seen_at"] == observed_at.replace(tzinfo=None)
     assert current["references"] == []
+
+
+def test_legacy_snapshot_without_frozen_map_keeps_current_and_historical_reference(tmp_path):
+    engine = create_engine("sqlite:///" + str(tmp_path / "legacy-cve-asof.db"))
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(engine)
+    cve_id = "CVE-2026-54321"
+    observed_at = datetime(2026, 5, 1, 12, tzinfo=timezone.utc)
+    attrs = {
+        "title": f"Legacy snapshot references {cve_id}",
+        "url": "https://vendor.example/security/legacy",
+    }
+    provenance = {"adapter": "rss_v1", "source_url": "https://vendor.example/rss"}
+    relations = version_cve_relations(
+        attributes=attrs, provenance=provenance, external_id="legacy-advisory",
+        source_adapter="rss_v1", source_kind="rss",
+    )
+
+    with factory() as db:
+        source = Source(
+            source_key="legacy-vendor", kind="rss", adapter="rss_v1",
+            item_kind="advisory", url="https://vendor.example/rss",
+            config_revision="fixture", config={}, enabled=True,
+            interval_minutes=60, max_requests_per_hour=4,
+        )
+        db.add(source)
+        db.flush()
+        item = Item(
+            source_id=source.id, external_id="legacy-advisory",
+            canonical_url=attrs["url"], kind="advisory", title=attrs["title"],
+            state="current", first_seen_at=observed_at, last_seen_at=observed_at,
+            current_version=1, current_hash="c" * 64,
+        )
+        db.add(item)
+        db.flush()
+        version = ItemVersion(
+            item_id=item.id, version=1, observed_at=observed_at,
+            sha256="c" * 64, attributes=attrs, provenance=provenance,
+        )
+        db.add(version)
+        db.flush()
+        for relation_id, relation in relations.items():
+            db.add(CveItemVersionLink(
+                item_version_id=version.id, cve_id=relation_id, relation=relation,
+            ))
+        # A conflicting current row must not rewrite the immutable snapshot grade.
+        db.add(CveItemLink(item_id=item.id, cve_id=cve_id, relation="record"))
+        db.commit()
+
+    with factory() as db:
+        historical = query_cve(
+            db, cve_id, observed_cutoff=observed_at + timedelta(hours=1),
+        )
+        current = query_cve(db, cve_id)
+
+    for result in (historical, current):
+        assert len(result["references"]) == 1
+        assert result["references"][0]["relation"] == "title_mention"

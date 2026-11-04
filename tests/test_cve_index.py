@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from nous.cve_index import cve_relations, valid_cve_id
+from nous.cve_index import cve_relations, valid_cve_id, version_cve_relations
 
 
 def test_cve_identity_is_strict():
@@ -63,3 +63,35 @@ def test_too_many_title_ids_fail_without_partial_links():
     raw = {"title": " ".join(f"CVE-2026-{n:04d}" for n in range(1000, 1034))}
     with pytest.raises(ValueError, match="too many"):
         cve_relations(source, raw)
+
+
+def test_legacy_version_relations_use_immutable_fields_and_recorded_adapter():
+    title_id = "CVE-2026-12345"
+    title_relations = version_cve_relations(
+        attributes={"title": f"Advisory references {title_id}"},
+        provenance={"adapter": "rss_v1"}, external_id="advisory-1",
+        source_adapter="rss_v1", source_kind="rss",
+    )
+    assert title_relations == {title_id: "title_mention"}
+
+    record_id = "CVE-2026-67890"
+    record_relations = version_cve_relations(
+        attributes={"title": "Vendor vulnerability", "vulnerability": {"cve_id": record_id}},
+        provenance={"adapter": "json_v1"}, external_id=record_id,
+        source_adapter="json_v1", source_kind="json_api",
+    )
+    assert record_relations == {record_id: "record"}
+
+    kev_relations = version_cve_relations(
+        attributes={"title": "CISA record", "vulnerability": {
+            "cve_id": record_id, "known_exploited": True,
+        }},
+        provenance={"adapter": "cisa_kev_v1"}, external_id=record_id,
+        source_adapter="cisa_kev_v1", source_kind="json_api",
+    )
+    assert kev_relations == {record_id: "kev"}
+    assert version_cve_relations(
+        attributes={"title": f"Advisory references {title_id}"},
+        provenance={"adapter": "json_v1"}, external_id="advisory-1",
+        source_adapter="rss_v1", source_kind="rss",
+    ) == {}

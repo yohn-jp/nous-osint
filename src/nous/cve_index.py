@@ -6,6 +6,7 @@ adapter; mentions and other vulnerability records are not exploitation claims.
 from __future__ import annotations
 
 import re
+from types import SimpleNamespace
 from sqlalchemy import delete, select
 from .models import CveItemLink, CveItemVersionLink
 
@@ -59,6 +60,39 @@ def cve_relations(source, raw: dict) -> dict[str, str]:
     if len(relations) > _MAX_IDS_PER_ITEM:
         raise ValueError("too many CVE references in one item")
     return relations
+
+
+def version_cve_relations(*, attributes, provenance, external_id: str,
+                          source_adapter: str, source_kind: str) -> dict[str, str]:
+    """Read a frozen relation map or derive only from this version's snapshot.
+
+    Legacy item versions predate ``cve_relations``. Their version-local title,
+    structured vulnerability fields, immutable external ID, and recorded
+    adapter can still support the canonical relation rules. Current link rows
+    are deliberately not consulted because they cannot reconstruct as-of state.
+    """
+    attrs = attributes if isinstance(attributes, dict) else {}
+    frozen = attrs.get("cve_relations")
+    if isinstance(frozen, dict):
+        return {
+            cve_id: relation for cve_id, relation in frozen.items()
+            if valid_cve_id(cve_id) and isinstance(relation, str) and relation in {
+                "kev", "record", "reference", "title_mention",
+            }
+        }
+    recorded_adapter = provenance.get("adapter") if isinstance(provenance, dict) else None
+    if (not isinstance(recorded_adapter, str) or not recorded_adapter or
+            recorded_adapter != source_adapter or not isinstance(external_id, str)):
+        return {}
+    raw = dict(attrs)
+    raw["id"] = external_id
+    raw.setdefault("title", "")
+    try:
+        return cve_relations(
+            SimpleNamespace(adapter=recorded_adapter, kind=source_kind), raw,
+        )
+    except (TypeError, ValueError):
+        return {}
 
 
 def sync_item_cves(db, item, source, raw: dict):

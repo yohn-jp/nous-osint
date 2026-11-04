@@ -60,6 +60,10 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
     fresh = (catalog_as_of is not None and
              catalog_as_of >= cutoff - timedelta(hours=48))
 
+    candidate_item_ids = select(ItemVersion.item_id).join(
+        CveItemVersionLink,
+        CveItemVersionLink.item_version_id == ItemVersion.id,
+    ).where(CveItemVersionLink.cve_id == cve_id).distinct()
     latest_versions = select(
         ItemVersion.id.label("item_version_id"),
         ItemVersion.item_id.label("item_id"),
@@ -67,7 +71,10 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
             partition_by=ItemVersion.item_id,
             order_by=(ItemVersion.observed_at.desc(), ItemVersion.id.desc()),
         ).label("version_rank"),
-    ).where(ItemVersion.observed_at <= cutoff).subquery()
+    ).where(
+        ItemVersion.observed_at <= cutoff,
+        ItemVersion.item_id.in_(candidate_item_ids),
+    ).subquery()
     priority = case(
         (CveItemVersionLink.relation == "kev", 0),
         (CveItemVersionLink.relation == "record", 1),

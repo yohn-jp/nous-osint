@@ -1,6 +1,12 @@
-"""Preserve exact CVE relations on immutable item versions."""
+"""Preserve exact CVE relations on immutable item versions.
+
+Legacy rows are derived from their own immutable attributes and recorded parser
+provenance using the canonical relation rules. The mutable current-link table is
+never consulted to reconstruct history.
+"""
 from alembic import op
 import sqlalchemy as sa
+from nous.cve_index import version_cve_relations
 
 revision = "0009"
 down_revision = "0008"
@@ -24,22 +30,38 @@ def upgrade():
         "ix_cve_item_version_links_cve_version", "cve_item_version_links",
         ["cve_id", "item_version_id"],
     )
-    op.execute(r"""
-        INSERT INTO cve_item_version_links (item_version_id, cve_id, relation)
-        SELECT item_versions.id, relation.key, relation.value
-        FROM item_versions
-        CROSS JOIN LATERAL json_each_text(
-            CASE
-                WHEN json_typeof(item_versions.attributes->'cve_relations') = 'object'
-                THEN item_versions.attributes->'cve_relations'
-                ELSE '{}'::json
-            END
-        ) AS relation
-        WHERE relation.key ~ '^CVE-[0-9]{4}-[0-9]{4,}$'
-          AND length(relation.key) <= 64
-          AND relation.value IN ('kev','record','reference','title_mention')
-        ON CONFLICT DO NOTHING
-    """)
+    connection = op.get_bind()
+    link_table = sa.table(
+        "cve_item_version_links",
+        sa.column("item_version_id", sa.Integer()),
+        sa.column("cve_id", sa.String(64)),
+        sa.column("relation", sa.String(24)),
+    )
+    rows = connection.execute(sa.text("""
+        SELECT version.id AS item_version_id, version.attributes, version.provenance,
+               item.external_id, source.adapter AS source_adapter, source.kind AS source_kind
+        FROM item_versions AS version
+        JOIN items AS item ON item.id = version.item_id
+        JOIN sources AS source ON source.id = item.source_id
+        ORDER BY version.id
+    """).execution_options(stream_results=True)).mappings().yield_per(1000)
+    batch = []
+    for row in rows:
+        relations = version_cve_relations(
+            attributes=row["attributes"], provenance=row["provenance"],
+            external_id=row["external_id"], source_adapter=row["source_adapter"],
+            source_kind=row["source_kind"],
+        )
+        batch.extend({
+            "item_version_id": row["item_version_id"],
+            "cve_id": cve_id,
+            "relation": relation,
+        } for cve_id, relation in relations.items())
+        if len(batch) >= 1000:
+            connection.execute(sa.insert(link_table), batch)
+            batch.clear()
+    if batch:
+        connection.execute(sa.insert(link_table), batch)
 
 
 def downgrade():
