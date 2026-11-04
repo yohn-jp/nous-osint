@@ -3,8 +3,11 @@ from urllib.parse import urljoin
 import feedparser
 from bs4 import BeautifulSoup
 from .job_postings import extract_jobs
+from .vulnerability_feeds import extract_kev
 
 def extract(source, content, base_url):
+    if getattr(source, "adapter", None) == "cisa_kev_v1":
+        return extract_kev(content)
     if getattr(source, "adapter", None) in (
             "greenhouse_jobs_v1", "lever_jobs_v1", "ashby_jobs_v1"):
         return extract_jobs(source.adapter, content)

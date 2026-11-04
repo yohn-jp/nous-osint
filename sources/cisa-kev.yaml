@@ -1,0 +1,18 @@
+id: cisa-kev
+kind: json_api
+url: https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json
+adapter: cisa_kev_v1
+item_kind: vulnerability
+organization: CISA / Known Exploited Vulnerabilities
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-04'
+  license_id: CC0-1.0
+  license_url: https://github.com/cisagov/kev-data/blob/develop/LICENSE
+  attribution: CISA / Cybersecurity and Infrastructure Security Agency
+  terms_url: https://github.com/cisagov/kev-data
+  content_storage: metadata_only
+  note: Official CISA GitHub mirror of the KEV dataset. Source JSON is CC0-1.0, but third-party URLs and CISA logos are not relicensed. Preserve CVE IDs and bounded publication metadata; no third-party content.
