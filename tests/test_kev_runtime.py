@@ -78,6 +78,7 @@ def test_malformed_kev_catalog_cannot_replace_existing_cve_records(monkeypatch):
         runtime.store_item(db, source, {
             "id": "CVE-2025-9999", "title": "Previously known exploited vulnerability",
             "url": "https://www.cve.org/CVERecord?id=CVE-2025-9999",
+            "vulnerability": {"cve_id": "CVE-2025-9999", "known_exploited": True},
         }, source.url)
         db.commit()
     bad = payload([record("CVE-2026-45678")], reported=2)
