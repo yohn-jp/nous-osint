@@ -9,14 +9,21 @@ const route = useRoute()
 const drawerOpen = ref(false)
 const active = computed(() => String(route.name ?? 'explore'))
 const canAdmin = ref(false)
-void api.adminSession().then(() => { canAdmin.value = true }).catch(() => { canAdmin.value = false })
+void api.adminSession().then(session => { canAdmin.value = session.allowed }).catch(() => { canAdmin.value = false })
 const nav = [
   { to: '/explore', name: 'explore', icon: 'travel_explore', title: '探索', caption: 'Explore' },
   { to: '/changes', name: 'changes', icon: 'update', title: '変更履歴', caption: 'Changes' },
   { to: '/sources', name: 'sources', icon: 'rss_feed', title: '情報源', caption: 'Sources' },
 ]
-const visibleNav = computed(() => canAdmin.value ? [...nav, { to: '/admin/sources', name: 'admin-sources', icon: 'tune', title: '管理', caption: 'Admin' }] : nav)
-const isActive = (name: string) => active.value === name || (active.value === 'item' && name === 'explore') || (name === 'admin-sources' && active.value.startsWith('admin-'))
+const visibleNav = computed(() => canAdmin.value ? [...nav,
+  { to: '/admin/sources', name: 'admin-sources', icon: 'tune', title: '管理', caption: 'Admin' },
+  { to: '/admin/reports', name: 'admin-reports', icon: 'article', title: 'レポート', caption: 'Reports' },
+] : nav)
+const isActive = (name: string) => {
+  if (name === 'admin-sources') return ['admin-sources', 'admin-new', 'admin-edit'].includes(active.value)
+  if (name === 'admin-reports') return active.value === 'admin-reports'
+  return active.value === name || (active.value === 'item' && name === 'explore')
+}
 function toggleDark() { $q.dark.set(!$q.dark.isActive) }
 function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
 </script>
