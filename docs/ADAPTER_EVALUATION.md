@@ -80,11 +80,12 @@ Publisher documentation:
 
 ## Priority B — global vulnerability data
 
-1. **CISA KEV**: official JSON includes `vulnerabilities` with `cveID`
-   but not a directly usable per-record public URL. Add a schema-aware
-   CVE URL resolver plus full-snapshot/delta semantics; do not fake a
-   `url` field or change the generic JSON adapter to silently accept
-   missing URLs.
+1. **CISA KEV — implemented in stacked vulnerability PR**: the dedicated
+   `cisa_kev_v1` adapter uses the CISA-maintained GitHub mirror
+   (CC0-1.0). It validates `count`, duplicate CVE IDs and bounded
+   metadata before any DB writes, and creates stable canonical CVE links.
+   The source is distributed disabled; neither live probe nor deployment
+   is claimed. Its publisher is linked in item provenance.
 2. **NVD API 2.0**: pagination, `lastModStartDate/lastModEndDate`,
    reasonable API-key handling, retry limits and nested vulnerability
    extraction. Use the OSS REST paging layer where it meets bounded
@@ -123,8 +124,11 @@ bounded Lever paging, and in-instance custom source registration. HTTPX,
 Pydantic, JSON and the existing PostgreSQL scheduler are reused. No extra
 scraping framework is necessary for publisher-provided native APIs.
 
-**Next:** introduce `vulnerability_dataset_v1` for CISA KEV and NVD first,
-then CVE List and OSV full/delta sources, with separate EPSS enrichment.
+**Next:** build NVD cursor-based/incremental collection with an audited
+request budget and persisted continuation state; then CVE List and OSV
+full/delta sources with separate EPSS enrichment. CISA KEV is now
+implemented as a safe whole-snapshot feed, using the existing OSS HTTPX
+transport and Pydantic/standard JSON validation.
 Assess the dlt RESTClient only where its pagination/cursor support can be
 integrated without bypassing the existing safe fetcher.
 **Later:** adopt Scrapy for selected approved HRMOS/HERP HTML pages that

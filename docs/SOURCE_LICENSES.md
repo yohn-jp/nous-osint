@@ -37,9 +37,13 @@ technical collection constraints, **not** a legal opinion.
 | `google-cloud-security-bulletins` | [Google Cloud Security Bulletins](https://docs.cloud.google.com/support/bulletins) | XML link on official Google Cloud support page; no general feed republishing license established | Disabled, probe pending |
 | `cloudflare-security-research` | [Cloudflare Security RSS](https://blog.cloudflare.com/tag/security/) | [Cloudflare website terms](https://www.cloudflare.com/website-terms/); no license to mirror blog posts asserted | Disabled, probe pending |
 | `fortinet-psirt` | [Fortinet PSIRT RSS](https://fortiguard.fortinet.com/psirt_policy) | Provider's PSIRT policy references the feed, but RSS reachability and content reuse rights remain unproven | Disabled, probe pending |
+| `cisa-kev` | [CISA KEV data mirror](https://github.com/cisagov/kev-data) | [CISA's explicit CC0-1.0 license](https://github.com/cisagov/kev-data/blob/develop/LICENSE) covers this dataset, **not** external third-party pages or CISA logo/DHS seal. Source is the CISA-maintained GitHub mirror of the canonical cisa.gov catalog | Disabled, complete-snapshot probe pending |
 | `sie-japan-careers` | [SIE Japan jobs](https://job-boards.greenhouse.io/siei) | [Greenhouse public Job Board API](https://docs.greenhouse.io/job-board) allows unauthenticated GET, **not** a blanket redistribution license. Original job postings remain publisher-owned | Disabled; native Japan/security categorization implemented, live probe pending |
 
-These are **catalog candidates**, not approved or enabled ingestion. The
+These are **catalog candidates**, not approved or enabled ingestion.
+The separate `cisa-kev` candidate uses the `cisa_kev_v1` adapter and has
+an affirmative upstream `CC0-1.0` dataset license. Its metadata is not
+inherited from, or relicensed by, the Nous MIT project license. The
 official publisher pages or documented endpoints were inspected, but this
 change did **not** execute the production `probe-source.yml` against all nine
 endpoints. In particular, the Fortinet feed and SIE's API endpoint were not

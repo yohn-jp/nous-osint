@@ -31,6 +31,13 @@ policy:
   note: "Placeholder: replace with an approved real source"
 ```
 
+CISA KEV records retain a stable CVE identity in the item `external_id`
+and in a bounded `attributes.vulnerability` metadata object, with the
+publisher feed URL retained in immutable version provenance. A synthesized
+CVE.org link is a canonical **identifier** lookup, not evidence that CVE.org
+published the KEV exploitation determination. Dataset license metadata
+(`policy.license_id`) remains independent of Nous's software license.
+
 Source IDs are immutable, unique and human-readable. Official entries are seeded from Git; custom entries are created in the per-instance Admin UI. An official ID conflict is rejected; source removal preserves historical observations. Registration validation rejects duplicate IDs, invalid protocols, unsupported adapters, unreviewed collection policies and unsafe endpoints. A disabled source remains queryable, retaining its historical observations. Credentials are referenced by secret names, not values.
 
 Every enabled source must define a reviewer-verifiable collection policy, ownership, rate limits and a positive decision to collect. A source is never enabled solely because an URL is reachable.
