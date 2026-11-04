@@ -40,10 +40,10 @@ uid=$(ssh "${ssh_options[@]}" "$target" id -u nous) || fail "cannot resolve remo
 [[ "$uid" =~ ^[0-9]+$ ]] || fail "remote UID is not numeric"
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 base="nous-osint-${stamp}"
-final_archive="$backup_dir/${base}.tar.gpg"
+final_archive="$backup_dir/${base}.backup.gpg"
 final_manifest="$backup_dir/${base}.manifest.json.gpg"
 [[ ! -e "$final_archive" && ! -e "$final_manifest" ]] || fail "backup already exists for ${stamp}"
-tmp_archive=$(mktemp "$backup_dir/.${base}.tar.gpg.XXXXXX")
+tmp_archive=$(mktemp "$backup_dir/.${base}.backup.gpg.XXXXXX")
 tmp_manifest_plain=$(mktemp "/dev/shm/${base}.manifest.json.XXXXXX")
 tmp_manifest=$(mktemp "$backup_dir/.${base}.manifest.json.gpg.XXXXXX")
 tmp_metadata=$(mktemp "/dev/shm/${base}.snapshot-metadata.XXXXXX")
@@ -94,7 +94,7 @@ IFS='|' read -r site_digest site_file_count site_asset_count site_manifest_hash 
 [[ "$db_digest" == "$site_digest" ]] || fail "database and report-site active digests differ"
 
 encrypted_sha=$(sha256sum -- "$tmp_archive" | cut -d ' ' -f 1)
-python3 - "$tmp_manifest_plain" "$stamp" "$target" "${base}.tar.gpg" "$encrypted_sha" \
+python3 - "$tmp_manifest_plain" "$stamp" "$target" "${base}.backup.gpg" "$encrypted_sha" \
   "$schema_version" "$source_count" "$item_count" "$version_count" "$run_count" \
   "$schedule_count" "$report_count" "$evidence_count" "$db_digest" "$site_file_count" \
   "$site_asset_count" "$site_manifest_hash" "$db_sha" "$site_sha" <<'PY'
@@ -118,7 +118,7 @@ if active != "none" and not sha_re.fullmatch(active):
 if site_manifest != "none" and not sha_re.fullmatch(site_manifest):
     raise SystemExit("invalid report-site manifest checksum")
 manifest = {
-    "format": "nous-report-site-backup-v1",
+    "format": "nous-report-site-backup-stream-v1",
     "created_at": created,
     "source_host": host,
     "artifact": artifact,
@@ -149,12 +149,12 @@ published=1
 
 # Retain N days; prune only matching encrypted artifact/manifest pairs.
 while IFS= read -r -d '' old_archive; do
-  old_manifest=${old_archive%.tar.gpg}.manifest.json.gpg
+  old_manifest=${old_archive%.backup.gpg}.manifest.json.gpg
   rm -f -- "$old_archive" "$old_manifest"
 done < <(find "$backup_dir" -maxdepth 1 -type f \
-  -name 'nous-osint-*.tar.gpg' -mtime "+$((retention_days - 1))" -print0)
+  -name 'nous-osint-*.backup.gpg' -mtime "+$((retention_days - 1))" -print0)
 while IFS= read -r -d '' old_manifest; do
-  old_archive=${old_manifest%.manifest.json.gpg}.tar.gpg
+  old_archive=${old_manifest%.manifest.json.gpg}.backup.gpg
   [[ -e "$old_archive" ]] || rm -f -- "$old_manifest"
 done < <(find "$backup_dir" -maxdepth 1 -type f \
   -name 'nous-osint-*.manifest.json.gpg' -mtime "+$((retention_days - 1))" -print0)

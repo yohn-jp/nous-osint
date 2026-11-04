@@ -143,26 +143,31 @@ host's systemd sandbox cannot read its system-wide SSH config.
 
 The capture stops an active report Worker and remembers whether it must restart.
 While publication is paused, it takes `pg_dump -Fc` and SQL row counts from one
-exported repeatable-read snapshot, then archives the private report-site volume.
+exported repeatable-read snapshot, then streams the private report-site volume.
 The database active digest must equal the volume's `current` symlink. The active
 `.manifests/<digest>.json` file map is checked against every HTML page and
 referenced static asset. A mismatch aborts the backup and still restarts a
-previously active Worker. All remote dump/archive staging is in `/dev/shm`, which
-must be a tmpfs large enough for both staged artifacts. No plaintext dump, site
-archive or manifest is written to persistent storage. Both the external
-`.manifest.json.gpg` and `.tar.gpg` are encrypted to the verified recipient;
-the external JSON manifest is staged only in `/dev/shm`. The encrypted tar
-contains `database.dump`, `report-site.tar` and an internal manifest.
+previously active Worker. The dump and volume archive are framed and streamed
+through bounded chunks directly to GPG; neither is staged in `/dev/shm` or on
+persistent storage. Only the uploaded helper and small metadata/manifests use
+tmpfs. The stream chunk size defaults to 1 MiB and can be set with
+`NOUS_BACKUP_STREAM_CHUNK_BYTES` from 4 KiB to 8 MiB. Both the external
+`.manifest.json.gpg` and `.backup.gpg` are encrypted to the verified recipient.
+The encrypted stream contains `database.dump`, `report-site.tar` and an
+internal manifest. Run `python3 scripts/test-snapshot-stream.py` to exercise a
+multi-megabyte fixture through the bounded stream at a 4 KiB chunk size; it
+checks the encrypted artifact and confirms no plaintext archive staging files
+or new `/dev/shm` files are created.
 
 Each external JSON manifest includes the encrypted artifact SHA-256, schema
 version, source and report-table counts, active digest, active HTML/asset counts,
 manifest hash, and inner database/site archive hashes. Validate it with:
 
 ```sh
-scripts/restore-test.sh ~/.local/state/nous-osint/backups/<backup>.tar.gpg
+scripts/restore-test.sh ~/.local/state/nous-osint/backups/<backup>.backup.gpg
 ```
 
-The restore check decrypts the tar as a stream: the DB dump goes directly to an
+The restore check decrypts the framed stream: the DB dump goes directly to an
 isolated PostgreSQL container and the site archive goes into a disposable
 rootless Podman volume. It verifies schema and row counts, DB/site active digest,
 the release manifest, each HTML page and asset hash, then removes the temporary
