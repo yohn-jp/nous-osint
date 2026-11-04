@@ -267,8 +267,30 @@ jobs:
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ghcr.io/yohn-jp/nous-osint-reports:main
+          load: ${{ github.event_name == 'pull_request' }}
           cache-from: type=gha,scope=nous-report-worker
           cache-to: type=gha,mode=max,scope=nous-report-worker
+      - name: Exercise production image under read-only rootfs and 128 MiB tmpfs
+        if: github.event_name == 'pull_request'
+        run: |
+          docker run --rm --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=128m \
+            --tmpfs /var/lib/nous-reports/private:rw,nosuid,nodev,size=512m \
+            --entrypoint python ghcr.io/yohn-jp/nous-osint-reports:main -c '
+          from pathlib import Path
+          from nous.report_pipeline import _SCHEMA_DIR, _SITE_DIR, build_static_release
+          from nous.report_templates import resolve_template
+          assert (_SCHEMA_DIR / "article-v1.schema.json").is_file()
+          assert (_SITE_DIR / "node_modules" / "astro").is_dir()
+          assert resolve_template("security-daily")["id"] == "security-daily"
+          assert resolve_template("cve-kev-deep-dive")["id"] == "cve-kev-deep-dive"
+          root = Path("/var/lib/nous-reports/private/build-smoke")
+          dist, assets, digest = build_static_release([], root)
+          assert (dist / "index.html").is_file()
+          assert len(digest) == 64
+          assert not list(root.glob("cache-*"))
+          print("Production report Worker: empty Astro site built with a read-only root filesystem")
+          '
       - name: Record immutable report Worker image reference
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:

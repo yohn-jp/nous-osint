@@ -12,7 +12,7 @@ FROM ${PYTHON_BASE}
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ASTRO_TELEMETRY_DISABLED=1 \
-    npm_config_cache=/tmp/npm-cache \
+    NOUS_REPORTS_DIR=/app/reports \
     NOUS_CODEX_EXPECTED_VERSION=0.166.0 \
     NOUS_CODEX_HOME=/var/lib/nous-codex \
     NOUS_REPORT_PRIVATE_DIR=/var/lib/nous-reports/private \
@@ -32,7 +32,8 @@ COPY --from=astro-build /usr/local/lib/node_modules/npm /usr/local/lib/node_modu
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && npm --version \
-    && npm install --global --no-audit --no-fund @openai/codex@0.166.0 \
+    && npm install --global --no-audit --no-fund --cache /tmp/npm-install-cache @openai/codex@0.166.0 \
+    && rm -rf /tmp/npm-install-cache \
     && test "$(codex --version)" = "codex-cli 0.166.0"
 
 COPY alembic.ini /app/alembic.ini
@@ -41,7 +42,8 @@ COPY sources /app/sources
 COPY reports /app/reports
 COPY --from=astro-build /app/reports/site/node_modules /app/reports/site/node_modules
 RUN test -f /app/reports/schemas/article-v1.schema.json \
-    && test -d /app/reports/site/node_modules/astro
+    && test -d /app/reports/site/node_modules/astro \
+    && python -c 'from nous.report_templates import resolve_template; from nous.report_pipeline import _SCHEMA_DIR, _SITE_DIR; assert resolve_template("security-daily")["id"] == "security-daily"; assert (_SCHEMA_DIR / "article-v1.schema.json").is_file(); assert (_SITE_DIR / "astro.config.mjs").is_file()'
 
 # Root inside the dedicated rootless container reads its Podman secret and
 # prepares private volume permissions; Codex itself is dropped to UID/GID 10002.
