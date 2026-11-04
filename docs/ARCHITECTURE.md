@@ -116,3 +116,7 @@ Set per-source failure thresholds and report degraded sources individually rathe
 - **ADR-006**: PostgreSQL version and container digest are explicitly pinned during implementation; upgrades are deliberate migrations with backup/restore validation.
 
 See [DATA_MODEL.md](DATA_MODEL.md), [QUADLET_DEPLOYMENT.md](QUADLET_DEPLOYMENT.md), and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+
+## CVE identity and KEV evidence
+
+The PostgreSQL `cve_item_links` index (Alembic 0007) joins canonical CVE IDs to source-backed observations without merging or rewriting their item versions. CISA KEV (`cisa_kev_v1`) is the sole authoritative exploitation assertion; other source references remain evidence-graded mentions/records. Read via `/v1/cves/{cve_id}` or MCP `get_cve`. Missing/stale KEV data is not interpreted as absence of exploitation. See [CVE/KEV contract](CVE_KEV_CORRELATION.md).

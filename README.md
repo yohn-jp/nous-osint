@@ -17,6 +17,10 @@
 - **提供**: Access保護付きのブラウザUI、読み取り専用API、Remote MCP
 - **公開リポジトリ**: ソースコード、収集先設定、スキーマ、設計書のみ。秘密情報・私的な転職情報・第三者の本文転載は含めない
 
+## CVE and KEV correlation
+
+Nous correlates each collected CVE with independent publisher records and CISA KEV exploitation evidence. The private UI exposes `/cves/CVE-YYYY-NNNN`, the read-only API exposes `GET /v1/cves/{cve_id}`, and Remote MCP provides `get_cve`. Missing KEV ingestion returns **unknown**, not "not exploited". See [CVE/KEV correlation contract](docs/CVE_KEV_CORRELATION.md).
+
 ## Source administration
 
 Bundled source definitions and their publication licenses are separate from Nous's MIT license. See [Source Rights and Licensing](docs/SOURCE_LICENSES.md) and the [OSS Adapter Evaluation](docs/ADAPTER_EVALUATION.md) before activating third-party feeds.
