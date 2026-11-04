@@ -1,6 +1,6 @@
 # Nous OSINT — Automated Intelligence Reports
 
-Status: **implementation design / not yet implemented**  
+Status: **feature branch implementation in progress; owner-authenticated Codex and VM acceptance NOT_CHECKED**
 Date: **2026-11-04**  
 Authority: [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [REMOTE_MCP_ACCESS.md](REMOTE_MCP_ACCESS.md), [SOURCE_LICENSES.md](SOURCE_LICENSES.md), [CVE_KEV_CORRELATION.md](CVE_KEV_CORRELATION.md)
 
@@ -195,10 +195,14 @@ Astro は `reports/site/` に置き、`static` output と記事 content collecti
 
 Quadlet は `nous-report-worker.container` と記事 volume マウント（Worker: 書込、MCP gateway: 読取）を追加。report worker image は CLI/Node/Astro を固定。`nous-api`、`nous-mcp`、収集 Worker のイメージは不要に肥大化させない。private DB role を用途ごとに分け、バックアップには report テーブル、テンプレート revision、article/asset volume の整合したスナップショットを含める。
 
+実装では `Containerfile.reports` を API/MCP/collection image から分離し、公式 `@openai/codex` CLI `0.166.0` と Node 24/Astro 依存を固定する。Worker のみが専用 DB URL secret を受け取り、rootless volume と read-only root filesystem を使う。Codex 子プロセスは UID/GID 10002 に落とし、認証状態は専用 private volume に置く。記事 volume は MCP から read-only mount する。Worker は HTTP listener や Podman socket を持たない。
+
+バックアップ時は report Worker を停止し、PostgreSQL の exported repeatable-read snapshot と volume archive を取得する。DB の `report_site_state.active_digest`、`current` symlink、active manifest、HTML と asset の hash を一致確認し、不整合時は中断する。暗号化された tar artifact と counts/checksum manifest の両方を保管し、restore check は隔離 PostgreSQL と使い捨て volume に復元して schema/data と active site digest/assets を確認する。DB と filesystem の kernel-level atomic snapshot ではないため、この停止と照合を必須とする。
+
 ## 11. Codex 認証・実行セキュリティ
 
 - インストール管理者が VM 上の専用ユーザー/専用設定領域に**公式 Codex CLI を使って自分でログイン**する。対話不能な SSH/サーバでは製品が案内する device auth 等の正規手段を使用。ChatGPT の Cookie / ブラウザトークンを抜き出さない。
-- CLI の認証ストアは**永続 private storage** に置き、権限は専用 UID のみに限定。Access JWT、Nous 管理セッション、Codex 認証情報は相互に転用しない。イメージ・ログ・Git・バックアップに秘密情報を平文で含めない。
+- CLI は検証済みの公式 `@openai/codex` npm package `0.166.0` を report Worker image に固定する。CLI の認証ストアは**永続 private storage** に置き、権限は専用 UID/GID 10002 のみに限定。Access JWT、Nous 管理セッション、Codex 認証情報は相互に転用しない。イメージ・ログ・Git・バックアップに秘密情報を平文で含めない。
 - `codex exec` は固定 binary/固定引数でプロセス起動する（shell string 組立て禁止）。作業ディレクトリ、CLI の config、モデル/バージョン、ステージごとの入出力のサイズを制限。モデル利用可能性とサブスクリプションの残量に応じて失敗し、勝手に別 API 課金に切り替えない。
 - OS とコンテナで `NoNewPrivileges`、rootless、読取専用 filesystem、限定 temp/workspace、資源上限、タイムアウト、ホスト側の秘密/ネットワークからの分離を強制。Codex 子プロセスには不要な DB 資格情報、Podman ソケット、GitHub token を継承させない。OpenAI 側への必須通信以外の egress は実運用環境で検証・制限する。
 - Codex の sandbox/approval 引数は採用バージョンの `codex exec --help` で検証し、**非対話・最小権限**で使用する。認証トークンの更新/失効は運用者が管理。Pi は独立 adapter にしたときのみ追加し、非公式 OAuth 実装を既定にしない。
@@ -216,7 +220,10 @@ Quadlet は `nous-report-worker.container` と記事 volume マウント（Worke
 | Access | `/reports/`、asset、記事 URL、管理 POST は未認証では拒否。一般利用者は管理 POST 不可、MCP に書き込み無し、直接 DB 公開無し |
 | HTML/UI | XSS/path traversal/危険 URL を拒否。PC・スマートフォン、日本語段落、コード・表、長文、ダークモード、リンクを実ブラウザで確認 |
 | セルフホスト | rootless Quadlet が再起動後復帰、Codex 所有者ログインを用いた一件の実記事生成が成功。認証失効や利用上限時は安全に失敗 |
-| CI | Alembic upgrade、Python lint/test、Astro build/schema/リンク検査、Quasar typecheck/build、image build。VM 検証と CI は別に報告 |
+| backup/restore | Worker 停止中の DB/site capture、active digest・manifest・HTML/asset hash の一致、隔離 restore 後の schema/count/digest/assets 検証 |
+| CI | Alembic upgrade、Python lint/test、Astro build/schema/リンク検査、Quasar typecheck/build、API/Worker image build。VM 検証と CI は別に報告 |
+
+Fixture pipeline と CI はオーナー認証済み Codex 実行や VM acceptance の証拠ではない。実施前の状態は明示的に **NOT_CHECKED** と報告する。
 
 *最終受入シナリオ*: 管理者が `security-daily` を随時実行 → スナップショットと四工程の記録が残る → 製品の禁止事項を満たす記事を静的 HTML として `/reports/` に公開 → 過去記事・出典・元 CVE を開ける → スケジュール実行でも同じ品質ゲートを通る → 生成失敗時は既存公開内容が変化しない。
 
@@ -226,7 +233,7 @@ Quadlet は `nous-report-worker.container` と記事 volume マウント（Worke
 
 **Luna（実装）**: 次の順序で最小変更の独立コミットを積む。SQL/テンプレート/Evidence Bundle → Worker/Codex adapter/四工程 → 検証/記事スキーマ → Astro fixed design/static publisher → Access/Admin/Quasar 導線 → rootless Quadlet/CI/運用文書。レビューなしの `main` 直書きや無関係の既存 UI・取得基盤変更は行わない。
 
-引継ぎ条件: 設計ブランチから実装ブランチを作るか、設計を PR として先に取り込むかは統括が明示する。**本コミットは設計のみ**であり、実装開始、VM への展開、Codex 認証、Cloudflare 設定変更、記事の公開は実施していない。Sol/Luna への実ジョブ起動には利用可能な実行環境・権限が別途必要。
+この feature branch に実装を進めている。**VM への展開、オーナー Codex 認証、実記事の公開、Cloudflare 設定変更は行っていない**。Codex 所有者ログインによる実ジョブおよび VM acceptance は **NOT_CHECKED** のままとし、別途実行権限と運用者の認証が与えられた後に検証する。fixture pipeline/CI の結果を実環境受入と混同しない。
 
 ## 14. External references
 
@@ -234,4 +241,4 @@ Quadlet は `nous-report-worker.container` と記事 volume マウント（Worke
 - Astro content collections / static output: https://docs.astro.build/en/guides/content-collections/ ; https://docs.astro.build/en/reference/configuration-reference/
 - Cloudflare Access self-hosted applications and origin JWT validation: https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/
 
-The reference URLs describe upstream capabilities; actual CLI flags, pinned dependencies, licenses, build output, browser behavior and VM connectivity must be verified against the versions selected during implementation.
+The reference URLs describe upstream capabilities. The selected Codex package is `@openai/codex@0.166.0` and its image build checks `codex-cli 0.166.0`; fixture CI and actual owner-authenticated VM operation remain separate evidence.

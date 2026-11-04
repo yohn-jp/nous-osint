@@ -1,7 +1,7 @@
 # Frontend execution and resource policy
 
-Status: Quasar SPA implementation complete; VM rollout is being validated
-Updated: 2026-11-03
+Status: Quasar SPA remains browser-rendered; report pages use a separate static build
+Updated: 2026-11-04
 
 ## Objective
 
@@ -16,6 +16,7 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 - **Nous API:** authenticate/authorize at a verified trust boundary, validate and bound queries, expose a stable read API, RSS/Atom exports, provenance and revisions. Do not accept raw SQL from the browser.
 - **PostgreSQL:** perform full-text search, filtering, ranking, sorting, pagination, aggregates and provenance/history queries. Never ship an entire corpus to the browser for searching.
 - **Workers:** ingest permitted public sources, deduplicate and persist revisions independently of frontend availability.
+- **Report Worker:** run the official Codex CLI and start Astro only as a bounded, one-shot static build after an article passes deterministic checks. Publish verified static HTML/assets to the private report volume. The Astro process exits after the build; it is not a UI server.
 
 ## Selected frontend (implementation in ui/)
 
@@ -37,7 +38,8 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 
 ## Performance and acceptance
 
-- UI assets are produced at image build time; the VM runs no Node or UI renderer, only serves the static files from the existing MCP process.
+- Quasar assets are produced at image build time; the VM does not run Node for the Quasar UI and serves those static files from the existing MCP process.
+- Astro is present only in the separate report Worker image. It runs once per publication to generate static report files; no Node listener, SSR, or persistent presentation process runs on the VM. The MCP gateway serves the private report volume read-only through the existing Access boundary.
 - Verify browser-side list/detail/filter navigation and usability on desktop/mobile; prevent loading an entire result set into memory.
 - Measure JS transfer size, initial render and interaction responsiveness in browsers; avoid claiming a measured budget before testing.
 - Measure API latency, PostgreSQL query plans/index use and memory separately; compare with an API-only baseline.
