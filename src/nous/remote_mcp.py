@@ -88,6 +88,20 @@ def get_item(item_id: int) -> dict:
 
 
 @mcp.tool()
+def get_cve(cve_id: str) -> dict:
+    """Resolve CVE ID to independently sourced KEV assertion and related records.
+
+    Missing or stale KEV catalog observations are explicitly 'unknown'; a
+    title mention never implies exploitation. No outbound publisher fetches.
+    """
+    from .cve_index import valid_cve_id
+    if not valid_cve_id(cve_id):
+        raise ValueError("CVE identifier must be CVE-YYYY-NNNN or longer")
+    from .api import cve
+    return jsonable_encoder(cve(cve_id))
+
+
+@mcp.tool()
 def get_changes(since: str, kind: str | None = None, limit: int = 20) -> list[dict]:
     """List recent observed public-record changes, limited to the last 90 days."""
     if not 1 <= limit <= 50:

@@ -24,6 +24,8 @@ _API_QUERY_KEYS = {
 def _query_keys(path: str) -> set[str] | None:
     if path in _API_QUERY_KEYS:
         return _API_QUERY_KEYS[path]
+    if AccessAssertionMiddleware._allowed_path(path, "GET") and path.startswith("/v1/cves/"):
+        return set()
     if AccessAssertionMiddleware._allowed_path(path, "GET") and path.startswith("/v1/items/"):
         if path.endswith("/versions"):
             return {"limit"}
