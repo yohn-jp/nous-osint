@@ -8,6 +8,7 @@ const schedules = ref<ReportSchedule[]>([])
 const selectedRun = ref<ReportRun | null>(null)
 const selectedTemplate = ref<ReportTemplateId>('security-daily')
 const loading = ref(true)
+const dataReady = ref(false)
 const refreshing = ref(false)
 const loadingOlder = ref(false)
 const nextRunCursor = ref<string | null>(null)
@@ -80,6 +81,7 @@ async function loadData(initial = false) {
       api.adminReportSchedules({ limit: 100 }),
     ])
     templates.value = templateRows
+    dataReady.value = true
     const newestIds = new Set(runPage.runs.map(run => run.run_id))
     runs.value = [...runPage.runs, ...runs.value.filter(run => !newestIds.has(run.run_id))]
     nextRunCursor.value = runPage.next_cursor
@@ -229,10 +231,15 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
       <q-btn flat color="primary" icon="open_in_new" label="公開レポートを開く" href="/reports/" />
     </div>
 
-    <q-banner v-if="error" class="bg-red-1 text-negative q-mt-md" role="alert">{{ error }}</q-banner>
+    <q-banner v-if="error" class="bg-red-1 text-negative q-mt-md" role="alert">
+      <div class="row items-center justify-between q-gutter-sm">
+        <span>{{ error }}</span>
+        <q-btn flat no-caps label="再取得" :loading="refreshing" @click="loadData(true)" />
+      </div>
+    </q-banner>
     <q-banner v-if="feedback" class="bg-green-1 text-positive q-mt-md" role="status">{{ feedback }}</q-banner>
 
-    <div class="report-stats q-mt-lg">
+    <div v-if="dataReady" class="report-stats q-mt-lg">
       <div class="admin-stat"><span>直近の実行</span><strong>{{ runs.length }}</strong></div>
       <div class="admin-stat"><span>処理中・待機中</span><strong>{{ activeCount }}</strong></div>
       <div class="admin-stat"><span>公開済み</span><strong>{{ publishedCount }}</strong></div>
@@ -246,7 +253,8 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
         </div>
         <q-spinner v-if="loading" color="primary" size="24px" aria-label="読み込み中" />
       </div>
-      <div v-if="loading" class="empty-state">テンプレートを読み込んでいます。</div>
+      <div v-if="loading" class="empty-state" role="status">テンプレートを読み込んでいます。</div>
+      <div v-else-if="!dataReady" class="empty-state" role="status">管理情報を取得できません。再取得してください。</div>
       <div v-else class="report-form-wrap">
         <q-tabs v-model="selectedTemplate" dense no-caps align="left" active-color="primary" indicator-color="primary" class="report-template-tabs">
           <q-tab name="security-daily" icon="shield" label="日次セキュリティ" />
@@ -296,7 +304,8 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
         </div>
         <q-btn flat round dense icon="refresh" aria-label="実行履歴を更新" :loading="refreshing" @click="loadData()" />
       </div>
-      <div v-if="loading" class="empty-state">実行履歴を読み込んでいます。</div>
+      <div v-if="loading" class="empty-state" role="status">実行履歴を読み込んでいます。</div>
+      <div v-else-if="!dataReady" class="empty-state" role="status">実行履歴を取得できません。</div>
       <div v-else-if="!sortedRuns.length" class="empty-state">実行履歴はありません。テンプレートを選んで実行できます。</div>
       <div v-else class="run-grid">
         <div class="run-list" role="list" aria-label="レポート生成ジョブ">
@@ -349,7 +358,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
         </div>
       </div>
       <div class="admin-hint">スケジュールは `security-daily` テンプレートだけを登録できます。CVE 詳細は随時実行してください。</div>
-      <q-form class="schedule-form row q-col-gutter-md" @submit.prevent="createSchedule">
+      <q-form v-if="dataReady" class="schedule-form row q-col-gutter-md" @submit.prevent="createSchedule">
         <div class="col-12 col-sm-6 col-lg-3">
           <q-select v-model="scheduleCadence" outlined dense emit-value map-options label="間隔"
             :options="[{label:'毎日',value:'daily'},{label:'毎週',value:'weekly'}]" />
@@ -369,7 +378,8 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
           <q-btn color="primary" unelevated type="submit" icon="schedule" label="スケジュールを追加" :loading="busy === 'schedule'" />
         </div>
       </q-form>
-      <div v-if="loading" class="empty-state">スケジュールを読み込んでいます。</div>
+      <div v-if="loading" class="empty-state" role="status">スケジュールを読み込んでいます。</div>
+      <div v-else-if="!dataReady" class="empty-state" role="status">スケジュールを取得できません。</div>
       <div v-else-if="!schedules.length" class="empty-state">スケジュールはまだありません。</div>
       <div v-else class="schedule-list">
         <div v-for="schedule in schedules" :key="schedule.id" class="schedule-row">
