@@ -167,3 +167,21 @@ def test_run_detail_publication_url_only_for_validated_report(managed):
         db.commit()
     detail = client.get(f"/v1/admin/report-runs/{run_id}")
     assert detail.json()["published_url"] == "/reports/security/2026-11-01-security-daily-563b9494f5b2/"
+
+
+def test_schedule_create_rejects_nonexistent_spring_forward_time(managed, monkeypatch):
+    import nous.admin as admin
+
+    client, _ = managed
+    # New York jumps from 01:59:59 to 03:00 on 2026-03-08.
+    monkeypatch.setattr(
+        admin, "now",
+        lambda: datetime(2026, 3, 8, 6, 30, tzinfo=timezone.utc),
+    )
+    result = write(client, "POST", "/v1/admin/report-schedules", {
+        "template_id": "security-daily", "parameters": {"category": None},
+        "timezone": "America/New_York", "cadence": "daily",
+        "local_time": "02:30",
+    })
+    assert result.status_code == 422
+    assert result.json()["detail"] == "local time does not exist in the selected timezone"
