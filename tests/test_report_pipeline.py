@@ -6,8 +6,19 @@ from nous.report_pipeline import (
     run_editorial_pipeline,
     validate_article,
     _evidence_record,
+    _check_site,
 )
 from nous.report_templates import template_snapshot
+
+
+def test_report_release_allows_only_canonical_library_return_link(tmp_path):
+    (tmp_path / "index.html").write_text('<a href="/explore">ライブラリへ戻る</a>', encoding="utf-8")
+    assets, digest = _check_site(tmp_path)
+    assert assets == [] and len(digest) == 64
+
+    (tmp_path / "index.html").write_text('<a href="/admin/sources">管理</a>', encoding="utf-8")
+    with pytest.raises(ReportError, match="renderer_relative_link_rejected"):
+        _check_site(tmp_path)
 
 
 def evidence_bundle(template_id="security-daily"):
