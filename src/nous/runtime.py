@@ -2,12 +2,14 @@ import hashlib
 import json
 import logging
 import socket
+import threading
 import time
 import httpx
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 from sqlalchemy import func, or_, select, text, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert
 from .adapters import extract
 from .job_postings import fetch_lever_board
@@ -16,6 +18,9 @@ from .db import session_factory
 from .fetch import fetch
 from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source, now
 from .registry import load_registry, sync
+
+_FETCH_LEASE_SECONDS = 300
+_FETCH_HEARTBEAT_SECONDS = 60
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -88,7 +93,7 @@ def claim(factory):
             db.commit()
             return None
         job.state = "leased"
-        job.lease_until = current + timedelta(minutes=5)
+        job.lease_until = current + timedelta(seconds=_FETCH_LEASE_SECONDS)
         job.attempts += 1
         attempt = job.attempts
         db.commit()
@@ -155,6 +160,45 @@ def parse_timestamp(value):
             return None
     return parsed.astimezone(timezone.utc) if parsed.tzinfo else None
 
+def _renew_fetch_lease(factory, job_id: int, attempt: int) -> bool:
+    """Extend only the still-live generation; never revive an expired claim."""
+    current = now()
+    with factory() as db:
+        changed = db.execute(update(FetchJob).where(
+            FetchJob.id == job_id,
+            FetchJob.attempts == attempt,
+            FetchJob.state == "leased",
+            FetchJob.lease_until > current,
+        ).values(lease_until=current + timedelta(seconds=_FETCH_LEASE_SECONDS)))
+        db.commit()
+        return changed.rowcount == 1
+
+
+class _FetchLeaseHeartbeat:
+    def __init__(self, factory, job_id: int, attempt: int):
+        self.factory, self.job_id, self.attempt = factory, job_id, attempt
+        self.stop_event = threading.Event()
+        self.thread = threading.Thread(target=self._run, name="fetch-lease-heartbeat", daemon=True)
+
+    def start(self):
+        self.thread.start()
+
+    def stop(self):
+        self.stop_event.set()
+        self.thread.join(timeout=2)
+
+    def _run(self):
+        while not self.stop_event.wait(_FETCH_HEARTBEAT_SECONDS):
+            try:
+                if not _renew_fetch_lease(self.factory, self.job_id, self.attempt):
+                    return
+            except SQLAlchemyError:
+                # The final persistence transaction independently rechecks
+                # generation and expiry; failures never authorize a stale write.
+                event("fetch_lease_renewal_failed", job=self.job_id)
+                return
+
+
 def process(factory, job_id, claim_attempt=None):
     """Fetch and persist only if this Worker still owns its claim generation.
 
@@ -178,6 +222,12 @@ def process(factory, job_id, claim_attempt=None):
         requests_made += 1
         return fetch(*args)
 
+    # Network I/O is outside a database transaction. Maintain ownership
+    # across slow multi-page polls, while still fencing every eventual write.
+    heartbeat = (_FetchLeaseHeartbeat(factory, job_id, claim_attempt)
+                 if claim_attempt is not None else None)
+    if heartbeat is not None:
+        heartbeat.start()
     try:
         if source.adapter == "lever_jobs_v1":
             # All pages must succeed before store_item or missing-item state
@@ -213,6 +263,9 @@ def process(factory, job_id, claim_attempt=None):
         outcome = "failure"
         records = []
         headers = {}
+    finally:
+        if heartbeat is not None:
+            heartbeat.stop()
     with factory() as db:
         job = db.scalar(select(FetchJob).where(
             FetchJob.id == job_id
