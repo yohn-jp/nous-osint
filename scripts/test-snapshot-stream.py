@@ -24,7 +24,7 @@ def fake_podman() -> int:
         blob = (b"DB-FIXTURE-STREAM-" + b"d" * 4080 + b"\n") * 2048
         sys.stdout.buffer.write(blob)
         digest = os.environ["NOUS_TEST_DIGEST"]
-        print(f"NOUS_SNAPSHOT_METADATA=0009|1|2|3|4|5|6|7|{digest}", file=sys.stderr)
+        print(f"NOUS_SNAPSHOT_METADATA=0010|1|2|3|4|5|6|7|{digest}", file=sys.stderr)
         return 0
     if not args or args[0] != "run":
         print("unexpected mock podman command", file=sys.stderr)
