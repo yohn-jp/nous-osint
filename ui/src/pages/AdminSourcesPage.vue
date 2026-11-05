@@ -4,8 +4,8 @@ import { api, type ManagedSource, type CatalogEntry } from '../lib/api'
 import { dateLabel, kindLabel } from '../lib/presentation'
 
 const tab = ref<'official' | 'custom'>('official')
-const catalog = ref<CatalogEntry[]>([])
-const installed = ref<ManagedSource[]>([])
+const catalog = ref<CatalogEntry[] | null>(null)
+const installed = ref<ManagedSource[] | null>(null)
 const loading = ref(true)
 const busy = ref('')
 const error = ref('')
@@ -16,17 +16,19 @@ const interval = ref(360)
 const hourly = ref(4)
 const concurrency = ref(1)
 const probeResult = ref<{ source: string; entries: number; sample: { title: string; url: string }[] } | null>(null)
-const officialRows = computed(() => catalog.value.filter(row =>
+const officialRows = computed(() => (catalog.value ?? []).filter(row =>
   row.config.id.includes(query.value.toLowerCase()) ||
   (row.config.organization ?? '').toLowerCase().includes(query.value.toLowerCase())
 ))
-const customRows = computed(() => installed.value.filter(row => row.origin === 'custom' &&
+const customRows = computed(() => (installed.value ?? []).filter(row => row.origin === 'custom' &&
   (row.id.includes(query.value.toLowerCase()) ||
   (row.config.organization ?? '').toLowerCase().includes(query.value.toLowerCase()))))
 
 async function load() {
   loading.value = true
   error.value = ''
+  catalog.value = null
+  installed.value = null
   try {
     const [c, s] = await Promise.all([api.adminCatalog(), api.adminSources()])
     catalog.value = c
@@ -95,9 +97,9 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
       <q-btn color="primary" unelevated icon="add" label="独自ソースを追加" to="/admin/sources/new" />
     </div>
     <div class="admin-stats q-my-lg">
-      <div class="admin-stat"><span>公式カタログ</span><strong>{{ catalog.length }}</strong></div>
-      <div class="admin-stat"><span>独自ソース</span><strong>{{ installed.filter(s => s.origin === 'custom').length }}</strong></div>
-      <div class="admin-stat"><span>収集中</span><strong>{{ installed.filter(s => s.enabled).length }}</strong></div>
+      <div class="admin-stat"><span>公式カタログ</span><strong>{{ catalog?.length ?? '—' }}</strong></div>
+      <div class="admin-stat"><span>独自ソース</span><strong>{{ installed?.filter(s => s.origin === 'custom').length ?? '—' }}</strong></div>
+      <div class="admin-stat"><span>収集中</span><strong>{{ installed?.filter(s => s.enabled).length ?? '—' }}</strong></div>
     </div>
     <q-banner v-if="error" class="bg-red-1 text-negative q-mb-md" role="alert">{{ error }} <q-btn flat dense label="再取得" @click="load" /></q-banner>
     <q-banner v-if="feedback" class="bg-green-1 text-green-9 q-mb-md" aria-live="polite">{{ feedback }}</q-banner>
@@ -114,6 +116,9 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
       </div>
       <q-separator />
       <div v-if="loading" class="q-pa-lg"><q-skeleton v-for="n in 4" :key="n" type="rect" height="78px" class="q-mb-md" /></div>
+      <div v-else-if="catalog === null || installed === null" class="q-pa-lg text-grey-7" role="status">
+        管理データを取得できないため、一覧を表示できません。
+      </div>
       <template v-else-if="tab === 'official'">
         <p class="admin-hint">公式定義の配布元はGitです。ここで有効化・停止・収集予算を変更してもGitの更新で上書きされません。新規追加分は初期状態で停止しています。</p>
         <div v-if="!officialRows.length" class="empty-state">一致する公式ソースはありません。</div>
