@@ -221,10 +221,9 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 
 <template>
   <q-page class="nous-page report-admin">
-    <div class="eyebrow q-mb-sm">OPERATIONS / REPORTS</div>
     <div class="row items-center justify-between q-gutter-sm">
       <div>
-        <h1 class="page-title q-ma-none">レポートを生成する。</h1>
+        <h1 class="page-title q-ma-none">レポート生成</h1>
         <p class="page-subtitle q-mb-none">検証済みテンプレートを実行し、生成状態と定期実行を管理します。</p>
       </div>
       <q-btn flat color="primary" icon="open_in_new" label="公開レポートを開く" href="/reports/" />
