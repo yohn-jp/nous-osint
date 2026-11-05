@@ -11,6 +11,8 @@ const loading = ref(true)
 const refreshing = ref(false)
 const loadingOlder = ref(false)
 const nextRunCursor = ref<string | null>(null)
+const nextScheduleCursor = ref<string | null>(null)
+const loadingOlderSchedules = ref(false)
 const busy = ref('')
 const error = ref('')
 const feedback = ref('')
@@ -74,13 +76,21 @@ async function loadData(initial = false) {
   error.value = ''
   try {
     const [templateRows, runPage, schedulePage] = await Promise.all([
-      api.adminReportTemplates(), api.adminReportRuns({ limit: 50 }), api.adminReportSchedules(),
+      api.adminReportTemplates(), api.adminReportRuns({ limit: 50 }),
+      api.adminReportSchedules({ limit: 100 }),
     ])
     templates.value = templateRows
     const newestIds = new Set(runPage.runs.map(run => run.run_id))
     runs.value = [...runPage.runs, ...runs.value.filter(run => !newestIds.has(run.run_id))]
     nextRunCursor.value = runPage.next_cursor
-    schedules.value = schedulePage.schedules
+    const scheduleIds = new Set(schedulePage.schedules.map(schedule => schedule.id))
+    const previouslyLoaded = schedules.value.length
+    schedules.value = [
+      ...schedulePage.schedules,
+      ...schedules.value.filter(schedule => !scheduleIds.has(schedule.id)),
+    ].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
+    // Retain the oldest loaded-page cursor across the 10-second refresh.
+    if (previouslyLoaded <= 100) nextScheduleCursor.value = schedulePage.next_cursor
     if (selectedRun.value) {
       const latest = runs.value.find(run => run.run_id === selectedRun.value?.run_id)
       if (latest?.state !== selectedRun.value.state || latest?.stage !== selectedRun.value.stage) {
@@ -107,6 +117,23 @@ async function loadOlderRuns() {
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '古い実行履歴を取得できません。'
   } finally { loadingOlder.value = false }
+}
+
+async function loadOlderSchedules() {
+  if (!nextScheduleCursor.value || loadingOlderSchedules.value) return
+  loadingOlderSchedules.value = true
+  error.value = ''
+  try {
+    const page = await api.adminReportSchedules({ limit: 100, cursor: nextScheduleCursor.value })
+    const existing = new Set(schedules.value.map(schedule => schedule.id))
+    schedules.value = [
+      ...schedules.value,
+      ...page.schedules.filter(schedule => !existing.has(schedule.id)),
+    ].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
+    nextScheduleCursor.value = page.next_cursor
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : '古いスケジュールを取得できません。'
+  } finally { loadingOlderSchedules.value = false }
 }
 
 async function enqueueRun() {
@@ -348,6 +375,10 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
           </div>
           <q-toggle :model-value="schedule.enabled" :label="schedule.enabled ? '有効' : '停止中'"
             :disable="busy === `schedule:${schedule.id}`" @update:model-value="toggleSchedule(schedule)" />
+        </div>
+        <div v-if="nextScheduleCursor" class="row justify-center q-mt-md">
+          <q-btn flat color="primary" icon="expand_more" label="古いスケジュールをさらに読み込む"
+            :loading="loadingOlderSchedules" @click="loadOlderSchedules" />
         </div>
       </div>
     </section>
