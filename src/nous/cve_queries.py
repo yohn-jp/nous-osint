@@ -65,9 +65,11 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
         # Legacy databases have no historical membership journal. Their
         # current complete catalog remains readable, but a cutoff before the
         # latest successful fetch must not be inferred from old item versions.
-        catalog_as_of = (cisa.last_success_at if cisa is not None and
-                         cisa.last_success_at is not None and
-                         cisa.last_success_at <= cutoff else None)
+        last_success = cisa.last_success_at if cisa is not None else None
+        if last_success is not None and last_success.tzinfo is None:
+            last_success = last_success.replace(tzinfo=timezone.utc)
+        catalog_as_of = (last_success if last_success is not None and
+                         last_success <= cutoff else None)
         membership_known = catalog_as_of is not None
         listed_in_catalog = None
     if catalog_as_of is not None and catalog_as_of.tzinfo is None:
