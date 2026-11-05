@@ -154,12 +154,12 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
           <button v-for="item in rows" :key="item.id" type="button" class="result-row"
             :class="{ selected: selectedId === item.id }" :aria-label="item.title + ' の詳細を開く'"
             @click="openItem(item.id)">
-            <div class="result-meta">
+            <span class="result-meta">
               <span class="kind-tag">{{ kindLabel(item.kind) }}</span><span>{{ item.organization || item.source }}</span>
               <span class="meta-sep">{{ stateLabel[item.state] }}</span>
-            </div>
-            <div class="result-title">{{ item.title }}</div>
-            <div class="result-foot">{{ item.source }} · {{ dateLabel(item.published_at || item.last_seen_at) }} · v{{ item.current_version }}</div>
+            </span>
+            <span class="result-title">{{ item.title }}</span>
+            <span class="result-foot">{{ item.source }} · {{ dateLabel(item.published_at || item.last_seen_at) }} · v{{ item.current_version }}</span>
           </button>
           <div class="q-pa-md row items-center justify-center">
             <q-btn v-if="nextCursor !== null" outline color="primary" no-caps :loading="loadingMore" label="さらに読み込む" icon-right="expand_more" @click="loadPage(true)" />
