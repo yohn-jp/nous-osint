@@ -8,11 +8,17 @@ import stat
 
 import httpx
 from starlette.exceptions import HTTPException
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from starlette.staticfiles import StaticFiles
 from urllib.parse import parse_qsl
 
-from .access_auth import AccessAssertionMiddleware, AccessConfig, AccessVerifier, _SPA_ROUTE
+from .access_auth import (
+    AccessAssertionMiddleware,
+    AccessConfig,
+    AccessVerifier,
+    _SPA_ROUTE,
+    _is_unknown_ui_path,
+)
 from .admin import app as admin_app
 from .remote_mcp import mcp_http
 
@@ -21,6 +27,7 @@ _MAX_QUERY_BYTES = 2048
 _MAX_RESPONSE_BYTES = 1_048_576
 _REPORT_SITE_DEFAULT = "/var/lib/nous-reports/site"
 _REPORT_INDEX_PATH = re.compile(r"^/reports/$")
+_REPORT_ROOT_PATH = re.compile(r"^/reports$")
 _REPORT_ARTICLE_PATH = re.compile(
     r"^/reports/(security|cve)/(?=[a-z0-9-]{1,128}/)"
     r"([a-z0-9]+(?:-[a-z0-9]+)*)/$"
@@ -167,6 +174,17 @@ class RemoteGateway:
             return None
         return file_path, "text/html; charset=utf-8"
 
+    def _report_not_found_file(self) -> Path | None:
+        """Return only the 404 document from the currently published release."""
+        try:
+            site_root = self._report_site_root()
+        except (OSError, RuntimeError, ValueError):
+            return None
+        release = self._current_release(site_root)
+        if release is None:
+            return None
+        return self._regular_file(release / "404.html", release)
+
     async def _report(self, scope, receive, send):
         path = scope.get("path", "")
         raw_path = scope.get("raw_path")
@@ -177,8 +195,23 @@ class RemoteGateway:
         if (scope.get("method", "").upper() not in ("GET", "HEAD") or
                 raw_path != canonical_path or scope.get("query_string", b"")):
             return await _report_not_found(scope, receive, send)
+        if _REPORT_ROOT_PATH.fullmatch(path):
+            return await RedirectResponse("/reports/", status_code=308)(
+                scope, receive, send
+            )
         resolved = self._report_file(path)
         if resolved is None:
+            if not path.startswith("/reports/_astro/"):
+                not_found = self._report_not_found_file()
+                if not_found is not None:
+                    return await FileResponse(
+                        not_found,
+                        status_code=404,
+                        media_type="text/html; charset=utf-8",
+                        headers={"Cache-Control": "no-store",
+                                 "X-Content-Type-Options": "nosniff"},
+                        method=scope.get("method", "GET"),
+                    )(scope, receive, send)
             return await _report_not_found(scope, receive, send)
         file_path, media_type = resolved
         return await FileResponse(
@@ -237,11 +270,19 @@ class RemoteGateway:
         if path.startswith("/v1/") or path == "/v1/items":
             return await self._api(scope, send)
         # StaticFiles is used as a bare ASGI app, so handle its missing-file
-        # exception locally. Only known SPA routes may fall back to index.html.
+        # exception locally. Known routes are normal app responses; safe unknown
+        # screen paths reach Vue's not-found route with the HTTP 404 preserved.
         ui_scope = scope
         if _SPA_ROUTE.fullmatch(path):
             ui_scope = {**scope, "path": "/index.html", "raw_path": b"/index.html",
-                        "query_string": b""}
+                        "query_string": scope.get("query_string", b"")}
+        elif _is_unknown_ui_path(path):
+            try:
+                not_found = await self.ui.get_response("index.html", scope)
+                not_found.status_code = 404
+                return await not_found(scope, receive, send)
+            except HTTPException:
+                return await _ui_not_found(scope, receive, send)
         try:
             return await self.ui(ui_scope, receive, send)
         except HTTPException:
@@ -259,6 +300,19 @@ async def _report_not_found(scope, receive, send):
         "Not Found\n",
         status_code=404,
         media_type="text/plain; charset=utf-8",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )(scope, _empty_receive, send)
+
+
+async def _ui_not_found(scope, receive, send):
+    """Small fallback if the UI bundle is unavailable while preserving 404."""
+    return await Response(
+        '<!doctype html><html lang="ja"><meta charset="utf-8">'
+        '<title>ページが見つかりません</title><main><h1>ページが見つかりません</h1>'
+        '<p>お探しの画面は見つかりませんでした。</p>'
+        '<a href="/explore">探索画面へ戻る</a></main></html>',
+        status_code=404,
+        media_type="text/html; charset=utf-8",
         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
     )(scope, _empty_receive, send)
 

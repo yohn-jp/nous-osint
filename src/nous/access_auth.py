@@ -25,6 +25,7 @@ _B64URL = re.compile(r"^[A-Za-z0-9_-]+$")
 _MAX_ASSERTION_LENGTH = 16_384
 _MAX_JWKS_BYTES = 128_000
 _STATIC_ASSET = re.compile(r"^/assets/[A-Za-z0-9._-]{1,255}$")
+_UNKNOWN_UI_PATH = re.compile(r"^/(?:[A-Za-z0-9_-]{1,128}/)*[A-Za-z0-9_-]{1,128}/?$")
 _API_ITEM = re.compile(r"^/v1/items/[0-9]+$")
 _API_CVE = re.compile(r"^/v1/cves/CVE-[0-9]{4}-[0-9]{4,}$")
 _API_VERSIONS = re.compile(r"^/v1/items/[0-9]+/versions$")
@@ -48,7 +49,12 @@ _ADMIN_SCHEDULE_DETAIL = re.compile(
     r"^/v1/admin/report-schedules/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
+_REPORT_ROOT = re.compile(r"^/reports$")
 _REPORT_INDEX = re.compile(r"^/reports/$")
+_REPORT_UNKNOWN_PATH = re.compile(
+    r"^/reports/(?!_astro(?:/|$))[A-Za-z0-9_-]{1,128}"
+    r"(?:/[A-Za-z0-9_-]{1,128})*/?$"
+)
 _REPORT_ARTICLE = re.compile(
     r"^/reports/(?:security|cve)/(?=[a-z0-9-]{1,128}/)"
     r"[a-z0-9]+(?:-[a-z0-9]+)*/$"
@@ -62,6 +68,17 @@ _REPORT_CSP = (
     "font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; "
     "object-src 'none'"
 )
+
+
+def _is_unknown_ui_path(path: str) -> bool:
+    """Allow only safe, non-reserved screen paths to reach the SPA 404 view."""
+    if not _UNKNOWN_UI_PATH.fullmatch(path):
+        return False
+    first = path.lstrip("/").split("/", 1)[0].lower()
+    return first not in {
+        "api", "v1", "mcp", "admin", "internal", "health", "metrics",
+        "reports", "assets",
+    } and not first.startswith("_")
 
 
 class AccessDenied(Exception):
@@ -280,10 +297,14 @@ class AccessAssertionMiddleware:
             if _ADMIN_SCHEDULE_DETAIL.fullmatch(path):
                 return method == "PATCH"
             return False
-        if (_REPORT_INDEX.fullmatch(path) or _REPORT_ARTICLE.fullmatch(path)
+        if (_REPORT_ROOT.fullmatch(path) or _REPORT_INDEX.fullmatch(path)
+                or _REPORT_UNKNOWN_PATH.fullmatch(path)
+                or _REPORT_ARTICLE.fullmatch(path)
                 or _REPORT_ASSET.fullmatch(path)):
             return method in ("GET", "HEAD")
         if path in ("/", "/index.html") or _STATIC_ASSET.fullmatch(path) or _SPA_ROUTE.fullmatch(path):
+            return method in ("GET", "HEAD")
+        if _is_unknown_ui_path(path):
             return method in ("GET", "HEAD")
         if method != "GET":
             return False
@@ -312,6 +333,7 @@ class AccessAssertionMiddleware:
             canonical_path = path.encode("ascii")
         except UnicodeEncodeError:
             canonical_path = b""
+        exact_path = raw_path == canonical_path
         exact_report_request = (
             not report_path or
             (raw_path == canonical_path and not scope.get("query_string", b""))
@@ -340,7 +362,7 @@ class AccessAssertionMiddleware:
                 message = {**message, "headers": headers_out}
             await send(message)
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
-        if (not self._allowed_host(headers) or not exact_report_request
+        if (not self._allowed_host(headers) or not exact_path or not exact_report_request
                 or not self._allowed_path(path, method)):
             return await JSONResponse({"detail": "not found"}, status_code=404)(
                 scope, receive, send_with_cache
