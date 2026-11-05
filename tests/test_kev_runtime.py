@@ -89,3 +89,42 @@ def test_malformed_kev_catalog_cannot_replace_existing_cve_records(monkeypatch):
         assert old.external_id == "CVE-2025-9999"
         assert old.state == "current"
         assert db.get(FetchJob, job_id).state == "failed"
+
+
+def test_immutable_catalog_journal_deduplicates_repeated_successful_membership():
+    from datetime import timedelta
+    from sqlalchemy import func
+    from nous.models import KevCatalogContent, KevCatalogObservation, now
+
+    factory = session_factory()
+    key = "kev-history-" + uuid.uuid4().hex[:12]
+    with factory() as db:
+        source = Source(
+            source_key=key, kind="json_api", adapter="cisa_kev_v1",
+            item_kind="vulnerability",
+            url="https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json",
+            config_revision="fixture", config={"max_concurrency": 1},
+            enabled=False, interval_minutes=360, max_requests_per_hour=4,
+        )
+        db.add(source)
+        db.flush()
+        source_id = source.id
+        start = now()
+        runtime._record_kev_catalog(db, source, ["CVE-2026-22222", "CVE-2026-11111"], start)
+        runtime._record_kev_catalog(db, source, ["CVE-2026-11111", "CVE-2026-22222"],
+                                    start + timedelta(hours=1))
+        runtime._record_kev_catalog(db, source, ["CVE-2026-11111"],
+                                    start + timedelta(hours=2))
+        db.commit()
+
+    with factory() as db:
+        observations = db.scalars(select(KevCatalogObservation).where(
+            KevCatalogObservation.source_id == source_id
+        ).order_by(KevCatalogObservation.observed_at)).all()
+        assert len(observations) == 3
+        assert observations[0].digest == observations[1].digest
+        assert observations[2].digest != observations[1].digest
+        assert db.scalar(select(func.count()).select_from(KevCatalogContent)) >= 2
+        assert db.get(KevCatalogContent, observations[1].digest).cve_ids == [
+            "CVE-2026-11111", "CVE-2026-22222",
+        ]
