@@ -57,6 +57,17 @@ def _admin_subjects():
     return {s.strip() for s in os.getenv("NOUS_ADMIN_SUBJECTS", "").split(",") if s.strip()}
 
 
+def _admin_emails():
+    return {s.strip().casefold() for s in os.getenv("NOUS_ADMIN_EMAILS", "").split(",") if s.strip()}
+
+
+def _is_admin(identity):
+    if identity is None:
+        return False
+    return (identity.subject in _admin_subjects() or
+            bool(identity.email and identity.email.casefold() in _admin_emails()))
+
+
 def _public_origin():
     host = os.getenv("NOUS_PUBLIC_HOST", "nous.yohn.jp").lower().strip()
     if not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?", host):
@@ -67,7 +78,9 @@ def _public_origin():
 @app.middleware("http")
 async def require_admin(request: Request, call_next):
     identity = request.scope.get("state", {}).get("access_identity")
-    if not identity or not _admin_subjects() or identity.subject not in _admin_subjects():
+    if identity is None:
+        return _error(403, "Access authentication required")
+    if request.url.path != "/v1/admin/session" and not _is_admin(identity):
         return _error(403, "administrator access required")
     if request.method not in ("GET", "HEAD"):
         if (request.headers.get("origin") != _public_origin() or
@@ -149,7 +162,7 @@ class ReportScheduleUpdate(BaseModel):
 
 @app.get("/v1/admin/session")
 def session(request: Request):
-    return {"allowed": True}
+    return {"allowed": _is_admin(request.state.access_identity)}
 
 
 @app.get("/v1/admin/catalog")
