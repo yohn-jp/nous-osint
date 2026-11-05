@@ -170,7 +170,10 @@ export interface ReportSchedule {
   created_at: string
 }
 
-export interface ReportSchedulesPage { schedules: ReportSchedule[] }
+export interface ReportSchedulesPage {
+  schedules: ReportSchedule[]
+  next_cursor: string | null
+}
 
 export interface CreateReportRun {
   template_id: ReportTemplateId
@@ -265,7 +268,8 @@ export const api = {
   },
   adminCreateReportRun: (request: CreateReportRun) =>
     mutation<{ run_id: string; state: ReportRunState }>('/v1/admin/report-runs', 'POST', request),
-  adminReportSchedules: () => get<ReportSchedulesPage>('/v1/admin/report-schedules'),
+  adminReportSchedules: (params: { limit?: number; cursor?: string } = {}) =>
+    get<ReportSchedulesPage>('/v1/admin/report-schedules' + qs(params)),
   adminCreateReportSchedule: (request: CreateReportSchedule) =>
     mutation<ReportSchedule>('/v1/admin/report-schedules', 'POST', request),
   adminUpdateReportSchedule: (id: string, changes: { enabled: boolean }) => {
