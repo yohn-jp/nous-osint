@@ -340,7 +340,12 @@ def _site_articles(db, candidate: dict | None = None) -> list[dict]:
     reports = db.scalars(select(Report).order_by(Report.published_at.desc()).limit(
         _MAX_ARCHIVE_REPORTS + 1
     )).all()
-    if len(reports) > _MAX_ARCHIVE_REPORTS:
+    if len(reports) > _MAX_ARCHIVE_REPORTS or (
+        candidate is not None and len(reports) >= _MAX_ARCHIVE_REPORTS
+    ):
+        # Reject before writing the candidate or its pending release intent.
+        # Otherwise publication #1001 succeeds and blocks every subsequent
+        # reconciliation tick, including the initial recovery path.
         raise ReportError("report_archive_limit_exceeded")
     values = [_site_article(report) for report in reports]
     if candidate is not None:
@@ -685,9 +690,9 @@ def _publish_candidate(factory, claim: dict, token: str, bundle: dict, article: 
         with _publication_lock(site_root):
             previous_digest = _ensure_current_release_locked(factory, site_root)
             with factory() as db:
-                old_reports = _site_articles(db)
+                site_articles = _site_articles(db, site_candidate)
             dist, assets, digest = build_static_release(
-                [*old_reports, site_candidate], build_root)
+                site_articles, build_root)
             _write_release(site_root, dist, assets, digest)
 
             if _current_digest(site_root) != previous_digest:
