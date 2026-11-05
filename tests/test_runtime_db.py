@@ -304,3 +304,44 @@ def test_stale_claim_is_fenced_after_reclaim_and_request_is_accounted(monkeypatc
         attempt = db.scalar(select(FetchAttempt).where(
             FetchAttempt.job_id == job_id))
         assert attempt.outcome == "stale_lease" and attempt.request_count == 1
+
+
+def test_scheduler_coalesces_due_polls_while_source_has_pending_work(monkeypatch):
+    """A down Worker must not accumulate one extra poll on every cadence tick."""
+    from datetime import timedelta
+    from nous.models import now
+
+    factory = session_factory()
+    key = "coalesced-" + uuid.uuid4().hex[:12]
+    monkeypatch.setattr(runtime, "sync", lambda db, configs: None)
+    monkeypatch.setattr(runtime, "load_registry", lambda: [])
+    with factory() as db:
+        source = Source(
+            source_key=key, kind="json_api", url="https://coalesced.example/feed",
+            adapter="json_v1", item_kind="news", config_revision="test",
+            config={"max_concurrency": 1}, enabled=True, interval_minutes=15,
+            max_requests_per_hour=5, next_due_at=now() - timedelta(hours=1),
+        )
+        db.add(source)
+        db.flush()
+        pending = FetchJob(source_id=source.id, dedupe_key=key)
+        db.add(pending)
+        db.commit()
+        source_id, pending_id = source.id, pending.id
+
+    runtime.schedule_once(factory)
+    with factory() as db:
+        source = db.get(Source, source_id)
+        assert source.next_due_at > now()
+        assert db.scalar(select(func.count()).select_from(FetchJob)
+                         .where(FetchJob.source_id == source_id)) == 1
+        # The pending poll finishes, and the next cadence can be scheduled.
+        db.get(FetchJob, pending_id).state = "done"
+        source.next_due_at = now() - timedelta(seconds=1)
+        db.commit()
+
+    runtime.schedule_once(factory)
+    with factory() as db:
+        jobs = db.scalars(select(FetchJob).where(FetchJob.source_id == source_id)).all()
+        assert len(jobs) == 2
+        assert sorted(j.state for j in jobs) == ["done", "queued"]
