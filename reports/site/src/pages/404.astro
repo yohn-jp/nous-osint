@@ -1,0 +1,17 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const base = import.meta.env.BASE_URL;
+---
+
+<BaseLayout
+  title="レポートが見つかりません"
+  description="お探しのレポートは見つかりませんでした。公開中のレポート一覧をご確認ください。"
+>
+  <section class="empty-state" aria-labelledby="not-found-title">
+    <p class="eyebrow">404 · REPORT NOT FOUND</p>
+    <h1 id="not-found-title">レポートが見つかりません</h1>
+    <p>お探しのレポートは見つかりませんでした。公開中の記事はレポート一覧からご覧いただけます。</p>
+    <p><a href={base}>レポート一覧へ戻る</a></p>
+  </section>
+</BaseLayout>
