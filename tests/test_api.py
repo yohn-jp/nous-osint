@@ -88,3 +88,51 @@ def test_ready_requires_latest_schema_revision(monkeypatch):
     monkeypatch.setattr(api, "expected_schema_head", lambda: "not-current")
     mismatch = client.get("/health/ready")
     assert mismatch.status_code == 503
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="PostgreSQL required")
+def test_version_history_endpoint_is_bounded_without_explicit_limit():
+    import uuid
+    from sqlalchemy import select
+    from nous.db import session_factory
+    from nous.models import Item, ItemVersion, Source
+
+    factory = session_factory()
+    key = "version-bound-" + uuid.uuid4().hex[:12]
+    with factory() as db:
+        source = Source(
+            source_key=key, kind="rss", adapter="rss_v1",
+            item_kind="news", url="https://version-bound.example/rss",
+            config_revision="fixture", config={}, enabled=False,
+            interval_minutes=60, max_requests_per_hour=5,
+        )
+        db.add(source)
+        db.flush()
+        item = Item(
+            source_id=source.id, external_id="bounded", kind="news",
+            canonical_url="https://version-bound.example/story",
+            title="Bounded version history", state="current",
+            current_version=60, current_hash="f" * 64,
+        )
+        db.add(item)
+        db.flush()
+        item_id = item.id
+        db.add_all([
+            ItemVersion(
+                item_id=item_id, version=number,
+                sha256=f"{number:064x}",
+                attributes={"title": f"Version {number}"},
+                provenance={"adapter": "rss_v1"},
+            )
+            for number in range(1, 61)
+        ])
+        db.commit()
+
+    default = client.get(f"/v1/items/{item_id}/versions")
+    assert default.status_code == 200, default.text
+    assert len(default.json()) == 50
+    assert default.json()[0]["version"] == 60
+    assert default.json()[-1]["version"] == 11
+    smaller = client.get(f"/v1/items/{item_id}/versions?limit=7")
+    assert smaller.status_code == 200 and len(smaller.json()) == 7
+    assert client.get(f"/v1/items/{item_id}/versions?limit=101").status_code == 422
