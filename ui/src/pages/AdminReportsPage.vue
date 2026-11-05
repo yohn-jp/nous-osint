@@ -85,12 +85,18 @@ async function loadData(initial = false) {
     nextRunCursor.value = runPage.next_cursor
     const scheduleIds = new Set(schedulePage.schedules.map(schedule => schedule.id))
     const previouslyLoaded = schedules.value.length
+    const knownBeforeRefresh = new Set(schedules.value.map(schedule => schedule.id))
+    const pageTail = schedulePage.schedules[schedulePage.schedules.length - 1]
     schedules.value = [
       ...schedulePage.schedules,
       ...schedules.value.filter(schedule => !scheduleIds.has(schedule.id)),
     ].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
-    // Retain the oldest loaded-page cursor across the 10-second refresh.
-    if (previouslyLoaded <= 100) nextScheduleCursor.value = schedulePage.next_cursor
+    // Keep the oldest cursor when pages are contiguous. If >100 new schedules
+    // appeared between refreshes, restart pagination at the new page boundary
+    // so no middle page can become permanently unreachable.
+    if (previouslyLoaded <= 100 || (pageTail && !knownBeforeRefresh.has(pageTail.id))) {
+      nextScheduleCursor.value = schedulePage.next_cursor
+    }
     if (selectedRun.value) {
       const latest = runs.value.find(run => run.run_id === selectedRun.value?.run_id)
       if (latest?.state !== selectedRun.value.state || latest?.stage !== selectedRun.value.stage) {
