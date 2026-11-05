@@ -49,8 +49,7 @@ onBeforeUnmount(() => controller?.abort())
 
 <template>
   <q-page class="nous-page">
-    <div class="eyebrow q-mb-sm">INTELLIGENCE / CHANGES</div>
-    <h1 class="page-title q-ma-none">変更を追跡する。</h1>
+    <h1 class="page-title q-ma-none">変更履歴</h1>
     <p class="page-subtitle q-mb-xl">観測された新規・更新レコードを時系列で確認する。</p>
     <section class="content-panel">
       <div class="row q-col-gutter-sm items-center q-pa-md">
