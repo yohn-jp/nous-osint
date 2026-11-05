@@ -319,3 +319,35 @@ def test_approved_kev_vulnerability_field_is_available_for_quote_rights():
     assert evidence["content_policy"]["quote_allowed"] is True
     assert evidence["content_policy"]["quote_values"] == ["Example Vendor"]
     assert "vulnerability.vendor" in evidence["allowed_fields"]
+
+
+def test_unreviewed_article_section_heading_cannot_publish_an_unchecked_claim():
+    bundle = evidence_bundle()
+    article = article_for(bundle)
+    article["sections"][0]["heading"] = "ランサムウェアでの悪用が確認された"
+    with pytest.raises(ReportError, match="unreviewed_section_heading"):
+        validate_article(article, template_id="security-daily", bundle=bundle,
+                         fact_check=fact_check_for())
+
+
+def test_fact_table_columns_must_use_neutral_reviewed_labels():
+    bundle = evidence_bundle()
+    text = "セキュリティ更新の内容 | 公式アドバイザリの情報"
+    article = article_for(bundle, text=text)
+    article["sections"][0]["blocks"] = [{
+        "type": "fact_table", "headers": ["項目", "内容"],
+        "rows": [{"cells": text.split(" | "), "claim_ids": ["C001"],
+                  "evidence_ids": ["E001"]}],
+    }]
+    validated = validate_article(
+        article, template_id="security-daily", bundle=bundle,
+        fact_check=fact_check_for(text),
+    )
+    assert validated["sections"][0]["blocks"][0]["headers"] == ["項目", "内容"]
+
+    article["sections"][0]["blocks"][0]["headers"][1] = "深刻な侵害が確定"
+    with pytest.raises(ReportError, match="unreviewed_table_header"):
+        validate_article(
+            article, template_id="security-daily", bundle=bundle,
+            fact_check=fact_check_for(text),
+        )
