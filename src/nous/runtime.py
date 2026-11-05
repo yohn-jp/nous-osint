@@ -4,6 +4,7 @@ import logging
 import socket
 import threading
 import time
+import uuid
 import httpx
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -16,7 +17,8 @@ from .job_postings import fetch_lever_board
 from .cve_index import cve_relations, record_item_version_cves, sync_item_cves
 from .db import session_factory
 from .fetch import fetch
-from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source, now
+from .models import (FetchAttempt, FetchJob, Item, ItemVersion,
+                     KevCatalogContent, KevCatalogObservation, Source, now)
 from .registry import load_registry, sync
 
 _FETCH_LEASE_SECONDS = 300
@@ -147,6 +149,20 @@ def store_item(db, source, raw, final_url):
         db.add(version)
         db.flush()
         record_item_version_cves(db, version.id, attrs.get("cve_relations", {}))
+
+def _record_kev_catalog(db, source: Source, members, observed_at: datetime):
+    """Commit complete membership alongside items and the successful fetch."""
+    cve_ids = sorted(set(members))
+    if not cve_ids:
+        raise ValueError("empty complete CISA KEV catalog")
+    digest = hashlib.sha256(json.dumps(cve_ids, separators=(",", ":")).encode()).hexdigest()
+    db.execute(insert(KevCatalogContent).values(digest=digest, cve_ids=cve_ids)
+               .on_conflict_do_nothing(index_elements=["digest"]))
+    db.add(KevCatalogObservation(
+        id=str(uuid.uuid4()), source_id=source.id,
+        observed_at=observed_at, digest=digest,
+    ))
+
 
 def parse_timestamp(value):
     if not isinstance(value, str):
@@ -304,7 +320,15 @@ def process(factory, job_id, claim_attempt=None):
                                           old_item.last_seen_at < now() - timedelta(days=7)
                                           else "unknown")
             if outcome != "failure":
-                source.last_success_at = now()
+                observed_at = now()
+                if (source.source_key == "cisa-kev" and source.origin == "official"
+                        and source.adapter == "cisa_kev_v1"):
+                    members = (seen if outcome == "success" else db.scalars(
+                        select(Item.external_id).where(
+                            Item.source_id == source.id, Item.state == "current",
+                        )).all())
+                    _record_kev_catalog(db, source, members, observed_at)
+                source.last_success_at = observed_at
                 source.last_error = None
                 source.etag = headers.get("etag", source.etag)
                 source.last_modified = headers.get("last-modified", source.last_modified)
