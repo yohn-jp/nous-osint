@@ -178,6 +178,9 @@ body { -webkit-font-smoothing: antialiased; }
 .result-row:focus-visible,
 .result-row.selected { background: var(--nous-hover); }
 .result-row:hover { transform: translateX(3px); }
+/* Informational source rows are not actions; avoid a misleading hover lift. */
+.source-observation-row { cursor: default; }
+.source-observation-row:hover { transform: none; }
 .result-row.selected {
   box-shadow: inset 3px 0 0 var(--nous-accent);
 }
