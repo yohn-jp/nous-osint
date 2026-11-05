@@ -36,8 +36,10 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
     <q-header class="nous-header">
       <q-toolbar class="q-px-lg" style="min-height: 64px">
         <q-btn v-if="$q.screen.lt.md" flat round dense icon="menu" aria-label="メニュー" @click="drawerOpen = !drawerOpen" />
-        <q-avatar rounded class="nous-mark" size="34px"><q-icon name="radar" size="22px" /></q-avatar>
-        <div class="q-ml-md brand-name">nous<span class="brand-soft"> / osint</span></div>
+        <router-link to="/explore" class="brand-link" aria-label="Nous OSINT 探索へ戻る">
+          <q-avatar rounded class="nous-mark" size="34px"><q-icon name="radar" size="22px" /></q-avatar>
+          <span class="brand-name">nous<span class="brand-soft"> / osint</span></span>
+        </router-link>
         <q-space />
 
         <q-btn v-if="canAdmin" flat no-caps class="header-admin-action q-mr-sm" :to="adminDestination"
@@ -76,7 +78,12 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
 
     <q-page-container><router-view /></q-page-container>
     <q-footer v-if="$q.screen.lt.md" class="mobile-footer">
-      <q-tabs no-caps dense indicator-color="primary" active-color="primary" class="text-grey-7">
+      <q-tabs v-if="isAdminArea && canAdmin" no-caps dense indicator-color="primary" active-color="primary" class="mobile-tabs">
+        <q-route-tab to="/admin/sources" :exact="false" icon="tune" label="情報源管理" />
+        <q-route-tab to="/admin/reports" exact icon="calendar_month" label="レポート生成" />
+        <q-route-tab to="/explore" exact icon="arrow_back" label="探索へ戻る" />
+      </q-tabs>
+      <q-tabs v-else no-caps dense indicator-color="primary" active-color="primary" class="mobile-tabs">
         <q-route-tab v-for="entry in nav" :key="entry.name" :to="entry.to" exact :icon="entry.icon" :label="entry.title" />
       </q-tabs>
     </q-footer>
