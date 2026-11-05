@@ -123,6 +123,7 @@ button.result-row:focus-visible, .nav-entry:focus-visible, .header-admin-action:
 .nous-page .q-btn:focus-visible { outline: 2px solid var(--nous-accent); outline-offset: -2px; }
 .source-observation-row { cursor: default; }
 .source-observation-row:hover { transform: none; background: var(--nous-panel); }
+button.result-row .result-title, button.result-row .result-foot { display: block; }
 .results-heading { display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; }
 .results-count { color: var(--nous-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .source-overview {
