@@ -117,9 +117,8 @@ async function submit() {
 
 <template>
   <q-page class="nous-page">
-    <div class="eyebrow q-mb-sm">OPERATIONS / CUSTOM SOURCE</div>
     <div class="row items-center justify-between q-gutter-sm q-mb-sm">
-      <h1 class="page-title q-ma-none">{{ editing ? '独自ソースを編集する。' : '独自ソースを追加する。' }}</h1>
+      <h1 class="page-title q-ma-none">{{ editing ? '独自ソースの編集' : '独自ソースの追加' }}</h1>
       <q-btn flat color="primary" icon="arrow_back" label="管理画面に戻る" to="/admin/sources" />
     </div>
     <p class="page-subtitle q-mb-lg">GitHubを使わず、このNousインスタンスに登録します。新規ソースは停止状態で作成されます。</p>
