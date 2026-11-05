@@ -251,7 +251,25 @@ def process(factory, job_id, claim_attempt=None):
                 raise ValueError(error)
         except Exception as exc:
             db.rollback()
-            job = db.get(FetchJob, job_id)
+            # Rollback drops the FOR UPDATE lock. Reacquire it and fence again
+            # before changing the job's retry state: another Worker can claim
+            # this job between the failed observation TX and recovery.
+            job = db.scalar(select(FetchJob).where(
+                FetchJob.id == job_id
+            ).with_for_update())
+            if claim_attempt is not None and (
+                job is None or job.attempts != claim_attempt or
+                job.state != "leased" or job.lease_until is None or
+                job.lease_until <= now()
+            ):
+                db.add(FetchAttempt(
+                    job_id=job_id, started_at=started, ended_at=now(),
+                    outcome="stale_lease", http_status=status, final_url=final_url,
+                    error_code="stale_lease", request_count=max(requests_made, 1),
+                ))
+                db.commit()
+                event("fetch_discarded", job=job_id, reason="stale_lease")
+                return
             source = db.get(Source, job.source_id)
             error = str(exc)[:100]
             source.last_error = error
