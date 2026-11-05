@@ -44,7 +44,7 @@ The object of work is an observed record, its publisher, its timestamp, its chan
 | All records as floating cards with shadows and oversized corners | A continuous scan-friendly result list with restrained separators | Density and source comparison serve the user |
 | Repeated delayed row-entry animations and hover translations | Instant selection/focus feedback (background/active indicator), reduced-motion parity | No item should shift away from the pointer |
 | Treating an information-only tag as a button | Separate static statuses from actionable controls | Shape and contrast must match affordance |
-| Showing `停止` for a source not yet installed | Explicit `未導入`, `停止`, or `収集中` | Prevent incorrect operational decisions |
+| Showing `停止` for a source not yet installed | Explicit `未導入`, `停止`, or `有効` (do not equate enabled with a successful collection) | Prevent incorrect operational decisions |
 | Generic `アクセス権限を確認してください` with apparently empty datasets | Keep error state separate from true empty results and expose recovery action | Errors are not missing data |
 | Decorative dashboards with invented metrics | Surface only real API observations and their associated actions | No unverified telemetry |
 
