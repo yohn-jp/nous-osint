@@ -114,8 +114,8 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
       <div><h1 class="page-title q-ma-none">探索</h1><div class="page-subtitle">公開情報を検索し、出典と変更履歴を確認します。</div></div>
     </div>
 
-    <section aria-label="検索条件" class="content-panel q-pa-md q-mb-lg">
-      <div class="row q-col-gutter-sm items-center">
+    <section aria-label="検索条件" class="content-panel search-panel q-pa-md q-mb-lg">
+      <div class="row q-col-gutter-sm items-center search-fields">
         <div class="col-12 col-md">
           <q-input v-model="term" maxlength="200" outlined dense clearable placeholder="キーワードで検索" aria-label="キーワード検索" @keydown.enter="onSearchKeydown">
             <template #prepend><q-icon name="search" color="primary" /></template>
@@ -127,8 +127,8 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
         <div class="col-6 col-md-3">
           <q-select v-model="source" outlined dense emit-value map-options :options="sourceOptions" label="情報源" @update:model-value="applyFilters" />
         </div>
-        <div class="col-auto">
-          <q-btn color="primary" unelevated icon="search" label="検索" @click="applyFilters" />
+        <div class="col-12 col-md-auto search-action">
+          <q-btn class="search-submit-btn" color="primary" unelevated icon="search" label="検索" @click="applyFilters" />
         </div>
       </div>
       <div v-if="sourceError" class="text-caption text-negative q-mt-sm">{{ sourceError }}</div>
@@ -146,19 +146,22 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
           <q-icon name="error_outline" size="32px" color="negative" />
           <p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="loadPage()" />
         </div>
-        <div v-else-if="rows.length === 0" class="empty-state">
-          <q-icon name="inbox" size="38px" /><div class="q-mt-md text-weight-medium">該当する情報がありません</div>
-          <p class="text-caption">検索条件を変更するか、収集状態を確認してください。</p>
+        <div v-else-if="rows.length === 0" class="empty-state result-empty-state">
+          <div class="empty-heading">{{ hasAppliedFilters ? '条件に一致する情報はありません' : '収集済みの情報はまだありません' }}</div>
+          <p>{{ hasAppliedFilters ? '検索語やフィルタを変えると、別の情報を探せます。' : '情報源の収集状態を確認できます。' }}</p>
+          <q-btn v-if="hasAppliedFilters" flat no-caps color="primary" label="条件をクリア" @click="clearFilters" />
+          <q-btn v-else flat no-caps color="primary" to="/sources" label="情報源を確認" />
         </div>
         <template v-else>
           <button v-for="item in rows" :key="item.id" type="button" class="result-row"
-            :class="{ selected: selectedId === item.id }" :aria-label="item.title + ' の詳細を開く'"
+            :class="{ selected: selectedId === item.id }" :aria-pressed="selectedId === item.id" :aria-label="item.title + ' の詳細を開く'"
             @click="openItem(item.id)">
+            <span class="result-title">{{ item.title }}</span>
             <span class="result-meta">
-              <span class="kind-tag">{{ kindLabel(item.kind) }}</span><span>{{ item.organization || item.source }}</span>
+              <span class="kind-tag">{{ kindLabel(item.kind) }}</span>
+              <span class="record-organization">{{ item.organization || item.source }}</span>
               <span class="meta-sep">{{ stateLabel[item.state] }}</span>
             </span>
-            <span class="result-title">{{ item.title }}</span>
             <span class="result-foot">{{ item.source }} · {{ dateLabel(item.published_at || item.last_seen_at) }} · v{{ item.current_version }}</span>
           </button>
           <div class="q-pa-md row items-center justify-center">
@@ -170,7 +173,7 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
       </section>
       <aside class="content-panel preview-pane" aria-label="情報のプレビュー">
         <ItemPreview v-if="selectedId" :item-id="selectedId" compact />
-        <div v-else class="empty-state"><q-icon name="article" size="38px" /><p class="q-mt-md">項目を選ぶと出典と履歴を表示します。</p></div>
+        <div v-else class="preview-empty"><q-icon name="article" size="27px" aria-hidden="true" /><p>一覧から情報を選択してください。</p><span>出典と観測履歴をここに表示します。</span></div>
       </aside>
     </div>
   </q-page>
