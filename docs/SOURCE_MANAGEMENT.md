@@ -27,8 +27,11 @@ budget; a reachable URL or probe result does not prove permission.
 
 ## Admin UI flow
 
-Navigate to **管理 → 情報ソース** (`/admin/sources`) as an explicitly
-allowlisted administrator.
+An administrator enters **管理** from the library header, then selects
+**情報源管理** (`/admin/sources`) or **レポート生成管理** (`/admin/reports`).
+The report publication site (`/reports/`) is a separate reading experience,
+opened from **PUBLICATIONS**, not a tab in the library. Both share the same
+Cloudflare Access session.
 
 - **公式カタログ**: view bundled source definitions and last-fetch status;
   probe and enable/disable each source; change polling interval and budgets.
@@ -49,8 +52,12 @@ contributors who want to improve the *official distributed catalog*.
 
 All admin requests travel through the existing Cloudflare Access-protected
 gateway. The gateway independently verifies the signed Access JWT and checks
-its stable `sub` claim against the comma-separated `NOUS_ADMIN_SUBJECTS`
-allowlist. **Access login alone is not administrative authorization.**
+its stable `sub` claim against `NOUS_ADMIN_SUBJECTS`, or its verified email
+claim against `NOUS_ADMIN_EMAILS` (both comma-separated exact-match allowlists).
+No separate administrator login is performed. `/v1/admin/session` reports
+`{"allowed": true|false}` for authenticated users, while every other admin
+endpoint denies non-administrators. **Access login alone is not administrative
+authorization.**
 
 The `NOUS_PUBLIC_HOST` environment variable sets the accepted public
 hostname (default `nous.yohn.jp`). The admin write API accepts same-origin
@@ -84,9 +91,16 @@ the new application image. Store a PostgreSQL URL using the dedicated
 `%h/.config/nous/mcp.env` entries:
 
 ```ini
-NOUS_ADMIN_SUBJECTS=<verified-access-sub-claim>
+NOUS_ADMIN_EMAILS=<verified-access-email>
+# Optional alternative for identities without an email claim:
+# NOUS_ADMIN_SUBJECTS=<verified-access-sub-claim>
 NOUS_PUBLIC_HOST=nous.yohn.jp
 ```
+
+Configure at least one exact administrator email or stable subject from the
+existing Cloudflare Access identity. Never use a wildcard or an unverified
+browser-supplied header. Changing this allowlist requires restarting the
+MCP gateway; it does not require a new login flow.
 
 The committed `nous-mcp.container` mounts the admin DB secret at
 `/run/secrets/admin_database_url`. Provision it before service restart;
