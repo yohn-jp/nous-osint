@@ -268,7 +268,12 @@ def test_stale_claim_is_fenced_after_reclaim_and_request_is_accounted(monkeypatc
         )
         db.add(source)
         db.flush()
-        job = FetchJob(source_id=source.id, dedupe_key=key)
+        # The suite shares a PostgreSQL schema; ensure this is the oldest due
+        # job rather than accidentally claiming a leftover queued fixture.
+        job = FetchJob(
+            source_id=source.id, dedupe_key=key,
+            available_at=now() - timedelta(days=30),
+        )
         db.add(job)
         db.commit()
         job_id, source_id = job.id, source.id
