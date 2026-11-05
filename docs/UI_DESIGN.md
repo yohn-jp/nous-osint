@@ -31,6 +31,33 @@ Visual direction: **research feed**, informed by the information hierarchy of fe
 - Supports light/dark theme with Quasar; respect reduced motion. Status/state is conveyed through text, not just color.
 - No external tracking fonts/scripts or untrusted HTML injection.
 
+## Interaction-first design contract (2026-11-05)
+
+The object of work is an observed record, its publisher, its timestamp, its change state, or an operational source. This UI is a **daily research instrument**, not a product-marketing landing page. The interface should communicate the result of a user action before adding ornament.
+
+### Antipatterns and replacements
+
+| Reject | Do instead | Reason / check |
+| --- | --- | --- |
+| Large narrative headings (`情報を探索する。`) and repeated English micro-kickers | Short Japanese screen names and an explicit task description where needed | Make the first glance about the work |
+| KPI cards with no direct action; inferred counts on API failure | Contextual, compact, truthfully sourced operational overview; unresolved is not zero | Distinguish loading, unavailable, disabled, and empty |
+| All records as floating cards with shadows and oversized corners | A continuous scan-friendly result list with restrained separators | Density and source comparison serve the user |
+| Repeated delayed row-entry animations and hover translations | Instant selection/focus feedback (background/active indicator), reduced-motion parity | No item should shift away from the pointer |
+| Treating an information-only tag as a button | Separate static statuses from actionable controls | Shape and contrast must match affordance |
+| Showing `停止` for a source not yet installed | Explicit `未導入`, `停止`, or `有効` (do not equate enabled with a successful collection) | Prevent incorrect operational decisions |
+| Generic `アクセス権限を確認してください` with apparently empty datasets | Keep error state separate from true empty results and expose recovery action | Errors are not missing data |
+| Decorative dashboards with invented metrics | Surface only real API observations and their associated actions | No unverified telemetry |
+
+### Motion policy
+
+Motion is **feedback**, not an atmosphere. Use short reversible transitions for hover/selection and actual disclosure. No page-entry choreography, staggered list reveal, card lift, fake loading completion, or transforms that displace operational controls. Keep keyboard focus visible during interaction and honor `prefers-reduced-motion`.
+
+### Review and evidence
+
+At 320/390px and desktop widths verify: scan speed with long Japanese/Latin titles, preserved query/filter state, IME composition, touch targets, keyboard selection, 200% text zoom, truthful loading/empty/permission/error states, report-to-library navigation, light/dark modes, and reduced-motion. CI only verifies builds/tests, not rendered visual quality. Browser checks must be marked unverified until actually performed.
+
+Design references used for evaluation (principles, not copied assets): [NN/g usability heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/), [Linear's 2026 UI reasoning](https://linear.app/now/behind-the-latest-design-refresh), [Carbon filtering](https://www.carbondesignsystem.com/building-blocks/core/patterns/filtering), [GOV.UK error guidance](https://design-system.service.gov.uk/components/error-message/), [GOV.UK tag guidance](https://design-system.service.gov.uk/components/tag/), [MDN reduced motion](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
+
 ## Pages / feature contracts
 
 1. **Explore** (primary): keyword query, kind and source filters, query submission and reset, stable incremental **cursor** pagination, loading/empty/error states. Render title, organization or source, kind/state, publication/observation time; opening the item shows source attribution and revisions. No entire-corpus fetch.

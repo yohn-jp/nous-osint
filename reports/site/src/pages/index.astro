@@ -17,20 +17,19 @@ function dateLabel(value: string) {
 
 <BaseLayout title="インテリジェンスレポート">
   <section class="index-hero" aria-labelledby="page-title">
-    <p class="eyebrow">SOURCE-BASED ANALYSIS</p>
-    <h1 id="page-title">インテリジェンス<br /><span>レポート</span></h1>
+    <p class="eyebrow">Nous / 分析レポート</p>
+    <h1 id="page-title">分析レポート</h1>
     <p class="hero-copy">
       収集した公開情報をもとに、確認された事実と分析を分けてまとめています。
       出典と観測時刻から原資料を確認できます。
     </p>
-    <div class="hero-rule" aria-hidden="true"><span></span></div>
     <p class="report-count">{reports.length} 件のレポート</p>
   </section>
 
   {reports.length > 0 ? (
     <section class="report-grid" aria-label="公開中のレポート">
-      {reports.map((report, index) => (
-        <article class={`report-card ${index === 0 ? 'report-card-featured' : ''}`}>
+      {reports.map((report) => (
+        <article class="report-card">
           <div class="card-meta">
             <span class={`category-pill category-${report.category}`}>{categoryName(report.category)}</span>
             <time datetime={report.published_at}>{dateLabel(report.published_at)}</time>
@@ -50,8 +49,7 @@ function dateLabel(value: string) {
     </section>
   ) : (
     <section class="empty-state" aria-label="レポート一覧">
-      <p class="eyebrow">NO REPORTS YET</p>
-      <h2>現在、公開中のレポートはありません。</h2>
+      <h2>まだレポートは公開されていません</h2>
       <p>対象期間に確認できる根拠がそろったときに掲載されます。収集済みの情報はダッシュボードで確認できます。</p>
       <a class="empty-return" href="/explore">ダッシュボードで情報を探す <span aria-hidden="true">↗</span></a>
     </section>

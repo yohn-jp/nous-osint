@@ -16,6 +16,7 @@ const interval = ref(360)
 const hourly = ref(4)
 const concurrency = ref(1)
 const probeResult = ref<{ source: string; entries: number; sample: { title: string; url: string }[] } | null>(null)
+const pendingToggle = ref<{ id: string; enabled: boolean } | null>(null)
 const officialRows = computed(() => (catalog.value ?? []).filter(row =>
   row.config.id.includes(query.value.toLowerCase()) ||
   (row.config.organization ?? '').toLowerCase().includes(query.value.toLowerCase())
@@ -38,6 +39,14 @@ async function load() {
 }
 void load()
 
+function requestToggle(id: string, enabled: boolean) {
+  if (!busy.value) pendingToggle.value = { id, enabled }
+}
+async function confirmToggle() {
+  const change = pendingToggle.value
+  pendingToggle.value = null
+  if (change) await toggle(change.id, change.enabled)
+}
 async function toggle(id: string, value: boolean) {
   busy.value = id
   feedback.value = ''
@@ -88,18 +97,22 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
 
 <template>
   <q-page class="nous-page">
-    <div class="eyebrow q-mb-sm">OPERATIONS / SOURCE MANAGEMENT</div>
     <div class="row items-start justify-between q-gutter-md">
       <div>
-        <h1 class="page-title q-ma-none">情報ソースを管理する。</h1>
+        <h1 class="page-title q-ma-none">情報源管理</h1>
         <p class="page-subtitle">公式カタログと独自ソース。設定はこのインスタンスのDBに保存されます。</p>
       </div>
       <q-btn color="primary" unelevated icon="add" label="独自ソースを追加" to="/admin/sources/new" />
     </div>
-    <div class="admin-stats q-my-lg">
-      <div class="admin-stat"><span>公式カタログ</span><strong>{{ catalog?.length ?? '—' }}</strong></div>
-      <div class="admin-stat"><span>独自ソース</span><strong>{{ installed?.filter(s => s.origin === 'custom').length ?? '—' }}</strong></div>
-      <div class="admin-stat"><span>収集中</span><strong>{{ installed?.filter(s => s.enabled).length ?? '—' }}</strong></div>
+    <div class="source-overview q-my-lg" role="status" aria-live="polite">
+      <template v-if="loading">収集状態を読み込んでいます</template>
+      <template v-else-if="catalog !== null && installed !== null">
+        <strong>{{ installed.filter(s => s.enabled).length }}件が有効</strong>
+        <span>{{ installed.filter(s => !s.enabled).length }}件が停止中</span>
+        <span>公式定義 {{ catalog.length }}件</span>
+        <span>独自ソース {{ installed.filter(s => s.origin === 'custom').length }}件</span>
+      </template>
+      <template v-else>収集状態を取得できません</template>
     </div>
     <q-banner v-if="error" class="bg-red-1 text-negative q-mb-md" role="alert">{{ error }} <q-btn flat dense label="再取得" @click="load" /></q-banner>
     <q-banner v-if="feedback" class="bg-green-1 text-green-9 q-mb-md" aria-live="polite">{{ feedback }}</q-banner>
@@ -127,19 +140,19 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
             <div class="row items-center q-gutter-sm">
               <strong>{{ entry.config.organization || entry.config.id }}</strong>
               <q-badge outline color="grey-7" label="公式" />
-              <q-badge :color="runtimeRow(entry)?.enabled ? 'positive' : 'grey-6'" :label="runtimeRow(entry)?.enabled ? '収集中' : '停止'" />
+              <q-badge :color="runtimeRow(entry)?.enabled ? 'positive' : 'grey-6'" :label="!runtimeRow(entry) ? '未導入' : runtimeRow(entry)?.enabled ? '有効' : '停止'" />
             </div>
             <div class="admin-source-id">{{ entry.config.id }} · {{ kindLabel(entry.config.item_kind) }} · {{ entry.config.kind.toUpperCase() }}</div>
             <div class="admin-source-id">権利表示: {{ entry.config.policy.license_id || 'NOASSERTION' }} · {{ entry.config.policy.attribution || '提供元未記録' }}</div>
             <a v-if="entry.config.policy.license_url || entry.config.policy.terms_url" class="text-caption" :href="entry.config.policy.license_url || entry.config.policy.terms_url || undefined" target="_blank" rel="noopener noreferrer">提供元の利用条件・ライセンスを確認</a>
             <div class="admin-source-detail">{{ entry.config.url }}</div>
             <div v-if="runtimeRow(entry)?.last_error" class="text-negative text-caption">最終エラー: {{ runtimeRow(entry)?.last_error }}</div>
-            <div class="admin-source-id">最終成功: {{ dateLabel(runtimeRow(entry)?.last_success_at ?? null) }}</div>
+            <div class="admin-source-id">取得間隔: {{ runtimeRow(entry)?.config.interval_minutes ?? entry.config.interval_minutes }}分 · 最終成功: {{ dateLabel(runtimeRow(entry)?.last_success_at ?? null) }}</div>
           </div>
           <div class="admin-source-actions">
-            <q-btn dense flat color="primary" icon="science" label="接続検証" :loading="busy === entry.config.id" @click="probe(entry.config.id)" />
-            <q-btn v-if="runtimeRow(entry)" dense flat icon="tune" color="primary" label="設定" @click="openSettings(runtimeRow(entry)!)" />
-            <q-btn dense unelevated :color="runtimeRow(entry)?.enabled ? 'grey-7' : 'primary'" :disable="!runtimeRow(entry)" :loading="busy === entry.config.id" :label="runtimeRow(entry)?.enabled ? '停止' : '有効化'" @click="toggle(entry.config.id, !runtimeRow(entry)?.enabled)" />
+            <q-btn dense flat color="primary" icon="science" label="接続検証" :disable="!!busy && busy !== entry.config.id" :loading="busy === entry.config.id" @click="probe(entry.config.id)" />
+            <q-btn v-if="runtimeRow(entry)" dense flat icon="tune" color="primary" label="設定" :disable="!!busy" @click="openSettings(runtimeRow(entry)!)" />
+            <q-btn dense outline :color="runtimeRow(entry)?.enabled ? 'grey-7' : 'primary'" :disable="!runtimeRow(entry) || !!busy" :loading="busy === entry.config.id" :label="runtimeRow(entry)?.enabled ? '収集を停止' : '有効化'" @click="requestToggle(entry.config.id, !runtimeRow(entry)?.enabled)" />
           </div>
         </div>
       </template>
@@ -150,21 +163,39 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
           <div class="admin-source-main">
             <div class="row items-center q-gutter-sm"><strong>{{ entry.config.organization || entry.id }}</strong>
               <q-badge outline color="grey-7" label="独自" />
-              <q-badge :color="entry.enabled ? 'positive' : 'grey-6'" :label="entry.enabled ? '収集中' : '停止'" />
+              <q-badge :color="entry.enabled ? 'positive' : 'grey-6'" :label="entry.enabled ? '有効' : '停止'" />
             </div>
             <div class="admin-source-id">{{ entry.id }} · {{ kindLabel(entry.config.item_kind) }} · {{ entry.config.kind.toUpperCase() }}</div>
             <div class="admin-source-detail">{{ entry.config.url }}</div>
+            <div class="admin-source-id">取得間隔: {{ entry.config.interval_minutes }}分 · 最終成功: {{ dateLabel(entry.last_success_at) }}</div>
             <div v-if="entry.last_error" class="text-negative text-caption">最終エラー: {{ entry.last_error }}</div>
           </div>
           <div class="admin-source-actions">
-            <q-btn dense flat color="primary" icon="science" label="接続検証" :loading="busy === entry.id" @click="probe(entry.id)" />
-            <q-btn dense flat icon="edit" color="primary" label="編集" :to="'/admin/sources/' + entry.id + '/edit'" />
-            <q-btn dense flat icon="tune" color="primary" label="収集予算" @click="openSettings(entry)" />
-            <q-btn dense unelevated :color="entry.enabled ? 'grey-7' : 'primary'" :loading="busy === entry.id" :label="entry.enabled ? '停止' : '有効化'" @click="toggle(entry.id, !entry.enabled)" />
+            <q-btn dense flat color="primary" icon="science" label="接続検証" :disable="!!busy && busy !== entry.id" :loading="busy === entry.id" @click="probe(entry.id)" />
+            <q-btn dense flat icon="edit" color="primary" label="編集" :disable="!!busy" :to="'/admin/sources/' + entry.id + '/edit'" />
+            <q-btn dense flat icon="tune" color="primary" label="収集予算" :disable="!!busy" @click="openSettings(entry)" />
+            <q-btn dense outline :color="entry.enabled ? 'grey-7' : 'primary'" :disable="!!busy" :loading="busy === entry.id" :label="entry.enabled ? '収集を停止' : '有効化'" @click="requestToggle(entry.id, !entry.enabled)" />
           </div>
         </div>
       </template>
     </section>
+    <q-dialog :model-value="!!pendingToggle" @update:model-value="value => { if (!value) pendingToggle = null }">
+      <q-card class="admin-confirm-card">
+        <q-card-section>
+          <div class="text-h6">{{ pendingToggle?.enabled ? '収集を有効にしますか？' : '収集を停止しますか？' }}</div>
+          <div class="admin-source-detail q-mt-sm">{{ pendingToggle?.id }}</div>
+          <p class="q-mt-md q-mb-none">
+            {{ pendingToggle?.enabled
+              ? 'この情報源を定期収集の対象に追加します。取得タイミングは設定された収集間隔に従います。'
+              : 'この情報源を以降の定期収集の対象から外します。保存済みの観測履歴は削除されません。' }}
+          </p>
+        </q-card-section>
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat label="キャンセル" no-caps v-close-popup />
+          <q-btn unelevated color="primary" :label="pendingToggle?.enabled ? '有効化する' : '停止する'" no-caps @click="confirmToggle" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
     <q-dialog :model-value="!!settings" @update:model-value="value => { if (!value) settings = null }" persistent>
       <q-card style="width: min(460px, 94vw)">
         <q-card-section><div class="text-h6">収集予算</div><div class="text-caption text-grey-7">{{ settings?.id }}</div></q-card-section>

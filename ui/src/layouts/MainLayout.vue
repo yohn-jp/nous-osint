@@ -12,13 +12,13 @@ const isAdminArea = computed(() => route.path.startsWith('/admin/'))
 const canAdmin = ref(false)
 void api.adminSession().then(session => { canAdmin.value = session.allowed }).catch(() => { canAdmin.value = false })
 const nav = [
-  { to: '/explore', name: 'explore', icon: 'travel_explore', title: '探索', caption: 'Explore' },
-  { to: '/changes', name: 'changes', icon: 'update', title: '変更履歴', caption: 'Changes' },
-  { to: '/sources', name: 'sources', icon: 'rss_feed', title: '情報源', caption: 'Sources' },
+  { to: '/explore', name: 'explore', icon: 'travel_explore', title: '探索' },
+  { to: '/changes', name: 'changes', icon: 'update', title: '変更履歴' },
+  { to: '/sources', name: 'sources', icon: 'rss_feed', title: '情報源' },
 ]
 const adminNav = [
-  { to: '/admin/sources', name: 'admin-sources', icon: 'tune', title: '情報源管理', caption: 'Source administration' },
-  { to: '/admin/reports', name: 'admin-reports', icon: 'calendar_month', title: 'レポート生成管理', caption: 'Report generation' },
+  { to: '/admin/sources', name: 'admin-sources', icon: 'tune', title: '情報源管理' },
+  { to: '/admin/reports', name: 'admin-reports', icon: 'calendar_month', title: 'レポート生成' },
 ]
 const isActive = (name: string) => {
   if (name === 'admin-sources') return ['admin-sources', 'admin-new', 'admin-edit'].includes(active.value)
@@ -36,11 +36,12 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
     <q-header class="nous-header">
       <q-toolbar class="q-px-lg" style="min-height: 64px">
         <q-btn v-if="$q.screen.lt.md" flat round dense icon="menu" aria-label="メニュー" @click="drawerOpen = !drawerOpen" />
-        <q-avatar rounded class="nous-mark" size="34px"><q-icon name="radar" size="22px" /></q-avatar>
-        <div class="q-ml-md brand-name">nous<span class="brand-soft"> / osint</span></div>
+        <router-link to="/explore" class="brand-link" aria-label="Nous OSINT 探索へ戻る">
+          <q-avatar rounded class="nous-mark" size="34px"><q-icon name="radar" size="22px" /></q-avatar>
+          <span class="brand-name">nous<span class="brand-soft"> / osint</span></span>
+        </router-link>
         <q-space />
-        <div class="header-descriptor gt-sm">OPEN SOURCE INTELLIGENCE LIBRARY</div>
-        <q-space />
+
         <q-btn v-if="canAdmin" flat no-caps class="header-admin-action q-mr-sm" :to="adminDestination"
           :icon="isAdminArea ? 'arrow_back' : 'admin_panel_settings'"
           :label="$q.screen.gt.xs ? adminLabel : undefined" :aria-label="adminLabel" />
@@ -49,36 +50,40 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
     </q-header>
 
     <q-drawer v-model="drawerOpen" show-if-above :breakpoint="1024" :width="222" bordered class="nous-drawer">
-      <div class="q-px-md q-pt-xl q-pb-md sidebar-caption">LIBRARY</div>
+      <div class="q-px-md q-pt-xl q-pb-md sidebar-caption">ライブラリ</div>
       <q-list padding class="q-px-sm">
         <q-item v-for="entry in nav" :key="entry.name" clickable v-ripple :to="entry.to" exact class="nav-entry" :active="isActive(entry.name)" active-class="nav-entry-active" @click="closeDrawerOnMobile">
           <q-item-section avatar><q-icon :name="entry.icon" size="20px" /></q-item-section>
-          <q-item-section><q-item-label>{{ entry.title }}</q-item-label><q-item-label caption>{{ entry.caption }}</q-item-label></q-item-section>
+          <q-item-section><q-item-label>{{ entry.title }}</q-item-label></q-item-section>
         </q-item>
       </q-list>
-      <div class="q-px-md q-pt-lg q-pb-sm sidebar-caption">PUBLICATIONS</div>
+      <div class="q-px-md q-pt-lg q-pb-sm sidebar-caption">レポート</div>
       <q-list padding class="q-px-sm">
         <q-item clickable v-ripple href="/reports/" target="_blank" rel="noopener noreferrer" class="nav-entry report-external-link" @click="closeDrawerOnMobile">
           <q-item-section avatar><q-icon name="article" size="20px" /></q-item-section>
-          <q-item-section><q-item-label>分析レポート</q-item-label><q-item-label caption>別の閲覧サイトで開く</q-item-label></q-item-section>
+          <q-item-section><q-item-label>分析レポートを読む</q-item-label><q-item-label caption>新しいタブで開く</q-item-label></q-item-section>
           <q-item-section side><q-icon name="open_in_new" size="17px" aria-label="新しいタブで開く" /></q-item-section>
         </q-item>
       </q-list>
       <template v-if="canAdmin && isAdminArea">
-        <div class="q-px-md q-pt-lg q-pb-sm sidebar-caption">ADMINISTRATION</div>
+        <div class="q-px-md q-pt-lg q-pb-sm sidebar-caption">管理</div>
         <q-list padding class="q-px-sm">
           <q-item v-for="entry in adminNav" :key="entry.name" clickable v-ripple :to="entry.to" exact class="nav-entry" :active="isActive(entry.name)" active-class="nav-entry-active" @click="closeDrawerOnMobile">
             <q-item-section avatar><q-icon :name="entry.icon" size="20px" /></q-item-section>
-            <q-item-section><q-item-label>{{ entry.title }}</q-item-label><q-item-label caption>{{ entry.caption }}</q-item-label></q-item-section>
+            <q-item-section><q-item-label>{{ entry.title }}</q-item-label></q-item-section>
           </q-item>
         </q-list>
       </template>
-      <div class="sidebar-footer">SOURCE FIRST · HISTORY PRESERVED</div>
     </q-drawer>
 
     <q-page-container><router-view /></q-page-container>
     <q-footer v-if="$q.screen.lt.md" class="mobile-footer">
-      <q-tabs no-caps dense indicator-color="primary" active-color="primary" class="text-grey-7">
+      <q-tabs v-if="isAdminArea && canAdmin" no-caps dense indicator-color="primary" active-color="primary" class="mobile-tabs">
+        <q-route-tab to="/admin/sources" :exact="false" icon="tune" label="情報源管理" />
+        <q-route-tab to="/admin/reports" exact icon="calendar_month" label="レポート生成" />
+        <q-route-tab to="/explore" exact icon="arrow_back" label="探索へ戻る" />
+      </q-tabs>
+      <q-tabs v-else no-caps dense indicator-color="primary" active-color="primary" class="mobile-tabs">
         <q-route-tab v-for="entry in nav" :key="entry.name" :to="entry.to" exact :icon="entry.icon" :label="entry.title" />
       </q-tabs>
     </q-footer>
