@@ -20,6 +20,7 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref('')
 const kindOptions = [{ label: 'すべての種別', value: null }, ...kinds]
+const hasAppliedFilters = computed(() => ['q', 'kind', 'source'].some(key => !!queryValue(route.query[key])))
 const sourceOptions = computed(() => [{ label: 'すべての情報源', value: null }, ...sources.value.map(s => ({ label: s.id, value: s.id }))])
 const selectedId = computed(() => {
   const raw = typeof route.query.item === 'string' ? Number(route.query.item) : 0
@@ -110,8 +111,7 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
 <template>
   <q-page class="nous-page">
     <div class="row items-end justify-between q-mb-xl">
-      <div><div class="eyebrow q-mb-sm">INTELLIGENCE / EXPLORE</div><h1 class="page-title q-ma-none">情報を探索する。</h1><div class="page-subtitle">公開情報を横断検索し、出典と更新履歴をたどる。</div></div>
-      <div class="text-caption text-grey-6 q-pb-xs gt-xs">SOURCE-ATTRIBUTED RECORDS</div>
+      <div><h1 class="page-title q-ma-none">探索</h1><div class="page-subtitle">公開情報を検索し、出典と変更履歴を確認します。</div></div>
     </div>
 
     <section aria-label="検索条件" class="content-panel q-pa-md q-mb-lg">
@@ -137,8 +137,8 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
     <div class="explore-grid">
       <section aria-label="検索結果" class="content-panel">
         <div class="row items-center justify-between q-px-lg q-py-md">
-          <div><div class="text-weight-bold">検索結果</div><div class="text-caption text-grey-6">出典を保持した最新レコード</div></div>
-          <q-btn flat no-caps size="sm" color="secondary" label="条件をクリア" @click="clearFilters" />
+          <div class="results-heading"><strong>検索結果</strong><span v-if="!loading && !error" class="results-count" role="status" aria-live="polite">{{ rows.length }}件を表示{{ nextCursor !== null ? "（続きあり）" : "" }}</span></div>
+          <q-btn v-if="hasAppliedFilters" flat no-caps size="sm" color="secondary" label="条件をクリア" @click="clearFilters" />
         </div>
         <q-separator />
         <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 4" :key="n" type="rect" height="62px" class="q-mb-lg" /></div>
@@ -151,16 +151,16 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
           <p class="text-caption">検索条件を変更するか、収集状態を確認してください。</p>
         </div>
         <template v-else>
-          <div v-for="item in rows" :key="item.id" role="button" tabindex="0" class="result-row"
+          <button v-for="item in rows" :key="item.id" type="button" class="result-row"
             :class="{ selected: selectedId === item.id }" :aria-label="item.title + ' の詳細を開く'"
-            @click="openItem(item.id)" @keydown.enter.prevent="openItem(item.id)" @keydown.space.prevent="openItem(item.id)">
+            @click="openItem(item.id)">
             <div class="result-meta">
               <span class="kind-tag">{{ kindLabel(item.kind) }}</span><span>{{ item.organization || item.source }}</span>
               <span class="meta-sep">{{ stateLabel[item.state] }}</span>
             </div>
             <div class="result-title">{{ item.title }}</div>
             <div class="result-foot">{{ item.source }} · {{ dateLabel(item.published_at || item.last_seen_at) }} · v{{ item.current_version }}</div>
-          </div>
+          </button>
           <div class="q-pa-md row items-center justify-center">
             <q-btn v-if="nextCursor !== null" outline color="primary" no-caps :loading="loadingMore" label="さらに読み込む" icon-right="expand_more" @click="loadPage(true)" />
             <span v-else class="text-caption text-grey-6">表示できる結果は以上です</span>
