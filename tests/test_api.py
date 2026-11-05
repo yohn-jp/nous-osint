@@ -132,6 +132,9 @@ def test_version_history_endpoint_is_bounded_without_explicit_limit():
     assert len(default.json()) == 50
     assert default.json()[0]["version"] == 60
     assert default.json()[-1]["version"] == 11
+    older = client.get(f"/v1/items/{item_id}/versions?before=11&limit=50")
+    assert older.status_code == 200
+    assert [row["version"] for row in older.json()] == list(range(10, 0, -1))
     smaller = client.get(f"/v1/items/{item_id}/versions?limit=7")
     assert smaller.status_code == 200 and len(smaller.json()) == 7
     assert client.get(f"/v1/items/{item_id}/versions?limit=101").status_code == 422
