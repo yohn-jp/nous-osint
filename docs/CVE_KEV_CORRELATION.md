@@ -27,9 +27,7 @@ title wording or matching a vendor/product name. Link updates and version
 history commit in the same PostgreSQL transaction. A title losing a CVE mention
 removes the *current* link without erasing its earlier recorded versions.
 
-The migration backfills exact CVE identifiers from existing vulnerability/
-advisory items and title mentions from existing items. It does not rewrite
-historical source data or re-fetch publisher content.
+Migrations 0007/0009 index exact current and version-local CVE relations without rewriting source data. Migration 0010 adds `kev_catalog_contents` (deduplicated full membership) and `kev_catalog_observations` (successful HTTP 200/304 timestamps). The collector inserts the complete membership and observation atomically with item state and attempt outcome. Historical catalog removals/re-listings can be resolved accurately only **from the first post-0010 complete observation onward**; earlier gaps are never guessed.
 
 ## API semantics
 
@@ -44,18 +42,11 @@ as CISA's source of the exploitation determination.
 
 KEV has exactly three states:
 
-- **`listed`**: a current, source-backed item from the official
-  `cisa-kev` catalog exists. The response carries the CISA publisher URL,
-  date added, due date, vendor/product, ransomware-use flag and last successful
-  catalog fetch. Even a stale positive assertion retains its observation time.
-- **`not_listed`**: no active CISA KEV item exists *and* the full official
-  catalog was successfully fetched within the previous **48 hours**.
+- **`listed`**: the latest complete official `cisa-kev` catalog at the requested cutoff contains this exact CVE and the version-local CISA observation provides supporting evidence. The response carries the publisher URL, date added, due date, vendor/product, ransomware-use flag and catalog observation time. Even a stale positive assertion retains its observation time.
+- **`not_listed`**: the latest complete CISA KEV catalog at the requested cutoff excludes this CVE *and* was successfully observed within the previous **48 hours**.
   This means “not listed in the last successfully observed catalog,” **not**
   “not exploited.”
-- **`unknown`**: no relevant CISA catalog has been successfully ingested
-  recently enough to justify absence. The first install, a disabled/uncollected
-  source and an outdated complete snapshot produce `unknown` when the CVE
-  is absent.
+- **`unknown`**: no relevant complete CISA catalog has been successfully ingested recently enough to justify absence, or the specified historical cutoff predates the first reliable retained complete catalog. First installs, disabled/uncollected sources and outdated snapshots produce `unknown` when the CVE is absent.
 
 The CVE endpoint returns a legitimate empty result with `unknown` for an
 unknown ID; it never initiates an outside HTTP request or assumes a CVE record
@@ -71,8 +62,7 @@ is exposed as read-only MCP `get_cve(cve_id)`, without enabling remote writes.
   known GET route allowlist, query-key filtering and `Cache-Control: no-store`.
 - The public data API and MCP are read-only; only the existing scheduler/worker
   writes link associations. The Admin UI cannot forge or override KEV status.
-- Apply `alembic upgrade head` (0007) before deploying the corresponding
-  application image. The health readiness check rejects mismatched schema.
+- Apply `alembic upgrade head` (currently 0010) and verify the journal table grants before deploying either application or report Worker image. The health readiness check rejects mismatched schema.
 - Enabling `cisa-kev` still requires live probe, rights review, and explicit
   operator activation. No production activation is implicit in this PR.
 
