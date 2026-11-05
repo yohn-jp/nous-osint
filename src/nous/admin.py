@@ -417,12 +417,29 @@ def report_run(run_id: str):
 
 
 @app.get("/v1/admin/report-schedules")
-def report_schedules():
+def report_schedules(limit: int = Query(100, ge=1, le=100), cursor: str | None = None):
     factory = _factory()
     with factory() as db:
-        rows = db.scalars(select(ReportSchedule).order_by(
-            ReportSchedule.created_at.desc(), ReportSchedule.id.desc()).limit(100))
-        return {"schedules": [_schedule_row(row) for row in rows]}
+        query = select(ReportSchedule).order_by(
+            ReportSchedule.created_at.desc(), ReportSchedule.id.desc())
+        if cursor is not None:
+            try:
+                cursor_id = str(uuid.UUID(cursor))
+            except (ValueError, TypeError, AttributeError) as exc:
+                raise HTTPException(422, "invalid report schedule cursor") from exc
+            cursor_row = db.get(ReportSchedule, cursor_id)
+            if cursor_row is None:
+                raise HTTPException(422, "invalid report schedule cursor")
+            query = query.where(or_(
+                ReportSchedule.created_at < cursor_row.created_at,
+                and_(ReportSchedule.created_at == cursor_row.created_at,
+                     ReportSchedule.id < cursor_row.id),
+            ))
+        rows = db.scalars(query.limit(limit + 1)).all()
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        return {"schedules": [_schedule_row(row) for row in rows],
+                "next_cursor": rows[-1].id if has_more and rows else None}
 
 
 @app.post("/v1/admin/report-schedules", status_code=201)
