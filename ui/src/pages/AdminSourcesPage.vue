@@ -88,18 +88,22 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
 
 <template>
   <q-page class="nous-page">
-    <div class="eyebrow q-mb-sm">OPERATIONS / SOURCE MANAGEMENT</div>
     <div class="row items-start justify-between q-gutter-md">
       <div>
-        <h1 class="page-title q-ma-none">情報ソースを管理する。</h1>
+        <h1 class="page-title q-ma-none">情報源管理</h1>
         <p class="page-subtitle">公式カタログと独自ソース。設定はこのインスタンスのDBに保存されます。</p>
       </div>
       <q-btn color="primary" unelevated icon="add" label="独自ソースを追加" to="/admin/sources/new" />
     </div>
-    <div class="admin-stats q-my-lg">
-      <div class="admin-stat"><span>公式カタログ</span><strong>{{ catalog?.length ?? '—' }}</strong></div>
-      <div class="admin-stat"><span>独自ソース</span><strong>{{ installed?.filter(s => s.origin === 'custom').length ?? '—' }}</strong></div>
-      <div class="admin-stat"><span>収集中</span><strong>{{ installed?.filter(s => s.enabled).length ?? '—' }}</strong></div>
+    <div class="source-overview q-my-lg" role="status" aria-live="polite">
+      <template v-if="loading">収集状態を読み込んでいます</template>
+      <template v-else-if="catalog !== null && installed !== null">
+        <strong>{{ installed.filter(s => s.enabled).length }}件が収集中</strong>
+        <span>{{ installed.filter(s => !s.enabled).length }}件が停止中</span>
+        <span>公式定義 {{ catalog.length }}件</span>
+        <span>独自ソース {{ installed.filter(s => s.origin === 'custom').length }}件</span>
+      </template>
+      <template v-else>収集状態を取得できません</template>
     </div>
     <q-banner v-if="error" class="bg-red-1 text-negative q-mb-md" role="alert">{{ error }} <q-btn flat dense label="再取得" @click="load" /></q-banner>
     <q-banner v-if="feedback" class="bg-green-1 text-green-9 q-mb-md" aria-live="polite">{{ feedback }}</q-banner>
@@ -127,14 +131,14 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
             <div class="row items-center q-gutter-sm">
               <strong>{{ entry.config.organization || entry.config.id }}</strong>
               <q-badge outline color="grey-7" label="公式" />
-              <q-badge :color="runtimeRow(entry)?.enabled ? 'positive' : 'grey-6'" :label="runtimeRow(entry)?.enabled ? '収集中' : '停止'" />
+              <q-badge :color="runtimeRow(entry)?.enabled ? 'positive' : 'grey-6'" :label="!runtimeRow(entry) ? '未導入' : runtimeRow(entry)?.enabled ? '収集中' : '停止'" />
             </div>
             <div class="admin-source-id">{{ entry.config.id }} · {{ kindLabel(entry.config.item_kind) }} · {{ entry.config.kind.toUpperCase() }}</div>
             <div class="admin-source-id">権利表示: {{ entry.config.policy.license_id || 'NOASSERTION' }} · {{ entry.config.policy.attribution || '提供元未記録' }}</div>
             <a v-if="entry.config.policy.license_url || entry.config.policy.terms_url" class="text-caption" :href="entry.config.policy.license_url || entry.config.policy.terms_url || undefined" target="_blank" rel="noopener noreferrer">提供元の利用条件・ライセンスを確認</a>
             <div class="admin-source-detail">{{ entry.config.url }}</div>
             <div v-if="runtimeRow(entry)?.last_error" class="text-negative text-caption">最終エラー: {{ runtimeRow(entry)?.last_error }}</div>
-            <div class="admin-source-id">最終成功: {{ dateLabel(runtimeRow(entry)?.last_success_at ?? null) }}</div>
+            <div class="admin-source-id">取得間隔: {{ runtimeRow(entry)?.config.interval_minutes ?? entry.config.interval_minutes }}分 · 最終成功: {{ dateLabel(runtimeRow(entry)?.last_success_at ?? null) }}</div>
           </div>
           <div class="admin-source-actions">
             <q-btn dense flat color="primary" icon="science" label="接続検証" :loading="busy === entry.config.id" @click="probe(entry.config.id)" />
@@ -154,6 +158,7 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
             </div>
             <div class="admin-source-id">{{ entry.id }} · {{ kindLabel(entry.config.item_kind) }} · {{ entry.config.kind.toUpperCase() }}</div>
             <div class="admin-source-detail">{{ entry.config.url }}</div>
+            <div class="admin-source-id">取得間隔: {{ entry.config.interval_minutes }}分 · 最終成功: {{ dateLabel(entry.last_success_at) }}</div>
             <div v-if="entry.last_error" class="text-negative text-caption">最終エラー: {{ entry.last_error }}</div>
           </div>
           <div class="admin-source-actions">
