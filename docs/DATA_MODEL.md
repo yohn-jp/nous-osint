@@ -1,7 +1,7 @@
 # Nous OSINT — Data and Source Contracts
 
-Status: **implemented through Alembic 0007**  
-Updated: 2026-11-03
+Status: **implemented through Alembic 0010**  
+Updated: 2026-11-05
 
 ## 1. Data ownership
 
@@ -12,7 +12,7 @@ Updated: 2026-11-03
 
 ## 2. Declarative source format
 
-Planned shape (illustrative YAML schema, not an implemented parser):
+Illustrative source declaration (validated by the implemented SourceConfig parser):
 
 ```yaml
 id: example-security-feed
@@ -52,6 +52,9 @@ Every enabled source must define a reviewer-verifiable collection policy, owners
 | `items` | Stable identity of a publisher record | `source_id`, `external_id` or verified canonical URL, `kind`, `first_seen_at`, `last_seen_at`, state |
 | `item_versions` | Immutable observed changes | `item_id`, sequential version, `observed_at`, `sha256`, attributes, provenance |
 | `cve_item_links` | Exact current CVE → item mapping with evidence grade (`kev`, `record`, `reference`, `title_mention`) | primary key (`item_id`, `cve_id`), indexed `cve_id`, constrained `relation`; backed by individual source records |
+| `cve_item_version_links` | Immutable observed CVE relationships (0009) | primary key (`item_version_id`, `cve_id`) |
+| `kev_catalog_contents` | Content-addressed sorted membership of complete CISA KEV catalog (0010) | SHA-256 digest primary key, immutable CVE ID list |
+| `kev_catalog_observations` | Immutable time-indexed successful complete catalog observations, including HTTP 304 (0010) | source ID + observed time index; digest FK into content table |
 
 Required item types initially: `job_posting`, `news`, `advisory`, `vulnerability`, `company_update`. A connector maps source-native fields into this shared vocabulary, preserving source-native keys in a validated namespace.
 
@@ -80,7 +83,12 @@ A claimed job has a finite lease. A worker commits the lease and releases the tr
 `cve_item_links` is implemented (migration 0007). A CVE ID is canonical identity;
 CISA KEV membership is a distinct, publisher-backed claim. The API returns
 `listed`, `not_listed` (only after a fresh complete CISA KEV snapshot) or
-`unknown` (no fresh complete snapshot). No CVE/NVD source content or third-party
+`unknown` (no fresh complete snapshot). In 0010, successive complete
+catalog memberships are content-deduplicated, and each successful 200/304
+records an immutable observation within the fetch transaction. Earlier
+catalog memberships that were not recorded are not reconstructed from
+mutable item state; historical results before the journal's first snapshot
+remain `unknown` unless a trustworthy current legacy state applies. No CVE/NVD source content or third-party
 license is inferred from an identifier. See [CVE/KEV correlation](CVE_KEV_CORRELATION.md).
 
 ## 5. Later relational layer (not MVP acceptance)
