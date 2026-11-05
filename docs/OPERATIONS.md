@@ -44,9 +44,9 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    `systemctl --user enable`.
 
 After role creation and `alembic upgrade head` has applied migration `0010`,
-apply the report and admin table grants below. Create `nous_report_worker`
-before migration `0009` so its conditional CVE-link grant applies; then run
-these report-table grants. The report Worker reads only the source observation
+apply the report and admin table grants below. Provision `nous_report_worker`
+before migrations `0009`/`0010` when possible, or apply their conditional
+table grants explicitly afterward as described below. The report Worker reads only the source observation
 tables it needs and has no DELETE privilege:
 
 ```sql
