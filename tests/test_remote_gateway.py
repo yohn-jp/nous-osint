@@ -167,6 +167,11 @@ def test_api_proxy_forwards_only_bounded_read_queries(gateway):
     assert client.get("/v1/items?q=first&q=second", headers=headers).status_code == 400
     assert client.get("/v1/items?q=" + "x" * 2100, headers=headers).status_code == 400
     assert len(requests) == 1
+    history = client.get("/v1/items/42/versions?limit=25&before=11", headers=headers)
+    assert history.status_code == 200
+    assert requests[-1].url.path == "/v1/items/42/versions"
+    assert dict(requests[-1].url.params) == {"limit": "25", "before": "11"}
+    assert client.get("/v1/items/42/versions?secret=1", headers=headers).status_code == 400
     cve = client.get("/v1/cves/CVE-2026-1234", headers=headers)
     assert cve.status_code == 200
     assert requests[-1].url.path == "/v1/cves/CVE-2026-1234"
