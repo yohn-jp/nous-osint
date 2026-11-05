@@ -122,19 +122,6 @@ def _evidence_record(version: ItemVersion, item: Item, source: Source, relation:
         "content_policy": {"storage": "metadata_only", "license_id": license_id,
                            "quote_allowed": False, "quote_values": []},
     }
-    quote_fields = policy.get("report_quote_fields", [])
-    if (policy.get("report_quote_allowed") is True and license_id != "NOASSERTION" and
-            isinstance(quote_fields, list) and len(quote_fields) <= 4):
-        quote_values = []
-        allowed_values = {"title": title, "published_at": record["published_at"]}
-        if "vulnerability" in record:
-            allowed_values.update({"vulnerability." + key: value
-                                   for key, value in record["vulnerability"].items()})
-        if all(isinstance(field, str) and field in allowed_values for field in quote_fields):
-            quote_values = [str(allowed_values[field])[:300] for field in quote_fields
-                            if allowed_values[field] is not None and str(allowed_values[field]).strip()]
-            record["content_policy"]["quote_allowed"] = bool(quote_values)
-            record["content_policy"]["quote_values"] = quote_values
     vulnerability = attrs.get("vulnerability") if isinstance(attrs.get("vulnerability"), dict) else {}
     if (relation == "kev" and license_id == "CC0-1.0" and
             authoritative_kev_version(
@@ -148,6 +135,19 @@ def _evidence_record(version: ItemVersion, item: Item, source: Source, relation:
         record["vulnerability"] = values
         record["allowed_fields"] = allowed_fields + ["vulnerability." + key for key in values]
         record["content_policy"]["dataset_license"] = "CC0-1.0"
+    quote_fields = policy.get("report_quote_fields", [])
+    if (policy.get("report_quote_allowed") is True and license_id != "NOASSERTION" and
+            isinstance(quote_fields, list) and len(quote_fields) <= 4):
+        quote_values = []
+        allowed_values = {"title": title, "published_at": record["published_at"]}
+        if "vulnerability" in record:
+            allowed_values.update({"vulnerability." + key: value
+                                   for key, value in record["vulnerability"].items()})
+        if all(isinstance(field, str) and field in allowed_values for field in quote_fields):
+            quote_values = [str(allowed_values[field])[:300] for field in quote_fields
+                            if allowed_values[field] is not None and str(allowed_values[field]).strip()]
+            record["content_policy"]["quote_allowed"] = bool(quote_values)
+            record["content_policy"]["quote_values"] = quote_values
     return record
 
 
