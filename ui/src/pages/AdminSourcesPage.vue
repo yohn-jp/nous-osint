@@ -107,7 +107,7 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
     <div class="source-overview q-my-lg" role="status" aria-live="polite">
       <template v-if="loading">収集状態を読み込んでいます</template>
       <template v-else-if="catalog !== null && installed !== null">
-        <strong>{{ installed.filter(s => s.enabled).length }}件が収集中</strong>
+        <strong>{{ installed.filter(s => s.enabled).length }}件が有効</strong>
         <span>{{ installed.filter(s => !s.enabled).length }}件が停止中</span>
         <span>公式定義 {{ catalog.length }}件</span>
         <span>独自ソース {{ installed.filter(s => s.origin === 'custom').length }}件</span>
@@ -140,7 +140,7 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
             <div class="row items-center q-gutter-sm">
               <strong>{{ entry.config.organization || entry.config.id }}</strong>
               <q-badge outline color="grey-7" label="公式" />
-              <q-badge :color="runtimeRow(entry)?.enabled ? 'positive' : 'grey-6'" :label="!runtimeRow(entry) ? '未導入' : runtimeRow(entry)?.enabled ? '収集中' : '停止'" />
+              <q-badge :color="runtimeRow(entry)?.enabled ? 'positive' : 'grey-6'" :label="!runtimeRow(entry) ? '未導入' : runtimeRow(entry)?.enabled ? '有効' : '停止'" />
             </div>
             <div class="admin-source-id">{{ entry.config.id }} · {{ kindLabel(entry.config.item_kind) }} · {{ entry.config.kind.toUpperCase() }}</div>
             <div class="admin-source-id">権利表示: {{ entry.config.policy.license_id || 'NOASSERTION' }} · {{ entry.config.policy.attribution || '提供元未記録' }}</div>
@@ -152,7 +152,7 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
           <div class="admin-source-actions">
             <q-btn dense flat color="primary" icon="science" label="接続検証" :disable="!!busy && busy !== entry.config.id" :loading="busy === entry.config.id" @click="probe(entry.config.id)" />
             <q-btn v-if="runtimeRow(entry)" dense flat icon="tune" color="primary" label="設定" :disable="!!busy" @click="openSettings(runtimeRow(entry)!)" />
-            <q-btn dense unelevated :color="runtimeRow(entry)?.enabled ? 'grey-7' : 'primary'" :disable="!runtimeRow(entry) || !!busy" :loading="busy === entry.config.id" :label="runtimeRow(entry)?.enabled ? '収集を停止' : '有効化'" @click="requestToggle(entry.config.id, !runtimeRow(entry)?.enabled)" />
+            <q-btn dense outline :color="runtimeRow(entry)?.enabled ? 'grey-7' : 'primary'" :disable="!runtimeRow(entry) || !!busy" :loading="busy === entry.config.id" :label="runtimeRow(entry)?.enabled ? '収集を停止' : '有効化'" @click="requestToggle(entry.config.id, !runtimeRow(entry)?.enabled)" />
           </div>
         </div>
       </template>
@@ -163,7 +163,7 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
           <div class="admin-source-main">
             <div class="row items-center q-gutter-sm"><strong>{{ entry.config.organization || entry.id }}</strong>
               <q-badge outline color="grey-7" label="独自" />
-              <q-badge :color="entry.enabled ? 'positive' : 'grey-6'" :label="entry.enabled ? '収集中' : '停止'" />
+              <q-badge :color="entry.enabled ? 'positive' : 'grey-6'" :label="entry.enabled ? '有効' : '停止'" />
             </div>
             <div class="admin-source-id">{{ entry.id }} · {{ kindLabel(entry.config.item_kind) }} · {{ entry.config.kind.toUpperCase() }}</div>
             <div class="admin-source-detail">{{ entry.config.url }}</div>
@@ -174,7 +174,7 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
             <q-btn dense flat color="primary" icon="science" label="接続検証" :disable="!!busy && busy !== entry.id" :loading="busy === entry.id" @click="probe(entry.id)" />
             <q-btn dense flat icon="edit" color="primary" label="編集" :disable="!!busy" :to="'/admin/sources/' + entry.id + '/edit'" />
             <q-btn dense flat icon="tune" color="primary" label="収集予算" :disable="!!busy" @click="openSettings(entry)" />
-            <q-btn dense unelevated :color="entry.enabled ? 'grey-7' : 'primary'" :disable="!!busy" :loading="busy === entry.id" :label="entry.enabled ? '収集を停止' : '有効化'" @click="requestToggle(entry.id, !entry.enabled)" />
+            <q-btn dense outline :color="entry.enabled ? 'grey-7' : 'primary'" :disable="!!busy" :loading="busy === entry.id" :label="entry.enabled ? '収集を停止' : '有効化'" @click="requestToggle(entry.id, !entry.enabled)" />
           </div>
         </div>
       </template>
