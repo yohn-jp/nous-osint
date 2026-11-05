@@ -868,32 +868,31 @@ def process_claim(factory, claim: dict):
             shutil.rmtree(workdir, ignore_errors=True)
 
 
-def _slot_next(slot: datetime, cadence: str, timezone_name: str) -> datetime:
-    from zoneinfo import ZoneInfo
-    zone = ZoneInfo(timezone_name)
-    local = slot.astimezone(zone)
-    delta = timedelta(days=1 if cadence == "daily" else 7)
-    return (local + delta).astimezone(timezone.utc)
-
-
-def _future_slot(slot: datetime, cadence: str, timezone_name: str, current: datetime) -> datetime:
+def _future_slot(slot: datetime, cadence: str, timezone_name: str, current: datetime,
+                 *, wall_time: str | None = None) -> datetime:
     from zoneinfo import ZoneInfo
     zone = ZoneInfo(timezone_name)
     local_current = current.astimezone(zone)
     local_slot = slot.astimezone(zone)
-    local_time = local_slot.timetz().replace(tzinfo=None)
-    if cadence == "daily":
-        candidate = datetime.combine(local_current.date(), local_time, tzinfo=zone)
-        if candidate.astimezone(timezone.utc) <= current:
-            candidate += timedelta(days=1)
-    else:
-        # Preserve the weekday and wall-clock time in the configured zone.
-        days = (local_slot.weekday() - local_current.weekday()) % 7
-        candidate = datetime.combine(local_current.date() + timedelta(days=days),
-                                     local_time, tzinfo=zone)
-        if candidate.astimezone(timezone.utc) <= current:
-            candidate += timedelta(days=7)
-    return candidate.astimezone(timezone.utc)
+    # Read the durable configured clock time, not the local time of a UTC slot
+    # shifted by a DST gap. Otherwise a spring-forward 02:30 becomes 03:30
+    # permanently on following days.
+    selected_time = (datetime.strptime(wall_time, "%H:%M").time() if wall_time
+                     else local_slot.timetz().replace(tzinfo=None))
+    step = timedelta(days=1 if cadence == "daily" else 7)
+    days = ((local_slot.weekday() - local_current.weekday()) % 7
+            if cadence == "weekly" else 0)
+    candidate_date = local_current.date() + timedelta(days=days)
+    while True:
+        candidate = datetime.combine(candidate_date, selected_time, tzinfo=zone)
+        instant = candidate.astimezone(timezone.utc)
+        # ZoneInfo accepts nonexistent wall times by assigning a pre-transition
+        # offset. Skip that calendar slot instead of silently shifting it.
+        exists = (instant.astimezone(zone).replace(tzinfo=None) ==
+                  candidate.replace(tzinfo=None))
+        if exists and instant > current:
+            return instant
+        candidate_date += step
 
 
 def schedule_due(factory):
@@ -908,7 +907,10 @@ def schedule_due(factory):
             slot = schedule.next_slot_at
             if slot.tzinfo is None:
                 slot = slot.replace(tzinfo=timezone.utc)
-            next_slot = _slot_next(slot, schedule.cadence, schedule.timezone)
+            next_slot = _future_slot(
+                slot, schedule.cadence, schedule.timezone, current,
+                wall_time=schedule.local_time,
+            )
             # Emit at most one recent missed slot. Older slots are advanced
             # without generating a retrospective catch-up storm.
             grace = timedelta(days=1 if schedule.cadence == "daily" else 7)
@@ -932,9 +934,6 @@ def schedule_due(factory):
                     available_at=current, stage_artifacts={}, created_at=current,
                 ))
                 count += 1
-                next_slot = _future_slot(slot, schedule.cadence, schedule.timezone, current)
-            else:
-                next_slot = _future_slot(slot, schedule.cadence, schedule.timezone, current)
             schedule.next_slot_at = next_slot
         try:
             db.commit()
