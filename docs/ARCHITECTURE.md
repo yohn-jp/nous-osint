@@ -1,6 +1,6 @@
 # Nous OSINT — System Architecture
 
-Status: **approved single-VM implementation baseline; automated reports are being added on a feature branch**
+Status: **approved single-VM implementation; automated reports merged into main (PR #13–#15), VM/Codex acceptance NOT_CHECKED**
 Target: **single Linux VM / rootless Podman / systemd Quadlet / PostgreSQL**  
 Updated: 2026-11-03
 
