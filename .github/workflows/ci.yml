@@ -295,7 +295,31 @@ jobs:
           assert (article_dist / "cve" / fixture["slug"] / "index.html").is_file()
           assert len(article_digest) == 64
           assert not list(root.glob("cache-*"))
-          print("Production report Worker: empty index and populated CVE article built under read-only rootfs")
+          import os, subprocess
+          from nous.report_pipeline import CodexRunner
+          codex_home = Path("/var/lib/nous-reports/private/codex-home-smoke")
+          codex_home.mkdir()
+          env = {"PATH": os.environ["PATH"], "HOME": str(codex_home),
+                 "CODEX_HOME": str(codex_home), "TMPDIR": "/tmp",
+                 "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
+          version = subprocess.run(["codex", "--version"], env=env, check=True,
+                                   capture_output=True, text=True)
+          assert version.stdout.strip() == "codex-cli 0.166.0"
+          arg0_root = codex_home / "tmp" / "arg0-linux"
+          launchers = list(arg0_root.glob("codex-arg0*"))
+          assert len(launchers) == 1
+          links = {path.name for path in launchers[0].iterdir() if path.is_symlink()}
+          assert links == {"codex-linux-sandbox", "apply_patch", "applypatch"}
+          assert all((launchers[0] / name).resolve(strict=True).is_file() for name in links)
+          credentials = codex_home / "auth.json"
+          credentials.write_text("credential-sentinel", encoding="utf-8")
+          runner = object.__new__(CodexRunner)
+          runner.codex_home = codex_home
+          runner.gid = 10002
+          runner._prepare_codex_home()
+          assert not arg0_root.exists()
+          assert credentials.read_text(encoding="utf-8") == "credential-sentinel"
+          print("Production report Worker: Astro releases built read-only; Codex CLI arg0 runtime safely cleaned")
           '
       - name: Record immutable report Worker image reference
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

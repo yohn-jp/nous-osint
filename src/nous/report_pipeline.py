@@ -582,6 +582,7 @@ class CodexRunner:
         if self.codex_home.is_symlink():
             raise ReportError("codex_home_unsafe")
         self.codex_home.mkdir(parents=True, exist_ok=True, mode=0o770)
+        self._clear_codex_arg0_runtime()
         paths = [self.codex_home, *self.codex_home.rglob("*")]
         for path in paths:
             if path.is_symlink() or not (path.is_dir() or path.is_file()):
@@ -594,6 +595,38 @@ class CodexRunner:
                 path.chmod(0o770 if path.is_dir() else 0o660)
             except OSError as exc:
                 raise ReportError("codex_uid_isolation_unavailable") from exc
+
+    def _clear_codex_arg0_runtime(self):
+        """Remove only Codex CLI's disposable Linux arg0 launcher directory."""
+        if not shutil.rmtree.avoids_symlink_attacks:
+            raise ReportError("codex_home_unsafe")
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        try:
+            home_fd = os.open(self.codex_home, directory_flags)
+        except OSError as exc:
+            raise ReportError("codex_home_unsafe") from exc
+        try:
+            try:
+                tmp_fd = os.open("tmp", directory_flags, dir_fd=home_fd)
+            except FileNotFoundError:
+                return
+            except OSError as exc:
+                raise ReportError("codex_home_unsafe") from exc
+            try:
+                try:
+                    os.stat("arg0-linux", dir_fd=tmp_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    return
+                except OSError as exc:
+                    raise ReportError("codex_home_unsafe") from exc
+                try:
+                    shutil.rmtree("arg0-linux", dir_fd=tmp_fd)
+                except OSError as exc:
+                    raise ReportError("codex_home_unsafe") from exc
+            finally:
+                os.close(tmp_fd)
+        finally:
+            os.close(home_fd)
 
     def _env(self):
         env = {"PATH": os.getenv("PATH", "/usr/local/bin:/usr/bin:/bin"),
