@@ -29,14 +29,23 @@ def schedule_once(factory):
         sync(db, load_registry())
         due = db.scalars(select(Source).where(Source.enabled.is_(True), Source.next_due_at <= now())
                          .with_for_update(skip_locked=True)).all()
+        scheduled = 0
         for source in due:
-            # The due timestamp is stable until this transaction commits.
-            # Deterministic, bounded key even for the longest legal source identifier.
-            key = hashlib.sha256(f"{source.source_key}\0{source.next_due_at.isoformat()}".encode()).hexdigest()
-            db.add(FetchJob(source_id=source.id, dedupe_key=key))
+            # A source has at most one queued/leased poll. Keeping the cadence
+            # advance even when a poll is pending prevents outage catch-up from
+            # creating an unbounded backlog or replaying stale catalog states.
+            pending = db.scalar(select(FetchJob.id).where(
+                FetchJob.source_id == source.id,
+                FetchJob.state.in_(("queued", "leased")),
+            ).limit(1))
+            if pending is None:
+                # The due timestamp is stable until this transaction commits.
+                key = hashlib.sha256(f"{source.source_key}\0{source.next_due_at.isoformat()}".encode()).hexdigest()
+                db.add(FetchJob(source_id=source.id, dedupe_key=key))
+                scheduled += 1
             source.next_due_at = now() + timedelta(minutes=source.interval_minutes)
         db.commit()
-        event("scheduled", count=len(due))
+        event("scheduled", count=scheduled, deferred=len(due) - scheduled)
 
 def claim(factory):
     with factory() as db:
