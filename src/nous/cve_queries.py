@@ -40,16 +40,28 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
         raise ValueError("CVE observation cutoff must be timezone-aware")
     cutoff = cutoff.astimezone(timezone.utc)
 
-    kev_sources = db.scalars(
-        select(Source).where(Source.source_key == "cisa-kev",
-                             Source.origin == "official",
-                             Source.last_success_at.is_not(None),
-                             Source.last_success_at <= cutoff)
-        .order_by(Source.last_success_at.desc()).limit(1)
-    ).all()
-    catalog_as_of = kev_sources[0].last_success_at if kev_sources else None
+    cisa = db.scalar(select(Source).where(
+        Source.source_key == "cisa-kev", Source.origin == "official"
+    ))
+    # A positive assertion is only current while the CVE is present in the
+    # latest complete catalog. Immutable versions prove historical observations,
+    # not membership in a subsequent catalog where the item disappeared.
+    catalog_as_of = (cisa.last_success_at if cisa is not None and
+                     cisa.last_success_at is not None and
+                     cisa.last_success_at <= cutoff else None)
     fresh = (catalog_as_of is not None and
              catalog_as_of >= cutoff - timedelta(hours=48))
+
+    def listed_at_cutoff(item: Item, source: Source) -> bool:
+        if cisa is None or source.id != cisa.id or cisa.last_success_at is None:
+            return False
+        if catalog_as_of is not None:
+            # Current item state describes the most recently ingested complete
+            # catalog, including the removal of previously listed CVEs.
+            return item.state == "current"
+        # An explicit historical cutoff predating the latest catalog may still
+        # cite an immutable prior KEV observation. Current reads never do so.
+        return observed_cutoff is not None
 
     candidate_item_ids = select(ItemVersion.item_id).join(
         CveItemVersionLink,
@@ -93,6 +105,8 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
         relation = _relation_at(version, item, source, cve_id)
         if relation is None or relation != link.relation:
             continue
+        if relation == "kev" and not listed_at_cutoff(item, source):
+            continue
         attrs = version.attributes if isinstance(version.attributes, dict) else {}
         details = attrs.get("vulnerability") if isinstance(attrs.get("vulnerability"), dict) else {}
         if relation == "kev" and source.source_key == "cisa-kev":
@@ -119,12 +133,11 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
 
     # The authoritative CISA row is also looked up by its normalized exact ID,
     # so a link retired after the cutoff cannot erase a historical listing.
-    if kev_sources:
-        cisa = kev_sources[0]
+    if cisa is not None and cisa.last_success_at is not None:
         kev_item = db.scalar(select(Item).where(
             Item.source_id == cisa.id, Item.external_id == cve_id,
             Item.first_seen_at <= cutoff))
-        if kev_item is not None:
+        if kev_item is not None and listed_at_cutoff(kev_item, cisa):
             kev_version = _version_at(db, kev_item.id, cutoff)
             relation = (_relation_at(kev_version, kev_item, cisa, cve_id)
                         if kev_version else None)
@@ -160,7 +173,7 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
             "vendor": None,
             "product": None,
             "known_ransomware_campaign_use": None,
-            "source_url": kev_sources[0].url if kev_sources else None,
+            "source_url": cisa.url if catalog_as_of is not None else None,
         }
     return {
         "cve_id": cve_id,
