@@ -12,7 +12,7 @@ Updated: 2026-11-05
 
 ## 2. Declarative source format
 
-Illustrative source declaration (validated by the implemented SourceConfig parser):
+Illustrative declaration shape (the placeholder review date is intentionally invalid until approved):
 
 ```yaml
 id: example-security-feed
