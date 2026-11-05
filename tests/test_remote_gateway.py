@@ -41,10 +41,16 @@ def test_static_ui_requires_assertion_and_unknown_routes_stay_hidden(gateway):
     assert page.text == "<main>Nous UI</main>"
     assert page.headers["cache-control"] == "no-store"
     for route in ("/explore", "/changes", "/sources", "/sources/new", "/admin/reports",
-                  "/items/3", "/cves/CVE-2026-1234"):
+                  "/admin/sources", "/admin/sources/new",
+                  "/admin/sources/example/edit", "/items/3", "/cves/CVE-2026-1234"):
         page = client.get(route, headers=headers)
         assert page.status_code == 200 and page.text == "<main>Nous UI</main>"
         assert page.headers["cache-control"] == "no-store"
+    unknown_screen = client.get("/missing-screen", headers=headers)
+    assert unknown_screen.status_code == 404
+    assert unknown_screen.text == "<main>Nous UI</main>"
+    assert unknown_screen.headers["content-type"].startswith("text/html")
+    assert client.get("/missing-screen").status_code == 403
     asset = client.get("/assets/app-123.js", headers=headers)
     assert asset.status_code == 200 and "window.nous" in asset.text
     assert asset.headers["cache-control"] == "no-store"
@@ -52,8 +58,13 @@ def test_static_ui_requires_assertion_and_unknown_routes_stay_hidden(gateway):
     assert immutable.status_code == 200
     assert immutable.headers["cache-control"] == "public, max-age=31536000, immutable"
     assert client.get("/assets/missing-0123456789.js", headers=headers).headers["cache-control"] == "no-store"
-    for path in ("/docs", "/health/ready", "/admin", "/api/v1/items", "/v1/status"):
+    for path in ("/health/ready", "/admin", "/api/v1/items", "/v1/status",
+                 "/v1/admin/not-allowed", "/assets/missing-12345678.js"):
         assert client.get(path, headers=headers).status_code == 404
+    assert client.get("/health/ready", headers=headers).headers["content-type"].startswith(
+        "application/json"
+    )
+    assert client.get("/%65xplore", headers=headers).status_code == 404
     assert client.post("/v1/items", headers=headers).status_code == 404
     assert client.get("/", headers={**headers, "Host": "other.example"}).status_code == 404
 
@@ -64,6 +75,9 @@ def test_private_reports_are_exact_read_only_routes(gateway, tmp_path, monkeypat
     release = report_root / "releases" / digest
     (release / "security" / "daily-summary").mkdir(parents=True)
     (release / "index.html").write_text("<main>Private reports</main>")
+    (release / "404.html").write_text(
+        '<main>Report not found <a href="/reports/">All reports</a></main>'
+    )
     (release / "security" / "daily-summary" / "index.html").write_text(
         "<article>Private daily report</article>"
     )
@@ -94,6 +108,11 @@ def test_private_reports_are_exact_read_only_routes(gateway, tmp_path, monkeypat
     assert "script-src 'none'" in denied.headers["content-security-policy"]
     assert denied.headers["x-content-type-options"] == "nosniff"
 
+    canonical = client.get("/reports", headers=headers, follow_redirects=False)
+    assert canonical.status_code == 308
+    assert canonical.headers["location"] == "/reports/"
+    assert client.get("/reports").status_code == 403
+
     index = client.get("/reports/", headers=headers)
     assert index.status_code == 200
     assert index.text == "<main>Private reports</main>"
@@ -105,6 +124,11 @@ def test_private_reports_are_exact_read_only_routes(gateway, tmp_path, monkeypat
     assert article.text == "<article>Private daily report</article>"
     head = client.head("/reports/security/daily-summary/", headers=headers)
     assert head.status_code == 200 and head.content == b""
+    missing_article = client.get("/reports/security/not-published-yet/", headers=headers)
+    assert missing_article.status_code == 404
+    assert "Report not found" in missing_article.text
+    assert 'href="/reports/"' in missing_article.text
+    assert missing_article.headers["content-type"].startswith("text/html")
 
     for filename in (
         "site-0123456789abcdef.css",
@@ -118,7 +142,6 @@ def test_private_reports_are_exact_read_only_routes(gateway, tmp_path, monkeypat
     assert client.head("/reports/_astro/site-0123456789abcdef.css", headers=headers).status_code == 200
 
     invalid = (
-        "/reports",
         "/reports/current/",
         "/reports/current/index.html",
         "/reports/security/daily-summary/index.html",

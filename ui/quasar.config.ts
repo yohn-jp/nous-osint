@@ -18,7 +18,7 @@ export default defineConfig(() => ({
     },
   },
   build: {
-    vueRouterMode: 'hash',
+    vueRouterMode: 'history',
     vueOptionsAPI: false,
     typescript: { strict: true },
   },
