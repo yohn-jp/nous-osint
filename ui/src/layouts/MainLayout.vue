@@ -12,13 +12,14 @@ const canAdmin = ref(false)
 void api.adminSession().then(session => { canAdmin.value = session.allowed }).catch(() => { canAdmin.value = false })
 const nav = [
   { to: '/explore', name: 'explore', icon: 'travel_explore', title: '探索', caption: 'Explore' },
+  { href: '/reports/', name: 'reports', icon: 'article', title: 'レポート', caption: 'Reports' },
   { to: '/changes', name: 'changes', icon: 'update', title: '変更履歴', caption: 'Changes' },
   { to: '/sources', name: 'sources', icon: 'rss_feed', title: '情報源', caption: 'Sources' },
 ]
-const visibleNav = computed(() => canAdmin.value ? [...nav,
-  { to: '/admin/sources', name: 'admin-sources', icon: 'tune', title: '管理', caption: 'Admin' },
-  { to: '/admin/reports', name: 'admin-reports', icon: 'article', title: 'レポート', caption: 'Reports' },
-] : nav)
+const adminNav = [
+  { to: '/admin/sources', name: 'admin-sources', icon: 'tune', title: '情報源管理', caption: 'Source administration' },
+  { to: '/admin/reports', name: 'admin-reports', icon: 'calendar_month', title: 'レポート生成管理', caption: 'Report generation' },
+]
 const isActive = (name: string) => {
   if (name === 'admin-sources') return ['admin-sources', 'admin-new', 'admin-edit'].includes(active.value)
   if (name === 'admin-reports') return active.value === 'admin-reports'
@@ -45,18 +46,30 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
     <q-drawer v-model="drawerOpen" show-if-above :breakpoint="1024" :width="222" bordered class="nous-drawer">
       <div class="q-px-md q-pt-xl q-pb-md sidebar-caption">LIBRARY</div>
       <q-list padding class="q-px-sm">
-        <q-item v-for="entry in visibleNav" :key="entry.name" clickable v-ripple :to="entry.to" exact class="nav-entry" :active="isActive(entry.name)" active-class="nav-entry-active" @click="closeDrawerOnMobile">
+        <q-item v-for="entry in nav" :key="entry.name" clickable v-ripple :to="entry.to" :href="entry.href" exact class="nav-entry" :active="isActive(entry.name)" active-class="nav-entry-active" @click="closeDrawerOnMobile">
           <q-item-section avatar><q-icon :name="entry.icon" size="20px" /></q-item-section>
           <q-item-section><q-item-label>{{ entry.title }}</q-item-label><q-item-label caption>{{ entry.caption }}</q-item-label></q-item-section>
         </q-item>
       </q-list>
+      <template v-if="canAdmin">
+        <div class="q-px-md q-pt-lg q-pb-sm sidebar-caption">ADMINISTRATION</div>
+        <q-list padding class="q-px-sm">
+          <q-item v-for="entry in adminNav" :key="entry.name" clickable v-ripple :to="entry.to" exact class="nav-entry" :active="isActive(entry.name)" active-class="nav-entry-active" @click="closeDrawerOnMobile">
+            <q-item-section avatar><q-icon :name="entry.icon" size="20px" /></q-item-section>
+            <q-item-section><q-item-label>{{ entry.title }}</q-item-label><q-item-label caption>{{ entry.caption }}</q-item-label></q-item-section>
+          </q-item>
+        </q-list>
+      </template>
       <div class="sidebar-footer">SOURCE FIRST · HISTORY PRESERVED</div>
     </q-drawer>
 
     <q-page-container><router-view /></q-page-container>
     <q-footer v-if="$q.screen.lt.md" class="mobile-footer">
       <q-tabs no-caps dense indicator-color="primary" active-color="primary" class="text-grey-7">
-        <q-route-tab v-for="entry in visibleNav" :key="entry.name" :to="entry.to" exact :icon="entry.icon" :label="entry.title" />
+        <template v-for="entry in nav" :key="entry.name">
+          <q-route-tab v-if="entry.to" :to="entry.to" exact :icon="entry.icon" :label="entry.title" />
+          <q-tab v-else :name="entry.name" :href="entry.href" :icon="entry.icon" :label="entry.title" />
+        </template>
       </q-tabs>
     </q-footer>
   </q-layout>

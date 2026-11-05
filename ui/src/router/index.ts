@@ -1,9 +1,9 @@
 import { defineRouter } from '#q-app'
-import { createRouter, createWebHashHistory, type Router } from 'vue-router'
+import { createRouter, createWebHistory, type Router } from 'vue-router'
 import routes from './routes'
 
 export default defineRouter((): Router => createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes,
   scrollBehavior(to, from, saved) {
     if (saved) return saved

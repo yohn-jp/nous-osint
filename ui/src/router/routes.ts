@@ -15,7 +15,8 @@ const routes: RouteRecordRaw[] = [{
     { path: 'admin/reports', name: 'admin-reports', component: () => import('../pages/AdminReportsPage.vue') },
     { path: 'admin/sources/new', name: 'admin-new', component: () => import('../pages/AdminSourceFormPage.vue') },
     { path: 'admin/sources/:id/edit', name: 'admin-edit', component: () => import('../pages/AdminSourceFormPage.vue') },
+    { path: ':pathMatch(.*)*', name: 'not-found', component: () => import('../pages/NotFoundPage.vue') },
   ],
-}, { path: '/:catchAll(.*)*', redirect: '/explore' }]
+}]
 
 export default routes
