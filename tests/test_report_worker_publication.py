@@ -25,7 +25,10 @@ def fake_static_build(articles, staging_root):
     staging_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     dist = staging_root / ("fixture-dist-" + uuid.uuid4().hex)
     dist.mkdir(mode=0o700)
-    pages = {"index.html": "<html><body>fixture index</body></html>"}
+    pages = {
+        "index.html": "<html><body>fixture index</body></html>",
+        "404.html": "<html><body>fixture 404 <a href=\"/reports/\">All reports</a></body></html>",
+    }
     for article in articles:
         if article.get("slug"):
             path = f"{article['category']}/{article['slug']}/index.html"
@@ -141,6 +144,72 @@ def test_corrupt_active_release_is_rebuilt_at_the_same_digest(publication):
     assert worker._current_digest(site_root) == digest
     assert worker._verify_release(site_root, digest)
     assert index.read_text(encoding="utf-8") == "<html><body>fixture index</body></html>"
+
+
+@pytest.mark.parametrize("include_published_article", [False, True])
+def test_legacy_release_without_404_page_is_rebuilt_from_published_archive(
+        publication, tmp_path, monkeypatch, include_published_article):
+    factory, claim, _bundle, _article = publication
+    site_root = worker.public_root()
+
+    if include_published_article:
+        with factory() as db:
+            db.add(Report(
+                id=str(uuid.uuid4()), run_id=claim["id"], slug="previous-published-report",
+                category="security", template_id="security-daily",
+                article={"title": "Published", "summary": ["Published"],
+                         "claims": [], "sections": []},
+                headline="Published", summary=["Published"],
+                published_at=datetime.now(timezone.utc), artifact_digest="a" * 64,
+                artifact_path="releases/" + "a" * 64, harness_version="fixture",
+                input_digest="b" * 64,
+            ))
+            db.commit()
+
+    # Model a pre-404 release whose index and manifest are otherwise valid.
+    legacy_dist = tmp_path / "legacy-dist"
+    legacy_dist.mkdir()
+    (legacy_dist / "index.html").write_text(
+        "<html><body>legacy index</body></html>", encoding="utf-8"
+    )
+    legacy_hash = hashlib.sha256()
+    legacy_hash.update(b"index.html")
+    legacy_hash.update(b"\0")
+    legacy_hash.update((legacy_dist / "index.html").read_bytes())
+    legacy_hash.update(b"\0")
+    legacy_digest = legacy_hash.hexdigest()
+    worker._write_release(site_root, legacy_dist, [], legacy_digest)
+    worker._promote(site_root, legacy_digest)
+    worker._persist_site_state(factory, legacy_digest)
+    assert worker._verify_release(site_root, legacy_digest)
+    assert not worker._release_has_404_page(site_root, legacy_digest)
+
+    builds = []
+
+    def record_build(articles, staging_root):
+        builds.append(articles)
+        return fake_static_build(articles, staging_root)
+
+    monkeypatch.setattr(worker, "build_static_release", record_build)
+    repaired = worker.ensure_current_release(factory)
+
+    assert len(builds) == 1
+    assert repaired != legacy_digest
+    repaired_release = site_root / "releases" / repaired
+    assert (repaired_release / "404.html").is_file()
+    assert worker._current_digest(site_root) == repaired
+    assert worker._is_current_contract_release(site_root, repaired)
+    assert (site_root / "releases" / legacy_digest / "index.html").is_file()
+    if include_published_article:
+        assert (repaired_release / "security" / "previous-published-report" / "index.html").is_file()
+        assert builds[0][0]["slug"] == "previous-published-report"
+    else:
+        assert builds[0] == []
+    with factory() as db:
+        state = db.get(ReportSiteState, 1)
+        assert state.active_digest == repaired
+        assert state.pending_digest is None
+        assert state.pending_run_id is None
 
 
 def test_saved_bundle_evidence_uses_immutable_version_link_after_current_link_changes(tmp_path):

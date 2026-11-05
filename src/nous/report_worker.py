@@ -485,6 +485,28 @@ def _verify_release(site_root: Path, digest: str) -> bool:
         return False
 
 
+def _release_has_404_page(site_root: Path, digest: str) -> bool:
+    """Require the renderer's not-found page in the immutable release contract."""
+    try:
+        manifest = json.loads(
+            (site_root / ".manifests" / f"{digest}.json").read_text(encoding="utf-8")
+        )
+        files = manifest.get("files")
+        html_files = manifest.get("html_files")
+        return (
+            isinstance(files, dict)
+            and "404.html" in files
+            and isinstance(html_files, list)
+            and "404.html" in html_files
+        )
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def _is_current_contract_release(site_root: Path, digest: str) -> bool:
+    return _verify_release(site_root, digest) and _release_has_404_page(site_root, digest)
+
+
 def _current_digest(site_root: Path) -> str | None:
     current = site_root / "current"
     if not current.exists() and not current.is_symlink():
@@ -533,7 +555,7 @@ def _ensure_current_release_locked(factory, site_root: Path) -> str:
         # An intent is committed before promotion. If it remains at recovery
         # time, the worker did not commit the report transaction; restore the
         # last committed digest before accepting another publication.
-        if expected and _verify_release(site_root, expected):
+        if expected and _is_current_contract_release(site_root, expected):
             _promote(site_root, expected)
         elif expected:
             private = private_root()
@@ -567,9 +589,9 @@ def _ensure_current_release_locked(factory, site_root: Path) -> str:
             # release has been persisted, but repair if old state is missing.
             return _ensure_current_release_locked(factory, site_root)
     actual = _current_digest(site_root)
-    if expected and actual == expected and _verify_release(site_root, expected):
+    if expected and actual == expected and _is_current_contract_release(site_root, expected):
         return expected
-    if expected and _verify_release(site_root, expected):
+    if expected and _is_current_contract_release(site_root, expected):
         _promote(site_root, expected)
         return expected
     # The selected release is absent or corrupt. Rebuild the complete archive
@@ -590,7 +612,7 @@ def _ensure_current_release_locked(factory, site_root: Path) -> str:
 
 
 def ensure_current_release(factory) -> str:
-    """Recover file/DB publication mismatches and create an initial empty index."""
+    """Recover stale-contract releases from DB articles and create an initial index."""
     site_root = public_root()
     with _publication_lock(site_root):
         return _ensure_current_release_locked(factory, site_root)
