@@ -30,7 +30,8 @@ const base = import.meta.env.BASE_URL;
           <span>nous<span class="brand-separator"> / </span>osint</span>
         </a>
         <nav aria-label="メインナビゲーション">
-          <a href={base}>レポート</a>
+          <a href={base} aria-current="page">レポート</a>
+          <a href="/explore" class="library-return">情報ライブラリへ <span aria-hidden="true">↗</span></a>
         </nav>
       </div>
     </header>
