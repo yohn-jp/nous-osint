@@ -50,7 +50,7 @@ def _query_keys(path: str) -> set[str] | None:
         return set()
     if AccessAssertionMiddleware._allowed_path(path, "GET") and path.startswith("/v1/items/"):
         if path.endswith("/versions"):
-            return {"limit"}
+            return {"limit", "before"}
         return set()
     return None
 

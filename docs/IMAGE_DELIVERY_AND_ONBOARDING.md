@@ -1,18 +1,19 @@
 # Image delivery and Source Onboarding
 
-## CI and immutable application image
+## CI and immutable application/report Worker images
 
-The `check` (Python, PostgreSQL, migration and backup verification) and `frontend` (Node 24, Quasar typecheck/build) jobs run concurrently. The `image` job depends on both; pull requests build without publishing, while pushes to `main` publish `ghcr.io/yohn-jp/nous-osint:main` and record the immutable `ghcr.io/yohn-jp/nous-osint@sha256:...` reference in the workflow summary and `nous-image-digest` artifact. BuildKit's GitHub Actions cache is shared across runs.
+The `check` (Python, PostgreSQL, migration and backup verification), `cve-role-grants`, `frontend` (Node 24, Quasar typecheck/build), and `reports` (Astro) checks run independently. The `image` job depends on check/frontend/reports; `report-worker-image` depends on check/reports. Pull requests build both images without publishing. Successful pushes to `main` publish `ghcr.io/yohn-jp/nous-osint:main` and `ghcr.io/yohn-jp/nous-osint-reports:main`, recording the immutable `@sha256:...` references in the workflow summaries and `nous-image-digest` / `report-worker-image-digest` artifacts. BuildKit's GitHub Actions cache is shared across runs.
 
-The application image includes the Python API/MCP/worker/scheduler and compiled Quasar assets. It does **not** replace the separately pinned PostgreSQL or cloudflared images. Only the application image is published here. The mutable `:main` tag is for discovery; deployment must use the digest, never the tag.
+The application image includes the Python API/MCP/collection Worker/scheduler and compiled Quasar assets. The separate report Worker image includes the reviewed Codex CLI, Python report pipeline and build-only Node/Astro dependencies. Neither image replaces separately pinned PostgreSQL/cloudflared. Both mutable `:main` tags are for discovery only: deployment must use each distinct immutable digest.
 
 ### VM deployment (not automated by CI)
 
-1. Review successful CI checks and copy the image reference from the **specific** successful main workflow run.
-2. Pull the exact digest on the VM using rootless Podman. If GHCR is private, provision a VM-local pull-only registry credential; never commit it or expose it to the browser.
-3. Update the `Image=` line of **all four** application Quadlets (`nous-api`, `nous-mcp`, `nous-worker`, `nous-scheduler`) to the **same** `ghcr.io/yohn-jp/nous-osint@sha256:...` reference. Do not change the database or Tunnel image.
-4. Reload the user systemd manager and restart application units in a controlled sequence. Confirm readiness, MCP `initialize` and `tools/list`, source collection, and UI access. Preserve the previous digest for rollback.
-5. If checks fail, restore the prior four `Image=` values and restart. Do not prune the old image before verification.
+1. Review **all green** checks for the specific `main` SHA and copy **both** immutable image references from that workflow run.
+2. Run the reviewed database migration `alembic upgrade head` (currently `0010`) with the migration role **before** new containers start. Ensure the conditional KEV journal grants exist for runtime/API/MCP/report Worker roles; migration failure blocks rollout.
+3. Pull both exact digests with rootless Podman; keep registry pull credentials local to the VM.
+4. Pin the **same application digest** in the four application Quadlets (`nous-api`, `nous-mcp`, `nous-worker`, `nous-scheduler`) and the **separate report digest** in `nous-report-worker`. Do not change PostgreSQL or Tunnel image references.
+5. Reload the user systemd manager, restart in dependency order, then confirm API readiness, MCP `initialize`/`tools/list`, source collection, browser access and report Worker recovery. Preserve both previous digests and the existing report-site release for rollback.
+6. On failure, restore previous image references and restart the prior services; the additive schema must be checked for backward compatibility. Do not prune either old image before verification.
 
 **Important:** Committing a concrete digest to the repository cannot happen in the same source commit that builds it without creating a self-referential build loop. The workflow publishes the digest as a release artifact; the VM's effective Quadlet configuration is pinned at deployment time. The current Quadlet digests are historical VM build references and are **not** automatically changed by this PR. This is deliberate; no unverified VM deployment is claimed.
 

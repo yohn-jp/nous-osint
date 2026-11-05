@@ -283,7 +283,7 @@ def main() -> int:
             site_root.mkdir()
             digest, site_metadata, _ = build_site(site_root)
             schema, counts = seed_database(database_url, digest)
-            if schema != "0009" or counts["sources"] != 1 or counts["items"] != 1 or counts["item_versions"] != 1:
+            if schema != "0010" or counts["sources"] != 1 or counts["items"] != 1 or counts["item_versions"] != 1:
                 raise RuntimeError(f"unexpected source fixture schema or counts: {schema} {counts}")
 
             install_tar = run_tar(site_root)

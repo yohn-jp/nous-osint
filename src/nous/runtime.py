@@ -2,20 +2,27 @@ import hashlib
 import json
 import logging
 import socket
+import threading
 import time
+import uuid
 import httpx
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 from sqlalchemy import func, or_, select, text, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert
 from .adapters import extract
 from .job_postings import fetch_lever_board
 from .cve_index import cve_relations, record_item_version_cves, sync_item_cves
 from .db import session_factory
 from .fetch import fetch
-from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source, now
+from .models import (FetchAttempt, FetchJob, Item, ItemVersion,
+                     KevCatalogContent, KevCatalogObservation, Source, now)
 from .registry import load_registry, sync
+
+_FETCH_LEASE_SECONDS = 300
+_FETCH_HEARTBEAT_SECONDS = 60
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -29,14 +36,23 @@ def schedule_once(factory):
         sync(db, load_registry())
         due = db.scalars(select(Source).where(Source.enabled.is_(True), Source.next_due_at <= now())
                          .with_for_update(skip_locked=True)).all()
+        scheduled = 0
         for source in due:
-            # The due timestamp is stable until this transaction commits.
-            # Deterministic, bounded key even for the longest legal source identifier.
-            key = hashlib.sha256(f"{source.source_key}\0{source.next_due_at.isoformat()}".encode()).hexdigest()
-            db.add(FetchJob(source_id=source.id, dedupe_key=key))
+            # A source has at most one queued/leased poll. Keeping the cadence
+            # advance even when a poll is pending prevents outage catch-up from
+            # creating an unbounded backlog or replaying stale catalog states.
+            pending = db.scalar(select(FetchJob.id).where(
+                FetchJob.source_id == source.id,
+                FetchJob.state.in_(("queued", "leased")),
+            ).limit(1))
+            if pending is None:
+                # The due timestamp is stable until this transaction commits.
+                key = hashlib.sha256(f"{source.source_key}\0{source.next_due_at.isoformat()}".encode()).hexdigest()
+                db.add(FetchJob(source_id=source.id, dedupe_key=key))
+                scheduled += 1
             source.next_due_at = now() + timedelta(minutes=source.interval_minutes)
         db.commit()
-        event("scheduled", count=len(due))
+        event("scheduled", count=scheduled, deferred=len(due) - scheduled)
 
 def claim(factory):
     with factory() as db:
@@ -79,7 +95,7 @@ def claim(factory):
             db.commit()
             return None
         job.state = "leased"
-        job.lease_until = current + timedelta(minutes=5)
+        job.lease_until = current + timedelta(seconds=_FETCH_LEASE_SECONDS)
         job.attempts += 1
         attempt = job.attempts
         db.commit()
@@ -134,6 +150,20 @@ def store_item(db, source, raw, final_url):
         db.flush()
         record_item_version_cves(db, version.id, attrs.get("cve_relations", {}))
 
+def _record_kev_catalog(db, source: Source, members, observed_at: datetime):
+    """Commit complete membership alongside items and the successful fetch."""
+    cve_ids = sorted(set(members))
+    if not cve_ids:
+        raise ValueError("empty complete CISA KEV catalog")
+    digest = hashlib.sha256(json.dumps(cve_ids, separators=(",", ":")).encode()).hexdigest()
+    db.execute(insert(KevCatalogContent).values(digest=digest, cve_ids=cve_ids)
+               .on_conflict_do_nothing(index_elements=["digest"]))
+    db.add(KevCatalogObservation(
+        id=str(uuid.uuid4()), source_id=source.id,
+        observed_at=observed_at, digest=digest,
+    ))
+
+
 def parse_timestamp(value):
     if not isinstance(value, str):
         return None
@@ -145,6 +175,45 @@ def parse_timestamp(value):
         except (TypeError, ValueError, IndexError):
             return None
     return parsed.astimezone(timezone.utc) if parsed.tzinfo else None
+
+def _renew_fetch_lease(factory, job_id: int, attempt: int) -> bool:
+    """Extend only the still-live generation; never revive an expired claim."""
+    current = now()
+    with factory() as db:
+        changed = db.execute(update(FetchJob).where(
+            FetchJob.id == job_id,
+            FetchJob.attempts == attempt,
+            FetchJob.state == "leased",
+            FetchJob.lease_until > current,
+        ).values(lease_until=current + timedelta(seconds=_FETCH_LEASE_SECONDS)))
+        db.commit()
+        return changed.rowcount == 1
+
+
+class _FetchLeaseHeartbeat:
+    def __init__(self, factory, job_id: int, attempt: int):
+        self.factory, self.job_id, self.attempt = factory, job_id, attempt
+        self.stop_event = threading.Event()
+        self.thread = threading.Thread(target=self._run, name="fetch-lease-heartbeat", daemon=True)
+
+    def start(self):
+        self.thread.start()
+
+    def stop(self):
+        self.stop_event.set()
+        self.thread.join(timeout=2)
+
+    def _run(self):
+        while not self.stop_event.wait(_FETCH_HEARTBEAT_SECONDS):
+            try:
+                if not _renew_fetch_lease(self.factory, self.job_id, self.attempt):
+                    return
+            except SQLAlchemyError:
+                # The final persistence transaction independently rechecks
+                # generation and expiry; failures never authorize a stale write.
+                event("fetch_lease_renewal_failed", job=self.job_id)
+                return
+
 
 def process(factory, job_id, claim_attempt=None):
     """Fetch and persist only if this Worker still owns its claim generation.
@@ -169,6 +238,12 @@ def process(factory, job_id, claim_attempt=None):
         requests_made += 1
         return fetch(*args)
 
+    # Network I/O is outside a database transaction. Maintain ownership
+    # across slow multi-page polls, while still fencing every eventual write.
+    heartbeat = (_FetchLeaseHeartbeat(factory, job_id, claim_attempt)
+                 if claim_attempt is not None else None)
+    if heartbeat is not None:
+        heartbeat.start()
     try:
         if source.adapter == "lever_jobs_v1":
             # All pages must succeed before store_item or missing-item state
@@ -204,6 +279,9 @@ def process(factory, job_id, claim_attempt=None):
         outcome = "failure"
         records = []
         headers = {}
+    finally:
+        if heartbeat is not None:
+            heartbeat.stop()
     with factory() as db:
         job = db.scalar(select(FetchJob).where(
             FetchJob.id == job_id
@@ -242,7 +320,15 @@ def process(factory, job_id, claim_attempt=None):
                                           old_item.last_seen_at < now() - timedelta(days=7)
                                           else "unknown")
             if outcome != "failure":
-                source.last_success_at = now()
+                observed_at = now()
+                if (source.source_key == "cisa-kev" and source.origin == "official"
+                        and source.adapter == "cisa_kev_v1"):
+                    members = (seen if outcome == "success" else db.scalars(
+                        select(Item.external_id).where(
+                            Item.source_id == source.id, Item.state == "current",
+                        )).all())
+                    _record_kev_catalog(db, source, members, observed_at)
+                source.last_success_at = observed_at
                 source.last_error = None
                 source.etag = headers.get("etag", source.etag)
                 source.last_modified = headers.get("last-modified", source.last_modified)

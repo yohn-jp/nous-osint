@@ -116,6 +116,26 @@ class CveItemVersionLink(Base):
     relation: Mapped[str] = mapped_column(String(24))
 
 
+
+class KevCatalogContent(Base):
+    """Content-addressed, immutable membership of one validated complete CISA KEV catalog."""
+    __tablename__ = "kev_catalog_contents"
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    cve_ids: Mapped[list] = mapped_column(JSON)
+
+
+class KevCatalogObservation(Base):
+    """Successful catalog observation; a 304 references existing member content."""
+    __tablename__ = "kev_catalog_observations"
+    __table_args__ = (
+        Index("ix_kev_catalog_source_observed", "source_id", "observed_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    digest: Mapped[str] = mapped_column(ForeignKey("kev_catalog_contents.digest"))
+
+
 class ReportSchedule(Base):
     __tablename__ = "report_schedules"
     __table_args__ = (CheckConstraint("cadence IN ('daily','weekly')", name="ck_report_schedule_cadence"),)

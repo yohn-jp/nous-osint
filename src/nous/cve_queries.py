@@ -10,7 +10,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import case, func, select
 from .cve_index import valid_cve_id, version_cve_relations
-from .models import CveItemVersionLink, Item, ItemVersion, Source
+from .models import (CveItemVersionLink, Item, ItemVersion,
+                     KevCatalogContent, KevCatalogObservation, Source)
 
 _RELATIONS = {"kev", "record", "reference", "title_mention"}
 
@@ -43,25 +44,48 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
     cisa = db.scalar(select(Source).where(
         Source.source_key == "cisa-kev", Source.origin == "official"
     ))
-    # A positive assertion is only current while the CVE is present in the
-    # latest complete catalog. Immutable versions prove historical observations,
-    # not membership in a subsequent catalog where the item disappeared.
-    catalog_as_of = (cisa.last_success_at if cisa is not None and
-                     cisa.last_success_at is not None and
-                     cisa.last_success_at <= cutoff else None)
+    # The observation journal was introduced in 0010. A cutoff after its
+    # first complete catalog is resolved against exactly the membership
+    # observed at that time, including later removals and re-additions.
+    observation = (db.scalar(select(KevCatalogObservation).where(
+        KevCatalogObservation.source_id == cisa.id,
+        KevCatalogObservation.observed_at <= cutoff,
+    ).order_by(
+        KevCatalogObservation.observed_at.desc(),
+        KevCatalogObservation.id.desc(),
+    ).limit(1)) if cisa is not None else None)
+    if observation is not None:
+        members = db.get(KevCatalogContent, observation.digest)
+        # This is protected by the FK; fail closed for an inconsistent database.
+        member_ids = set(members.cve_ids) if members is not None else set()
+        catalog_as_of = observation.observed_at if members is not None else None
+        membership_known = members is not None
+        listed_in_catalog = cve_id in member_ids
+    else:
+        # Legacy databases have no historical membership journal. Their
+        # current complete catalog remains readable, but a cutoff before the
+        # latest successful fetch must not be inferred from old item versions.
+        last_success = cisa.last_success_at if cisa is not None else None
+        if last_success is not None and last_success.tzinfo is None:
+            last_success = last_success.replace(tzinfo=timezone.utc)
+        catalog_as_of = (last_success if last_success is not None and
+                         last_success <= cutoff else None)
+        membership_known = catalog_as_of is not None
+        listed_in_catalog = None
+    if catalog_as_of is not None and catalog_as_of.tzinfo is None:
+        # SQLite fixtures store timezone-aware datetimes as naive UTC.
+        catalog_as_of = catalog_as_of.replace(tzinfo=timezone.utc)
     fresh = (catalog_as_of is not None and
              catalog_as_of >= cutoff - timedelta(hours=48))
 
     def listed_at_cutoff(item: Item, source: Source) -> bool:
-        if cisa is None or source.id != cisa.id or cisa.last_success_at is None:
+        if cisa is None or source.id != cisa.id or not membership_known:
             return False
-        if catalog_as_of is not None:
-            # Current item state describes the most recently ingested complete
-            # catalog, including the removal of previously listed CVEs.
-            return item.state == "current"
-        # An explicit historical cutoff predating the latest catalog may still
-        # cite an immutable prior KEV observation. Current reads never do so.
-        return observed_cutoff is not None
+        if listed_in_catalog is not None:
+            return listed_in_catalog
+        # Only the effective current catalog is safe to read without 0010
+        # snapshots. No historical positive is invented for legacy intervals.
+        return item.state == "current"
 
     candidate_item_ids = select(ItemVersion.item_id).join(
         CveItemVersionLink,
@@ -124,7 +148,8 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
             associated.append({
                 "item_id": item.id, "source": source.source_key,
                 "relation": relation, "kind": item.kind,
-                "state": item.state, "title": attrs.get("title", item.title),
+                "state": ("current" if relation == "kev" else item.state),
+                "title": attrs.get("title", item.title),
                 "url": attrs.get("url", item.canonical_url),
                 "last_seen_at": version.observed_at, "source_url": source.url,
                 "source_adapter": source.adapter,
@@ -133,7 +158,7 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
 
     # The authoritative CISA row is also looked up by its normalized exact ID,
     # so a link retired after the cutoff cannot erase a historical listing.
-    if cisa is not None and cisa.last_success_at is not None:
+    if cisa is not None and membership_known:
         kev_item = db.scalar(select(Item).where(
             Item.source_id == cisa.id, Item.external_id == cve_id,
             Item.first_seen_at <= cutoff))
@@ -157,14 +182,14 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
                     associated.insert(0, {
                         "item_id": kev_item.id, "source": cisa.source_key,
                         "relation": "kev", "kind": kev_item.kind,
-                        "state": kev_item.state, "title": attrs.get("title", kev_item.title),
+                        "state": "current", "title": attrs.get("title", kev_item.title),
                         "url": attrs.get("url", kev_item.canonical_url),
                         "last_seen_at": kev_version.observed_at,
                         "source_url": cisa.url, "source_adapter": cisa.adapter,
                     })
     if kev is None:
         kev = {
-            "status": "not_listed" if fresh else "unknown",
+            "status": "not_listed" if fresh and membership_known else "unknown",
             "catalog_as_of": catalog_as_of,
             "catalog_fresh": fresh,
             "item_id": None,

@@ -208,13 +208,15 @@ def item(item_id: int):
                 "provenance": version.provenance}
 
 @app.get("/v1/items/{item_id}/versions", response_model=list[VersionResponse])
-def versions(item_id: int, limit: int | None = Query(None, ge=1, le=100)):
+def versions(item_id: int, limit: int = Query(50, ge=1, le=100),
+             before: int | None = Query(None, ge=1)):
     with session_factory()() as db:
         if not db.get(Item, item_id):
             raise HTTPException(404, "item not found")
-        query = select(ItemVersion).where(ItemVersion.item_id == item_id).order_by(ItemVersion.version.desc())
-        if limit is not None:
-            query = query.limit(limit)
+        query = select(ItemVersion).where(ItemVersion.item_id == item_id)
+        if before is not None:
+            query = query.where(ItemVersion.version < before)
+        query = query.order_by(ItemVersion.version.desc()).limit(limit)
         return [{"version": v.version, "observed_at": v.observed_at,
                  "sha256": v.sha256, "attributes": v.attributes, "provenance": v.provenance}
                 for v in db.scalars(query)]

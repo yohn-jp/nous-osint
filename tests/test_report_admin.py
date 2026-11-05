@@ -185,3 +185,40 @@ def test_schedule_create_rejects_nonexistent_spring_forward_time(managed, monkey
     })
     assert result.status_code == 422
     assert result.json()["detail"] == "local time does not exist in the selected timezone"
+
+
+def test_schedule_list_paginates_more_than_one_hundred_active_entries(managed):
+    import uuid
+    from datetime import timedelta
+    from nous.models import ReportSchedule
+
+    client, factory = managed
+    template = resolve_template("security-daily")
+    base = datetime(2026, 11, 1, tzinfo=timezone.utc)
+    with factory() as db:
+        for number in range(103):
+            created = base + timedelta(minutes=number)
+            db.add(ReportSchedule(
+                id=str(uuid.uuid4()), template_id=template["id"],
+                template_revision=template["revision_key"],
+                template_snapshot=template, parameters={"category": None},
+                timezone="Asia/Tokyo", cadence="daily", local_time="09:00",
+                next_slot_at=base + timedelta(days=1), enabled=True,
+                created_by="owner", created_at=created, updated_at=created,
+            ))
+        db.commit()
+
+    seen = []
+    cursor = None
+    while True:
+        query = "?limit=50" + (f"&cursor={cursor}" if cursor else "")
+        response = client.get("/v1/admin/report-schedules" + query)
+        assert response.status_code == 200, response.text
+        page = response.json()
+        seen.extend(item["id"] for item in page["schedules"])
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+    assert len(seen) == len(set(seen)) == 103
+    assert client.get("/v1/admin/report-schedules?limit=101").status_code == 422
+    assert client.get("/v1/admin/report-schedules?cursor=not-a-uuid").status_code == 422

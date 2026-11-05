@@ -304,3 +304,130 @@ def test_stale_claim_is_fenced_after_reclaim_and_request_is_accounted(monkeypatc
         attempt = db.scalar(select(FetchAttempt).where(
             FetchAttempt.job_id == job_id))
         assert attempt.outcome == "stale_lease" and attempt.request_count == 1
+
+
+def test_scheduler_coalesces_due_polls_while_source_has_pending_work(monkeypatch):
+    """A down Worker must not accumulate one extra poll on every cadence tick."""
+    from datetime import timedelta
+    from nous.models import now
+
+    factory = session_factory()
+    key = "coalesced-" + uuid.uuid4().hex[:12]
+    monkeypatch.setattr(runtime, "sync", lambda db, configs: None)
+    monkeypatch.setattr(runtime, "load_registry", lambda: [])
+    with factory() as db:
+        source = Source(
+            source_key=key, kind="json_api", url="https://coalesced.example/feed",
+            adapter="json_v1", item_kind="news", config_revision="test",
+            config={"max_concurrency": 1}, enabled=True, interval_minutes=15,
+            max_requests_per_hour=5, next_due_at=now() - timedelta(hours=1),
+        )
+        db.add(source)
+        db.flush()
+        pending = FetchJob(source_id=source.id, dedupe_key=key)
+        db.add(pending)
+        db.commit()
+        source_id, pending_id = source.id, pending.id
+
+    runtime.schedule_once(factory)
+    with factory() as db:
+        source = db.get(Source, source_id)
+        assert source.next_due_at > now()
+        assert db.scalar(select(func.count()).select_from(FetchJob)
+                         .where(FetchJob.source_id == source_id)) == 1
+        # The pending poll finishes, and the next cadence can be scheduled.
+        db.get(FetchJob, pending_id).state = "done"
+        source.next_due_at = now() - timedelta(seconds=1)
+        db.commit()
+
+    runtime.schedule_once(factory)
+    with factory() as db:
+        jobs = db.scalars(select(FetchJob).where(FetchJob.source_id == source_id)).all()
+        assert len(jobs) == 2
+        assert sorted(j.state for j in jobs) == ["done", "queued"]
+
+
+def test_fetch_lease_renewal_keeps_generation_and_rejects_reclaimed_owner():
+    from datetime import timedelta
+    from nous.models import now
+
+    factory = session_factory()
+    key = "renew-fenced-" + uuid.uuid4().hex[:12]
+    with factory() as db:
+        source = Source(
+            source_key=key, kind="rss", url="https://renew-fenced.example/feed",
+            adapter="rss_v1", item_kind="news", config_revision="fixture",
+            config={"max_concurrency": 1}, enabled=True, interval_minutes=60,
+            max_requests_per_hour=4,
+        )
+        db.add(source)
+        db.flush()
+        job = FetchJob(
+            source_id=source.id, dedupe_key=key, state="leased",
+            attempts=1, lease_until=now() + timedelta(seconds=5),
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+    assert runtime._renew_fetch_lease(factory, job_id, 1) is True
+    with factory() as db:
+        job = db.get(FetchJob, job_id)
+        assert job.lease_until > now() + timedelta(minutes=4)
+        first_expiry = job.lease_until
+        job.attempts = 2
+        db.commit()
+    assert runtime._renew_fetch_lease(factory, job_id, 1) is False
+    with factory() as db:
+        assert db.get(FetchJob, job_id).lease_until == first_expiry
+
+
+def test_slow_fetch_heartbeats_without_losing_its_own_result(monkeypatch):
+    import time
+    from datetime import timedelta
+    from nous.models import now
+
+    factory = session_factory()
+    key = "slow-heartbeat-" + uuid.uuid4().hex[:12]
+    with factory() as db:
+        source = Source(
+            source_key=key, kind="json_api", url="https://slow-heartbeat.example/feed",
+            adapter="json_v1", item_kind="news", config_revision="fixture",
+            config={"max_concurrency": 1}, enabled=True, interval_minutes=60,
+            max_requests_per_hour=5,
+        )
+        db.add(source)
+        db.flush()
+        job = FetchJob(
+            source_id=source.id, dedupe_key=key, state="leased",
+            attempts=1, lease_until=now() + timedelta(minutes=5),
+        )
+        db.add(job)
+        db.commit()
+        job_id, source_id = job.id, source.id
+
+    renewed = []
+    original_renewal = runtime._renew_fetch_lease
+
+    def observe_renewal(*args):
+        outcome = original_renewal(*args)
+        renewed.append(outcome)
+        return outcome
+
+    def slow_response(*args):
+        time.sleep(0.08)
+        body = json.dumps([{
+            "id": "polled", "title": "A completed slow poll",
+            "url": "https://slow-heartbeat.example/polled",
+        }]).encode()
+        return 200, body, {}, args[0]
+
+    monkeypatch.setattr(runtime, "_FETCH_HEARTBEAT_SECONDS", 0.01)
+    monkeypatch.setattr(runtime, "_renew_fetch_lease", observe_renewal)
+    monkeypatch.setattr(runtime, "fetch", slow_response)
+    runtime.process(factory, job_id, 1)
+
+    assert renewed and all(renewed)
+    with factory() as db:
+        assert db.get(FetchJob, job_id).state == "done"
+        assert db.scalar(select(Item).where(Item.source_id == source_id)) is not None
