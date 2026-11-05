@@ -21,7 +21,7 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    `nous-runtime-database-url` after provisioning separate `nous_api` and
    `nous_runtime` SQL roles. For remote MCP, provision a `nous_mcp` role with
    SELECT-only grants and import its URL as `nous-mcp-database-url`. Provision
-   `nous_report_worker` before migration `0009` so its conditional CVE-link
+   `nous_report_worker` before migrations `0009`/`0010` so their conditional CVE/KEV
    grant can apply. Create `nous_admin` before applying the report admin grants
    below. Import the Worker URL as `nous-report-worker-database-url`. Securely
    remove temporary files. Never put a password in Git or a Quadlet.
@@ -43,7 +43,7 @@ commands as `nous` with `XDG_RUNTIME_DIR=/run/user/$(id -u nous)`.
    `default.target.wants` links; generated units cannot be enabled with
    `systemctl --user enable`.
 
-After role creation and `alembic upgrade head` has created migration `0009`,
+After role creation and `alembic upgrade head` has applied migration `0010`,
 apply the report and admin table grants below. Create `nous_report_worker`
 before migration `0009` so its conditional CVE-link grant applies; then run
 these report-table grants. The report Worker reads only the source observation
@@ -61,25 +61,24 @@ GRANT SELECT, INSERT, UPDATE ON report_runs, report_schedules TO nous_admin;
 GRANT SELECT ON reports TO nous_admin;
 ```
 
-Migration `0009` conditionally grants access to the immutable CVE relation table
+Migrations `0009`/`0010` conditionally grant access to the immutable CVE relation and KEV catalog journal tables
 when these pre-existing roles are present. If a role is provisioned after the
 migration, apply only these table grants as the database owner:
 
 ```sql
 GRANT INSERT ON cve_item_version_links TO nous_runtime;
 GRANT SELECT ON cve_item_version_links TO nous_api, nous_mcp, nous_report_worker;
+GRANT INSERT ON kev_catalog_contents, kev_catalog_observations TO nous_runtime;
+GRANT SELECT ON kev_catalog_contents, kev_catalog_observations TO nous_api, nous_mcp, nous_report_worker;
 ```
 
-The collection runtime needs INSERT to record relations for new observations.
-The API, remote MCP and report Worker need SELECT to display or analyze them.
-Do not grant UPDATE, DELETE, TRUNCATE or blanket default privileges on this
-table. Existing grants on other tables remain as provisioned above.
+The collection runtime inserts immutable CVE relations and complete KEV catalog observations; read surfaces have SELECT-only access. Do not grant UPDATE, DELETE, TRUNCATE or blanket default privileges on these tables. Existing grants on other tables remain as provisioned above. Before the first successful post-0010 catalog observation, historical membership is not reconstructable: as-of reads must remain unknown rather than inventing evidence.
 
 To verify the migration grant boundary, use a separate disposable database
 migrated through `0008`. Set `DATABASE_URL` or `DATABASE_URL_FILE` to its admin
 URL and run `.venv/bin/python scripts/test-cve-role-grants.py`. The script
 creates the four canonical roles with temporary passwords, upgrades the
-database through `0009`, tests each grant through that role's own connection,
+database through `0010`, tests each grant through that role's own connection,
 then removes the roles and any fixture rows. Do not run it against the shared
 application database; the URL must allow role creation and connections from the
 test process.
