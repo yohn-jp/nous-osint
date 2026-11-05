@@ -138,9 +138,8 @@ function openProposal() {
 
 <template>
   <q-page class="nous-page">
-    <div class="eyebrow q-mb-sm">INTELLIGENCE / SOURCE ONBOARDING</div>
     <div class="row items-center justify-between q-mb-sm">
-      <h1 class="page-title q-ma-none">公式情報源を提案する。</h1>
+      <h1 class="page-title q-ma-none">公式情報源の提案</h1>
       <q-btn flat icon="arrow_back" color="primary" label="情報源一覧" to="/sources" />
     </div>
     <p class="page-subtitle q-mb-lg">
