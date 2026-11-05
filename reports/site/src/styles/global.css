@@ -41,7 +41,10 @@ a:focus-visible { outline: 3px solid #e2a23f; outline-offset: 3px; border-radius
 .brand { display: inline-flex; align-items: center; gap: 0.75rem; color: var(--ink); text-decoration: none; font-weight: 750; letter-spacing: 0.02em; }
 .brand-mark { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 9px; color: #fff; background: #176d68; font: 800 17px/1 Georgia, serif; }
 .brand-separator { color: var(--faint); font-weight: 400; }
+.site-header nav { display: flex; align-items: center; flex-wrap: wrap; gap: clamp(12px, 2.5vw, 30px); }
 .site-header nav a { font-size: 0.9rem; font-weight: 650; text-decoration: none; }
+.site-header nav .library-return { color: var(--muted); font-weight: 550; }
+.site-header nav .library-return:hover { color: var(--accent); }
 .site-main { width: min(1180px, calc(100% - 40px)); min-height: calc(100vh - 150px); margin: 0 auto; padding: 54px 0 92px; }
 .site-footer { color: var(--muted); border-top: 1px solid var(--line); background: var(--surface); font-size: 0.82rem; }
 .footer-inner { min-height: 60px; gap: 1rem; }

@@ -823,6 +823,10 @@ def _check_site(dist: Path) -> tuple[list[Path], str]:
                     raise ReportError("renderer_link_unresolved")
                 if "_astro/" in value and value not in known_assets:
                     raise ReportError("renderer_asset_unresolved")
+            elif value == "/explore" and tag == "a" and name == "href":
+                # The published report site may link back to the Access-protected
+                # library; all other non-report relative paths remain forbidden.
+                pass
             elif value.startswith("#") or value.startswith("mailto:"):
                 if value.startswith("mailto:"):
                     raise ReportError("mailto_link_rejected")

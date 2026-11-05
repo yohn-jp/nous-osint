@@ -12,6 +12,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP
 .header-descriptor, .sidebar-caption, .sidebar-footer, .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 1.55px; color: var(--nous-muted); }
 .nous-drawer { background: var(--nous-panel); border-color: var(--nous-line); }
 .nav-entry { border-radius: 9px; margin-bottom: 5px; min-height: 52px; }
+.header-admin-action { min-height: 38px; border: 1px solid var(--nous-line); border-radius: 9px; font-weight: 650; }
+.report-external-link { border: 1px solid var(--nous-line); }
+.report-external-link .q-item__section--side { color: var(--nous-muted); }
+.report-external-link:focus-visible, .header-admin-action:focus-visible { outline: 2px solid var(--nous-ink); outline-offset: 2px; }
 .nav-entry-active { background: var(--nous-hover); color: #34744b; font-weight: 650; }
 .body--dark .nav-entry-active { color: #a4deb1; }
 .sidebar-footer { position: absolute; bottom: 26px; left: 22px; letter-spacing: .9px; font-size: 9px; }

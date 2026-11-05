@@ -17,10 +17,10 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
-def _signed_assertion(key, issuer: str, audience: str) -> str:
+def _signed_assertion(key, issuer: str, audience: str, subject: str = "report-admin") -> str:
     header = _b64(json.dumps({"alg": "RS256", "kid": "report-test"}).encode())
     claims = _b64(json.dumps({
-        "iss": issuer, "aud": audience, "sub": "report-admin",
+        "iss": issuer, "aud": audience, "sub": subject,
         "exp": datetime.now(timezone.utc).timestamp() + 3600,
     }).encode())
     signed = f"{header}.{claims}".encode("ascii")
@@ -106,6 +106,14 @@ def test_authenticated_gateway_allows_report_admin_api_and_spa(tmp_path, monkeyp
     )
     assert update_schedule.status_code == 200, update_schedule.text
     assert client.get("/v1/admin/report-schedules", headers=headers).status_code == 200
+
+    # Authenticated readers can discover their role without a second login,
+    # but must not acquire administrative capabilities.
+    reader_headers = {**headers, "Cf-Access-Jwt-Assertion": _signed_assertion(
+        key, issuer, audience, subject="ordinary-reader")}
+    assert client.get("/v1/admin/session", headers=reader_headers).json() == {"allowed": False}
+    assert client.get("/v1/admin/report-templates", headers=reader_headers).status_code == 403
+    assert client.get("/v1/admin/session").status_code == 403
 
     # Keep the route/method allowlist exact, even for a valid Access identity.
     assert client.post("/v1/admin/report-templates", headers=headers).status_code == 404
