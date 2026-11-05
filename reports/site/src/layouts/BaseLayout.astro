@@ -27,11 +27,11 @@ const base = import.meta.env.BASE_URL;
       <div class="header-inner">
         <a class="brand" href={base} aria-label="Nous OSINT レポート一覧">
           <span class="brand-mark" aria-hidden="true">N</span>
-          <span>nous<span class="brand-separator"> / </span>osint</span>
+          <span>nous<span class="brand-product"><span class="brand-separator"> / </span>osint</span></span>
         </a>
         <nav aria-label="メインナビゲーション">
           <a href={base} class="reports-home">レポート一覧</a>
-          <a href="/explore" class="library-return"><span aria-hidden="true">←</span> ダッシュボードへ戻る</a>
+          <a href="/explore" class="library-return" aria-label="ダッシュボードへ戻る"><span aria-hidden="true">←</span> <span class="return-desktop">ダッシュボードへ戻る</span><span class="return-mobile">探索へ戻る</span></a>
         </nav>
       </div>
     </header>
