@@ -140,11 +140,11 @@ function openProposal() {
   <q-page class="nous-page">
     <div class="eyebrow q-mb-sm">INTELLIGENCE / SOURCE ONBOARDING</div>
     <div class="row items-center justify-between q-mb-sm">
-      <h1 class="page-title q-ma-none">情報源を登録する。</h1>
+      <h1 class="page-title q-ma-none">公式情報源を提案する。</h1>
       <q-btn flat icon="arrow_back" color="primary" label="情報源一覧" to="/sources" />
     </div>
     <p class="page-subtitle q-mb-lg">
-      取得設定を生成し、Gitでレビューしてから登録します。ここでは収集は開始されません。
+      公式カタログへの追加用YAMLを作成します。GitHubでのレビュー・検証を経て反映され、この画面では収集は開始されません。
     </p>
     <div class="onboarding-grid">
       <section class="content-panel q-pa-lg">
@@ -192,10 +192,10 @@ function openProposal() {
         <div class="row q-gutter-sm q-mt-md">
           <q-btn :disable="!ready" outline color="primary" icon="content_copy" :label="copied ? 'コピー済み' : 'YAMLをコピー'" @click="copyYaml" />
           <q-btn :disable="!ready" outline color="primary" icon="download" label="YAMLを保存" @click="saveFile" />
-          <q-btn :disable="!ready" color="primary" unelevated icon="open_in_new" label="GitHubで提案を作成" @click="openProposal" />
+          <q-btn :disable="!ready" color="primary" unelevated icon="open_in_new" label="GitHubでファイルを作成" @click="openProposal" />
         </div>
         <p class="text-caption text-grey-7 q-mt-lg">
-          GitHubでは必ず別ブランチからPRを作成してください。PRのCIで定義を検証し、
+          GitHubのファイル作成画面が開きます。別ブランチへコミットしてPRを作成してください。PRのCIで定義を検証し、
           Source Probeワークフローで実データを確認した後に有効化・マージします。
           承認された定義は次回アプリイメージに含まれます。
         </p>

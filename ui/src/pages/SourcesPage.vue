@@ -8,7 +8,7 @@ const loading = ref(false)
 const error = ref('')
 const textFilter = ref('')
 const canAdmin = ref(false)
-void api.adminSession().then(() => { canAdmin.value = true }).catch(() => { canAdmin.value = false })
+void api.adminSession().then(session => { canAdmin.value = session.allowed }).catch(() => { canAdmin.value = false })
 const filtered = computed(() => sources.value
   .filter(s => s.id.toLowerCase().includes(textFilter.value.toLowerCase()))
   .sort((a,b) => a.id.localeCompare(b.id)))
@@ -29,7 +29,7 @@ onBeforeUnmount(() => controller?.abort())
 <template>
   <q-page class="nous-page">
     <div class="eyebrow q-mb-sm">INTELLIGENCE / SOURCES</div>
-    <div class="row items-center justify-between q-gutter-md"><h1 class="page-title q-ma-none">情報源を確認する。</h1><div class="row q-gutter-sm"><q-btn v-if="canAdmin" color="primary" unelevated icon="tune" label="ソース管理" to="/admin/sources" /><q-btn flat color="primary" icon="add" label="Gitに提案" to="/sources/new" /></div></div>
+    <div class="row items-center justify-between q-gutter-md"><h1 class="page-title q-ma-none">情報源を確認する。</h1><div class="row q-gutter-sm"><q-btn v-if="canAdmin" color="primary" unelevated icon="tune" label="ソース管理" to="/admin/sources" /><q-btn flat color="primary" icon="add" label="公式カタログに提案" to="/sources/new" /></div></div>
     <p class="page-subtitle q-mb-xl">収集先の有効状態と最終成功日時。管理者はこのインスタンスへ直接追加できます。公式カタログへの提案はGitでレビューします。</p>
     <section class="content-panel">
       <div class="row items-center q-pa-md q-gutter-sm">
@@ -40,7 +40,7 @@ onBeforeUnmount(() => controller?.abort())
       <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 3" :key="n" type="rect" height="62px" class="q-mb-md" /></div>
       <div v-else-if="error" class="empty-state" role="alert"><q-icon name="error_outline" color="negative" size="30px"/><p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="load" /></div>
       <div v-else-if="filtered.length === 0" class="empty-state"><q-icon name="rss_feed" size="32px"/><p class="q-mt-md">該当する情報源がありません。</p></div>
-      <template v-else><div v-for="entry in filtered" :key="entry.id" class="result-row" style="cursor: default">
+      <template v-else><div v-for="entry in filtered" :key="entry.id" class="result-row source-observation-row">
         <div class="row items-start justify-between q-gutter-sm">
           <div><div class="text-weight-bold" style="overflow-wrap: anywhere">{{ entry.id }}</div><div class="result-foot">{{ kindLabel(entry.item_kind) }} · {{ entry.kind.toUpperCase() }}</div></div>
           <q-badge :color="entry.enabled ? 'positive' : 'grey-6'" :label="entry.enabled ? '収集有効' : '収集停止'" />
