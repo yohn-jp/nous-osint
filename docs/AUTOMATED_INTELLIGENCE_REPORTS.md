@@ -1,7 +1,7 @@
 # Nous OSINT — Automated Intelligence Reports
 
-Status: **feature branch implementation in progress; owner-authenticated Codex and VM acceptance NOT_CHECKED**
-Date: **2026-11-04**  
+Status: **code integrated into main (PR #13 and #14); owner-authenticated Codex and VM acceptance NOT_CHECKED**
+Date: **2026-11-05**  
 Authority: [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [REMOTE_MCP_ACCESS.md](REMOTE_MCP_ACCESS.md), [SOURCE_LICENSES.md](SOURCE_LICENSES.md), [CVE_KEV_CORRELATION.md](CVE_KEV_CORRELATION.md)
 
 ## 1. Goal and decisions
@@ -21,7 +21,7 @@ Nous OSINT に、取得済みの公開情報から**利用者向けの品質の�
 
 ## 2. 既存実装との接続点
 
-2026-11-04 時点の `main` (`9414592b7044a475efa954b72c5d2b57e0e2801c`) を調査済み。
+初期設計時に `main` (`9414592b7044a475efa954b72c5d2b57e0e2801c`) を調査し、実装は PR #13 および本番イメージの修正 PR #14 で `main` に統合した。
 
 - `src/nous/models.py`: `Source` / `Item` / `ItemVersion` / `CveItemLink`、最新 Alembic `0007`。既存 `fetch_jobs` は取得専用のためレポートジョブと混用しない。
 - `src/nous/api.py`: 読み取り専用検索、changes、`GET /v1/cves/{cve_id}`。CVE/KEV の状態は `listed | not_listed | unknown` を厳密に維持する。
@@ -162,6 +162,8 @@ Astro は `reports/site/` に置き、`static` output と記事 content collecti
 | `reports` | UUID、unique slug、article schema version、元 run ID、headline、要約、カテゴリ、published_at、artifact digest/path、supersedes ID、生成モデル/ハーネス version、input digest | 既刊データは不変。修正/再刊は新 UUID + supersedes。失敗時は既刊を維持 |
 | `report_evidence` | report ID、evidence ID、item ID + **item_version ID**、source URL、観測日時、relation、出典種別 | 必ず元データの immutable version に解決し、関係を偽装しない |
 
+静的 HTML サイトは最大 1,000 件の既存公開記事を一括ビルドする。上限に達した場合、新規記事の生成ジョブは `report_archive_limit_exceeded` で失敗し、既存の公開ポインタ・既存記事を変更しない。DB 上の記事を無断削除して解消しない。保持・ページ分割に関する仕様変更は独立して決定する。
+
 中間生成物 (`plan`, `fact_check`, `draft`, `article`) と検査ログは非公開のジョブ領域に保存する。実行履歴のメタデータと最終 immutable 記事は DB に永続化し、ファイルを消しても再ビルド可能にする。巨大な raw bundle は private artifact volume に hash 付きで保存して参照し、DB にその hash と保管期限を保持する。記事への掲載が許されない本文は永続的に転載しない。
 
 ジョブ状態: `queued → leased/running → validating → publishing → published`。合法的な終端として `skipped`, `failed`, `cancelled` を持つ。公開前の一時的な失敗は有限回 retry（初期最大 2 回）、検査失敗・不正入力は再試行せず失敗。実行時間の上限、lease heartbeat、途中停止時の cleanup、二重刊行を防ぐ unique key を設ける。Codex の実行制限・認証失効・予算不足は分かる error code として保存し、秘密情報はログに残さない。
@@ -229,11 +231,9 @@ Fixture pipeline と CI はオーナー認証済み Codex 実行や VM acceptanc
 
 ## 13. 実装の切り分けとエージェント引継ぎ
 
-**Sol（統括・authority/統合判断）**: この文書、既存の architecture/Access/source-rights と最新 `main` を実装 authority として、受入条件ごとに進捗を管理し、Luna の作業差分・実装境界・テスト結果・CI・VM 動作を検証する。実装者本人の自己検証のみで完成判定しない。独立したレビューを実施するときはその責務を明示する。
+**実装 authority**: この文書、ARCHITECTURE / DATA_MODEL / SOURCE_LICENSES / ACCESS と `main` の既存コード・テストを照合する。後続変更は CONTRIBUTING.md に従い専用ブランチと PR で審査し、CI と VM 動作を別々に報告する。
 
-**Luna（実装）**: 次の順序で最小変更の独立コミットを積む。SQL/テンプレート/Evidence Bundle → Worker/Codex adapter/四工程 → 検証/記事スキーマ → Astro fixed design/static publisher → Access/Admin/Quasar 導線 → rootless Quadlet/CI/運用文書。レビューなしの `main` 直書きや無関係の既存 UI・取得基盤変更は行わない。
-
-この feature branch に実装を進めている。**VM への展開、オーナー Codex 認証、実記事の公開、Cloudflare 設定変更は行っていない**。Codex 所有者ログインによる実ジョブおよび VM acceptance は **NOT_CHECKED** のままとし、別途実行権限と運用者の認証が与えられた後に検証する。fixture pipeline/CI の結果を実環境受入と混同しない。
+実装は `main` に統合済みである。**GitHub Actions での検証は VM への展開・起動成功の証拠ではない**。オーナー認証済み Codex による実記事生成、VM での Report Worker / HTML 配信、Cloudflare Access を通した受入確認は **NOT_CHECKED** として扱い、実行後の観測結果でのみ更新する。fixture pipeline/CI の結果を実環境受入と混同しない。
 
 ## 14. External references
 
