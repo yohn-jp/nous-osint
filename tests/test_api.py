@@ -93,7 +93,6 @@ def test_ready_requires_latest_schema_revision(monkeypatch):
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="PostgreSQL required")
 def test_version_history_endpoint_is_bounded_without_explicit_limit():
     import uuid
-    from sqlalchemy import select
     from nous.db import session_factory
     from nous.models import Item, ItemVersion, Source
 
