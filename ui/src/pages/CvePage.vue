@@ -45,7 +45,6 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
   <q-page class="nous-page">
     <q-btn class="q-mb-md" flat no-caps icon="arrow_back" color="secondary"
       label="情報検索へ戻る" to="/explore" />
-    <div class="eyebrow q-mb-sm">VULNERABILITY INTELLIGENCE / CVE</div>
     <h1 class="page-title q-ma-none">{{ id }}</h1>
     <p class="page-subtitle">CVE識別子を軸に、複数の一次情報とCISAの悪用確認情報を結び付けます。</p>
     <section class="content-panel q-mt-lg q-pa-lg" style="max-width: 980px">
@@ -57,7 +56,7 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
       <template v-else-if="data">
         <div class="row items-center justify-between q-gutter-md">
           <div>
-            <div class="eyebrow">CISA / KNOWN EXPLOITED VULNERABILITIES</div>
+            <div class="eyebrow">CISA KEV掲載状況</div>
             <div class="text-h6 q-mt-sm">{{ kevStatus }}</div>
           </div>
           <q-badge :color="data.kev.status === 'listed' ? 'negative' : 'grey-7'"
