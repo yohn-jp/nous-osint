@@ -106,7 +106,7 @@ Entity resolution is conservative. Similar company names or products are not eno
 - `GET /v1/sources` — enabled state, last success, lag, error class.
 - `GET /v1/items?kind=&source=&q=&since=&limit=&cursor=` — paginated current items; cursor-based stable ordering.
 - `GET /v1/items/{id}` — current item plus source, timestamps and provenance.
-- `GET /v1/items/{id}/versions` — revision history.
+- `GET /v1/items/{id}/versions?limit=50&before={version}` — revision history (maximum 100 per request; omit `before` for newest, then use the oldest returned version as the exclusive cursor).
 - `GET /v1/cves/{cve_id}` — CVE identity, KEV status with freshness, and independent source references.
 - `GET /v1/changes?since=&kind=` — newly observed and changed records.
 
