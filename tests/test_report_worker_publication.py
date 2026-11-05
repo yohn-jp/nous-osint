@@ -13,6 +13,7 @@ from nous.models import (
     CveItemVersionLink,
     Item,
     ItemVersion,
+    Report,
     ReportRun,
     ReportSiteState,
     Source,
@@ -208,3 +209,30 @@ def test_saved_bundle_evidence_uses_immutable_version_link_after_current_link_ch
     assert len(first_attempt) == len(retry_attempt) == 1
     assert first_attempt[0].item_version_id == retry_attempt[0].item_version_id == version.id
     assert first_attempt[0].relation == retry_attempt[0].relation == "title_mention"
+
+
+def test_archive_capacity_rejects_candidate_without_breaking_recovery(publication, monkeypatch):
+    """The N+1 release must not be persisted, leaving N safe to serve."""
+    factory, claim, bundle, article = publication
+    before = worker._current_digest(worker.public_root())
+    monkeypatch.setattr(worker, "_MAX_ARCHIVE_REPORTS", 1)
+    with factory() as db:
+        db.add(Report(
+            id=str(uuid.uuid4()), run_id=claim["id"], slug="prior-report",
+            category="security", template_id="security-daily",
+            article={"title": "Prior", "summary": ["Prior"], "claims": [],
+                     "sections": []},
+            headline="Prior", summary=["Prior"],
+            published_at=datetime.now(timezone.utc),
+            artifact_digest=before, artifact_path=f"releases/{before}",
+            harness_version="fixture", input_digest="b" * 64,
+        ))
+        db.commit()
+
+    with pytest.raises(worker.ReportError, match="report_archive_limit_exceeded"):
+        worker._publish_candidate(factory, claim, claim["lease_token"],
+                                  bundle, article, "fixture", "fixture")
+    assert worker.ensure_current_release(factory) == before
+    with factory() as db:
+        assert db.get(ReportSiteState, 1).pending_digest is None
+        assert len(db.query(Report).all()) == 1
