@@ -1,6 +1,7 @@
 import pytest
 
 from nous.report_pipeline import (
+    CodexRunner,
     ReportError,
     ReportSkipped,
     run_editorial_pipeline,
@@ -19,6 +20,66 @@ def test_report_release_allows_only_canonical_library_return_link(tmp_path):
     (tmp_path / "index.html").write_text('<a href="/admin/sources">管理</a>', encoding="utf-8")
     with pytest.raises(ReportError, match="renderer_relative_link_rejected"):
         _check_site(tmp_path)
+
+
+def _codex_runner_for_home(home, monkeypatch):
+    runner = object.__new__(CodexRunner)
+    runner.codex_home = home
+    runner.gid = 10002
+    monkeypatch.setattr("nous.report_pipeline.os.geteuid", lambda: 0)
+    monkeypatch.setattr("nous.report_pipeline.os.chown", lambda *_args: None)
+    return runner
+
+
+def test_codex_home_clears_only_official_arg0_runtime_and_preserves_credentials(tmp_path, monkeypatch):
+    home = tmp_path / "codex-home"
+    runtime = home / "tmp" / "arg0-linux" / "codex-arg0fixture"
+    runtime.mkdir(parents=True)
+    target = tmp_path / "installed-codex"
+    target.write_text("installed binary", encoding="utf-8")
+    (runtime / ".lock").touch()
+    for name in ("codex-linux-sandbox", "apply_patch", "applypatch"):
+        (runtime / name).symlink_to(target)
+    credentials = home / "auth.json"
+    credentials.write_text('{"credential":"preserve-this"}', encoding="utf-8")
+
+    _codex_runner_for_home(home, monkeypatch)._prepare_codex_home()
+
+    assert not (home / "tmp" / "arg0-linux").exists()
+    assert credentials.read_text(encoding="utf-8") == '{"credential":"preserve-this"}'
+    assert target.read_text(encoding="utf-8") == "installed binary"
+
+
+def test_codex_home_still_rejects_symlinks_outside_arg0_runtime(tmp_path, monkeypatch):
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    external = tmp_path / "external-secret"
+    external.write_text("untouched", encoding="utf-8")
+    (home / "unexpected-link").symlink_to(external)
+
+    with pytest.raises(ReportError, match="codex_home_unsafe"):
+        _codex_runner_for_home(home, monkeypatch)._prepare_codex_home()
+
+    assert external.read_text(encoding="utf-8") == "untouched"
+
+
+def test_codex_home_rejects_symlinked_tmp_parent_without_traversing_it(tmp_path, monkeypatch):
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    external_tmp = tmp_path / "external-tmp"
+    runtime = external_tmp / "arg0-linux" / "codex-arg0fixture"
+    runtime.mkdir(parents=True)
+    target = tmp_path / "external-target"
+    target.write_text("untouched", encoding="utf-8")
+    launcher = runtime / "apply_patch"
+    launcher.symlink_to(target)
+    (home / "tmp").symlink_to(external_tmp, target_is_directory=True)
+
+    with pytest.raises(ReportError, match="codex_home_unsafe"):
+        _codex_runner_for_home(home, monkeypatch)._prepare_codex_home()
+
+    assert launcher.is_symlink()
+    assert target.read_text(encoding="utf-8") == "untouched"
 
 
 def evidence_bundle(template_id="security-daily"):
