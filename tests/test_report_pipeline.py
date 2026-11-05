@@ -5,6 +5,7 @@ from nous.report_pipeline import (
     ReportSkipped,
     run_editorial_pipeline,
     validate_article,
+    _evidence_record,
 )
 from nous.report_templates import template_snapshot
 
@@ -279,3 +280,42 @@ def test_cve_fact_requires_matching_bundle_id_and_visible_claim_evidence():
     with pytest.raises(ReportError, match="invalid_evidence_reference"):
         validate_article(article, template_id="cve-kev-deep-dive", bundle=bundle,
                          fact_check=fact_check)
+
+
+def test_approved_kev_vulnerability_field_is_available_for_quote_rights():
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    cve_id = "CVE-2026-12345"
+    source_url = ("https://raw.githubusercontent.com/cisagov/kev-data/develop/"
+                  "known_exploited_vulnerabilities.json")
+    source = SimpleNamespace(
+        source_key="cisa-kev", origin="official", url=source_url,
+        config={"policy": {
+            "license_id": "CC0-1.0", "content_storage": "metadata_only",
+            "report_quote_allowed": True,
+            "report_quote_fields": ["vulnerability.vendor"],
+        }},
+    )
+    item = SimpleNamespace(
+        id=1, external_id=cve_id, canonical_url=f"https://www.cve.org/CVERecord?id={cve_id}",
+        kind="vulnerability",
+    )
+    version = SimpleNamespace(
+        id=2, sha256="a" * 64,
+        observed_at=datetime(2026, 11, 3, tzinfo=timezone.utc),
+        provenance={"adapter": "cisa_kev_v1", "source_url": source_url},
+        attributes={
+            "title": "Known Exploited Vulnerability",
+            "url": item.canonical_url,
+            "vulnerability": {
+                "cve_id": cve_id, "known_exploited": True,
+                "vendor": "Example Vendor",
+            },
+        },
+    )
+
+    evidence = _evidence_record(version, item, source, "kev", "E001")
+    assert evidence["content_policy"]["quote_allowed"] is True
+    assert evidence["content_policy"]["quote_values"] == ["Example Vendor"]
+    assert "vulnerability.vendor" in evidence["allowed_fields"]
