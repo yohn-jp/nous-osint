@@ -121,10 +121,10 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
             <template #prepend><q-icon name="search" color="primary" /></template>
           </q-input>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-3 search-filter">
           <q-select v-model="kind" outlined dense emit-value map-options :options="kindOptions" label="種別" @update:model-value="applyFilters" />
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-3 search-filter">
           <q-select v-model="source" outlined dense emit-value map-options :options="sourceOptions" label="情報源" @update:model-value="applyFilters" />
         </div>
         <div class="col-12 col-md-auto search-action">
