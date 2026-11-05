@@ -28,8 +28,7 @@ onBeforeUnmount(() => controller?.abort())
 
 <template>
   <q-page class="nous-page">
-    <div class="eyebrow q-mb-sm">INTELLIGENCE / SOURCES</div>
-    <div class="row items-center justify-between q-gutter-md"><h1 class="page-title q-ma-none">情報源を確認する。</h1><div class="row q-gutter-sm"><q-btn v-if="canAdmin" color="primary" unelevated icon="tune" label="ソース管理" to="/admin/sources" /><q-btn flat color="primary" icon="add" label="公式カタログに提案" to="/sources/new" /></div></div>
+    <div class="row items-center justify-between q-gutter-md"><h1 class="page-title q-ma-none">情報源</h1><div class="row q-gutter-sm"><q-btn v-if="canAdmin" color="primary" unelevated icon="tune" label="ソース管理" to="/admin/sources" /><q-btn flat color="primary" icon="add" label="公式カタログに提案" to="/sources/new" /></div></div>
     <p class="page-subtitle q-mb-xl">収集先の有効状態と最終成功日時。管理者はこのインスタンスへ直接追加できます。公式カタログへの提案はGitでレビューします。</p>
     <section class="content-panel">
       <div class="row items-center q-pa-md q-gutter-sm">
