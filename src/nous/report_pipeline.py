@@ -34,7 +34,7 @@ _SECTION_HEADINGS = {
     "security-daily": ("概要", "主な変化", "分析", "確認された事実", "未確認事項", "出典"),
     "cve-kev-deep-dive": (
         "CVEの概要", "KEV掲載状況", "一次資料", "影響と未確認事項",
-        "CVEの確認情報", "出典",
+        "CVEの確認情報", "確認された事実", "出典",
     ),
 }
 _FACT_TABLE_HEADERS = (
