@@ -13,12 +13,13 @@ from nous.registry import load_registry, sync
 
 
 class InjectIdentity:
-    def __init__(self, subject):
+    def __init__(self, subject, email=None):
         self.subject = subject
+        self.email = email
 
     async def __call__(self, scope, receive, send):
         scope = {**scope, "state": {"access_identity": SimpleNamespace(
-            subject=self.subject, email=None
+            subject=self.subject, email=self.email
         )}} if self.subject else {**scope, "state": {}}
         await app(scope, receive, send)
 
@@ -50,9 +51,27 @@ def candidate():
 
 def test_admin_denies_anonymous_and_non_admin(managed):
     client, factory = managed
-    assert TestClient(InjectIdentity(None)).get("/v1/admin/catalog").status_code == 403
-    assert TestClient(InjectIdentity("someone-else")).get("/v1/admin/catalog").status_code == 403
+    anonymous = TestClient(InjectIdentity(None))
+    non_admin = TestClient(InjectIdentity("someone-else"))
+    assert anonymous.get("/v1/admin/session").status_code == 403
+    assert anonymous.get("/v1/admin/catalog").status_code == 403
+    assert non_admin.get("/v1/admin/session").json() == {"allowed": False}
+    assert non_admin.get("/v1/admin/catalog").status_code == 403
     assert client.get("/v1/admin/session").json() == {"allowed": True}
+
+
+def test_admin_reuses_verified_access_email_without_second_login(managed, monkeypatch):
+    monkeypatch.setenv("NOUS_ADMIN_SUBJECTS", "")
+    monkeypatch.setenv("NOUS_ADMIN_EMAILS", " Owner@Example.org ")
+    operator = TestClient(InjectIdentity("access-stable-sub", "owner@example.org"))
+    other = TestClient(InjectIdentity("access-other-sub", "other@example.org"))
+    assert operator.get("/v1/admin/session").json() == {"allowed": True}
+    assert operator.get("/v1/admin/catalog").status_code == 200
+    assert other.get("/v1/admin/session").json() == {"allowed": False}
+    assert other.get("/v1/admin/catalog").status_code == 403
+    assert TestClient(InjectIdentity("access-stable-sub")).get("/v1/admin/session").json() == {"allowed": False}
+    monkeypatch.setenv("NOUS_ADMIN_EMAILS", "")
+    assert operator.get("/v1/admin/session").json() == {"allowed": False}
 
 
 def test_custom_source_survives_catalog_sync_and_audits_changes(managed):
