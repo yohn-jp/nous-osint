@@ -81,8 +81,11 @@ def claim(factory):
         job.state = "leased"
         job.lease_until = current + timedelta(minutes=5)
         job.attempts += 1
+        attempt = job.attempts
         db.commit()
-        return job.id
+        # The attempt generation fences a Worker whose lease expires while it
+        # is performing network I/O. The ID alone can be reclaimed by another.
+        return job.id, attempt
 
 def store_item(db, source, raw, final_url):
     external_id = raw.get("id") or raw.get("url")
@@ -143,7 +146,12 @@ def parse_timestamp(value):
             return None
     return parsed.astimezone(timezone.utc) if parsed.tzinfo else None
 
-def process(factory, job_id):
+def process(factory, job_id, claim_attempt=None):
+    """Fetch and persist only if this Worker still owns its claim generation.
+
+    A missing claim_attempt is supported for isolated ingestion fixtures only;
+    the scheduler/Worker entry point always passes claim()'s generation.
+    """
     with factory() as db:
         job = db.get(FetchJob, job_id)
         source = db.get(Source, job.source_id)
@@ -197,7 +205,25 @@ def process(factory, job_id):
         records = []
         headers = {}
     with factory() as db:
-        job = db.get(FetchJob, job_id)
+        job = db.scalar(select(FetchJob).where(
+            FetchJob.id == job_id
+        ).with_for_update())
+        # Fetching occurs outside the lease transaction; a slow fetch may
+        # finish after a different Worker has reclaimed the same job. Lock and
+        # check the generation, state, and expiration before any item mutation.
+        if claim_attempt is not None and (
+            job is None or job.attempts != claim_attempt or
+            job.state != "leased" or job.lease_until is None or
+            job.lease_until <= now()
+        ):
+            db.add(FetchAttempt(
+                job_id=job_id, started_at=started, ended_at=now(),
+                outcome="stale_lease", http_status=status, final_url=final_url,
+                error_code="stale_lease", request_count=max(requests_made, 1),
+            ))
+            db.commit()
+            event("fetch_discarded", job=job_id, reason="stale_lease")
+            return
         source = db.get(Source, job.source_id)
         try:
             for raw in records:
@@ -225,7 +251,25 @@ def process(factory, job_id):
                 raise ValueError(error)
         except Exception as exc:
             db.rollback()
-            job = db.get(FetchJob, job_id)
+            # Rollback drops the FOR UPDATE lock. Reacquire it and fence again
+            # before changing the job's retry state: another Worker can claim
+            # this job between the failed observation TX and recovery.
+            job = db.scalar(select(FetchJob).where(
+                FetchJob.id == job_id
+            ).with_for_update())
+            if claim_attempt is not None and (
+                job is None or job.attempts != claim_attempt or
+                job.state != "leased" or job.lease_until is None or
+                job.lease_until <= now()
+            ):
+                db.add(FetchAttempt(
+                    job_id=job_id, started_at=started, ended_at=now(),
+                    outcome="stale_lease", http_status=status, final_url=final_url,
+                    error_code="stale_lease", request_count=max(requests_made, 1),
+                ))
+                db.commit()
+                event("fetch_discarded", job=job_id, reason="stale_lease")
+                return
             source = db.get(Source, job.source_id)
             error = str(exc)[:100]
             source.last_error = error
@@ -249,9 +293,9 @@ def main(mode):
                 schedule_once(factory)
                 time.sleep(30)
             else:
-                job_id = claim(factory)
-                if job_id:
-                    process(factory, job_id)
+                claimed = claim(factory)
+                if claimed:
+                    process(factory, *claimed)
                 else:
                     time.sleep(5)
         except Exception as exc:

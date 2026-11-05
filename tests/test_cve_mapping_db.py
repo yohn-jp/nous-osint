@@ -203,3 +203,35 @@ def test_non_cisa_source_cannot_assert_kev_via_title():
     response = api.cve(unrelated_cve)
     assert response["kev"]["status"] == "not_listed"
     assert all(ref["relation"] != "kev" for ref in response["references"])
+
+
+def test_removed_kev_item_does_not_remain_listed_after_fresh_complete_catalog():
+    """Immutable historical KEV evidence is not proof of current membership."""
+    factory, kev_id, _ = setup_sources()
+    cve_id = f"CVE-2026-{int(uuid.uuid4().hex[:8], 16)}"
+    with factory() as db:
+        source = db.get(Source, kev_id)
+        runtime.store_item(db, source, kev_raw(cve_id), source.url)
+        db.commit()
+    assert api.cve(cve_id)["kev"]["status"] == "listed"
+
+    with factory() as db:
+        source = db.get(Source, kev_id)
+        item = db.scalar(select(Item).where(
+            Item.source_id == kev_id, Item.external_id == cve_id))
+        assert item is not None
+        # A subsequent successfully validated complete CISA snapshot omitted
+        # this CVE; runtime.process marks the item unknown, preserving versions.
+        item.state = "unknown"
+        source.last_success_at = now()
+        db.commit()
+
+    current = api.cve(cve_id)
+    assert current["kev"]["status"] == "not_listed"
+    assert all(ref["relation"] != "kev" for ref in current["references"])
+
+    with factory() as db:
+        source = db.get(Source, kev_id)
+        source.last_success_at = now() - timedelta(hours=72)
+        db.commit()
+    assert api.cve(cve_id)["kev"]["status"] == "unknown"

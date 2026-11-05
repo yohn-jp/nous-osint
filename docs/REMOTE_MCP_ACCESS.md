@@ -56,7 +56,7 @@ The scheduler and worker never accept incoming traffic. No public PostgreSQL por
 
 - Add `nous-tunnel.container` using a pinned `cloudflared` image digest and a VM-local secret/token. Do not assume `127.0.0.1` inside a container references the host's loopback.
 - Prefer a **separate rootless Podman ingress network** shared only by `cloudflared` and the MCP-serving app; keep PostgreSQL on the pre-existing backend network, which `cloudflared` must not join. Connect the API process to both networks only if required. Inspect actual Quadlet service/network names before writing files; do not replace working deployments blindly.
-- On the Tunnel, map the single public hostname to the combined MCP/UI origin. The origin admits `/mcp`, static UI files, and a strict GET allowlist under `/v1`; it returns `404` for `/api/v1`, administrative routes, diagnostics and every other unapproved path even after authentication.
+- On the Tunnel, map the single public hostname to the combined MCP/UI origin. The origin admits `/mcp`, static UI files, report HTML, an explicit read-only `/v1` allowlist, and the dedicated `/v1/admin/*` and `/admin/*` administration flows added in PR #8/#13. Administrative data/actions require verified Access identity, an explicit administrator subject allowlist, same-origin write controls and a separate limited SQL role. It returns `404` for `/api/v1`, diagnostics and every other unapproved path even after authentication.
 - Cloudflare Access covers the **whole public hostname**. All reachable paths, including error pages, inherit the Access policy; no broad Bypass policy. Health probes use local/VM-only addresses.
 - No direct public DNS A/AAAA to the VM and no secondary unprotected public hostname. Disable extra `workers.dev` routes because no Worker is deployed.
 
@@ -133,6 +133,9 @@ Cloudflared's token-file mechanism, Podman secret delivery, container command an
 | `https://nous.yohn.jp/mcp` | MCP | Access Managed OAuth + valid Access JWT + read-only tools |
 | `https://nous.yohn.jp/` | Static UI | Access JWT required; assets are image-baked and hash-routed |
 | `https://nous.yohn.jp/v1/*` | UI read API | Access JWT required; allowlisted GET routes proxy to the private API |
+| `https://nous.yohn.jp/admin/sources`, `/admin/reports` | Admin SPA routes | Access JWT required; backend authorizes each admin request by subject |
+| `https://nous.yohn.jp/v1/admin/*` | Source/report administration | Strict route/method allowlist + Access JWT + admin subject allowlist + same-origin write controls + limited admin SQL role |
+| `https://nous.yohn.jp/reports/*` | Static report HTML/assets | Access JWT required; restrictive report-path allowlist and CSP; no unapproved dynamic execution |
 | `https://nous.yohn.jp/api/v1/` | Closed | 404 at origin; internal API remains private |
 | `/health/*`, `/admin/*`, `/metrics`, `/docs`, `/openapi.json` | **Not public** | return 404/403; health is VM-local |
 
@@ -165,7 +168,7 @@ The feature is **not complete** until actual VM + Cloudflare evidence demonstrat
 9. Tunnel/Access/identity logs correlate with origin request IDs without logging bearer tokens; failure and recovery paths are tested.
 10. A rollback can disable **only this** public ingress while leaving the internal collector, API and PostgreSQL working.
 
-**Non-goals:** UI creation, exposing administrative APIs, a Cloudflare Worker, MCP Portal, new persistence, AI enrichment, schema redesign or changes to the existing collector pipeline.
+**Initial MCP phase non-goals:** Admin UI and report generation were not part of the initial MCP delivery, but were subsequently implemented behind independent origin-side authorization in PR #8 and #13. Still out of scope: a Cloudflare Worker, MCP Portal, duplicate persistence, unreviewed collector changes, or bypassing the existing Access boundary.
 
 ## 9. Cost model
 

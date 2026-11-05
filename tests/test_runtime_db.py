@@ -33,7 +33,7 @@ def test_host_concurrency_claim():
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: runtime.claim(factory), range(2)))
-    assert sum(result in ids for result in results) == 1
+    assert sum(result is not None and result[0] in ids for result in results) == 1
     assert results.count(None) == 1
     with factory() as db:
         states = [db.get(FetchJob, job_id).state for job_id in ids]
@@ -248,3 +248,59 @@ def test_change_history_uses_version_title():
     response = changes(since=now() - timedelta(days=1), limit=100)
     titles = [c["title"] for c in response["changes"] if c["item_id"] == original_id]
     assert titles == ["New title", "Original title"]
+
+
+def test_stale_claim_is_fenced_after_reclaim_and_request_is_accounted(monkeypatch):
+    """An old Worker must not overwrite newer data or the newer lease."""
+    import json
+    import uuid
+    from datetime import timedelta
+    from nous.models import now
+
+    factory = session_factory()
+    key = "stale-generation-" + uuid.uuid4().hex[:12]
+    with factory() as db:
+        source = Source(
+            source_key=key, kind="json_api", adapter="json_v1",
+            item_kind="news", url="https://stale-generation.example/api",
+            config_revision="test", config={"max_concurrency": 1},
+            enabled=True, interval_minutes=60, max_requests_per_hour=5,
+        )
+        db.add(source)
+        db.flush()
+        # The suite shares a PostgreSQL schema; ensure this is the oldest due
+        # job rather than accidentally claiming a leftover queued fixture.
+        job = FetchJob(
+            source_id=source.id, dedupe_key=key,
+            available_at=now() - timedelta(days=30),
+        )
+        db.add(job)
+        db.commit()
+        job_id, source_id = job.id, source.id
+
+    claimed = runtime.claim(factory)
+    assert claimed == (job_id, 1)
+
+    def complete_after_reclaim(*_args):
+        # Emulate another Worker claiming the expired job during network I/O.
+        with factory() as db:
+            job = db.get(FetchJob, job_id)
+            job.attempts = 2
+            job.state = "leased"
+            job.lease_until = now() + timedelta(minutes=5)
+            db.commit()
+        return (200, json.dumps([
+            {"id": "bad-old", "url": "https://stale-generation.example/old",
+             "title": "Old response"}
+        ]).encode(), {}, "https://stale-generation.example/api")
+
+    monkeypatch.setattr(runtime, "fetch", complete_after_reclaim)
+    runtime.process(factory, *claimed)
+
+    with factory() as db:
+        assert db.scalar(select(Item).where(Item.source_id == source_id)) is None
+        job = db.get(FetchJob, job_id)
+        assert job.state == "leased" and job.attempts == 2
+        attempt = db.scalar(select(FetchAttempt).where(
+            FetchAttempt.job_id == job_id))
+        assert attempt.outcome == "stale_lease" and attempt.request_count == 1

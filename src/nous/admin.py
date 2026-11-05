@@ -448,6 +448,8 @@ def create_report_schedule(body: ReportScheduleCreate, request: Request):
     elif slot_local.astimezone(timezone.utc) <= current:
         slot_local += timedelta(days=1)
     slot = slot_local.astimezone(timezone.utc)
+    if slot.astimezone(zone).replace(tzinfo=None) != slot_local.replace(tzinfo=None):
+        raise HTTPException(422, "local time does not exist in the selected timezone")
     row = ReportSchedule(
         id=str(uuid.uuid4()), template_id="security-daily",
         template_revision=template["revision_key"], template_snapshot=template,
