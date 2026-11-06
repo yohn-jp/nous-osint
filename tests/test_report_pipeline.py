@@ -277,6 +277,12 @@ def test_codex_runtime_file_limit_keeps_response_and_log_caps(
     ("Not logged in", "codex_auth"),
     ("Usage limit reached", "codex_usage_limit"),
     ("unrelated temporary failure", "codex_execution_failed"),
+    ("error: unexpected argument '--ignore-user-config'", "codex_cli_argument_rejected"),
+    ("failed to connect to api.openai.com", "codex_network_unavailable"),
+    ("No space left on device", "codex_storage_exhausted"),
+    ("Read-only file system", "codex_read_only_filesystem"),
+    ("sandbox initialization failed", "codex_sandbox_rejected"),
+    ("model not found", "codex_model_unavailable"),
 ])
 def test_codex_error_codes_never_include_stderr(message, code):
     assert _codex_failure_code(message) == code
