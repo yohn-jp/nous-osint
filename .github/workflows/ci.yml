@@ -190,14 +190,14 @@ jobs:
 
       - name: Build release mode and record SHA provenance
         id: release-build
-        if: github.event_name == 'push' && vars.FRONTEND_DEPLOY_ENABLED == 'true'
+        if: github.event_name == 'push'
         working-directory: edge/frontend
         run: |
           npx cf build --mode production
           node --input-type=module -e "import {writeFileSync} from 'node:fs'; writeFileSync('.cloudflare/output/v0/provenance.json', JSON.stringify({sha: process.env.GITHUB_SHA, mode: 'production'}))"
           echo "mode=production" >> "$GITHUB_OUTPUT"
       - name: Transfer main release build to the protected deploy job
-        if: github.event_name == 'push' && vars.FRONTEND_DEPLOY_ENABLED == 'true'
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: edge-release-${{ github.sha }}
@@ -462,7 +462,6 @@ jobs:
     needs: [changes, frontend]
     if: >-
       github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-      vars.FRONTEND_DEPLOY_ENABLED == 'true' &&
       needs.changes.outputs.frontend == 'true' &&
       needs.frontend.result == 'success'
     runs-on: ubuntu-latest
