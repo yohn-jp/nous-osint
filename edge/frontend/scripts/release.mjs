@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile, appendFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 export async function release(options, { apiFetch = fetch, run = runCLI, load = readFile } = {}) {
@@ -45,15 +46,42 @@ export async function release(options, { apiFetch = fetch, run = runCLI, load = 
     assert.equal(body.result.enabled, false, 'workers.dev must already be disabled');
     assert.equal(body.result.previews_enabled, false, 'Version previews must already be disabled');
   }
+  // Cloudflare's version-list API is stable; the beta cf CLI's human-readable
+  // stdout is not. Snapshot IDs before upload so a retry cannot accidentally
+  // activate an earlier version carrying the same commit tag.
+  async function workerVersions() {
+    const versions = [];
+    for (let page = 1; page <= 100; page++) {
+      const response = await apiFetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/nous-frontend/versions?page=${page}&per_page=100`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert(response.ok, `Unable to list Worker versions (${response.status})`);
+      const body = await response.json();
+      assert.equal(body.success, true, 'Worker versions query unsuccessful');
+      const items = body.result?.items;
+      assert(Array.isArray(items), 'Malformed Worker versions response');
+      versions.push(...items);
+      const total = body.result_info?.total_count;
+      if (items.length === 0 || (Number.isSafeInteger(total) && versions.length >= total) ||
+          (total === undefined && items.length < 100)) return versions;
+    }
+    throw new Error('Worker versions pagination limit exceeded');
+  }
   await currentMain();
   await privateWorker();
-  const output = run(['workers', 'versions', 'create', '--prebuilt', '--mode', mode,
+  const previousIds = new Set((await workerVersions()).map(version => version.id));
+  run(['workers', 'versions', 'create', '--prebuilt', '--mode', mode,
     '--tag', sha, '--message', `GitHub ${repository}@${sha}`]);
-  // Exact-pinned cf beta.28 emits this marker. Refuse activation if it changes;
-  // never select a version by "latest", which could be uploaded by another run.
-  const ids = [...output.replace(/\x1b\[[0-9;]*m/g, '').matchAll(/Worker Version ID:\s*([a-f0-9-]{36})/gi)];
-  assert.equal(ids.length, 1, 'Expected one uploaded Worker Version ID');
-  const id = ids[0][1];
+  let uploaded = [];
+  for (let attempt = 0; attempt < 4; attempt++) {
+    uploaded = (await workerVersions()).filter(version =>
+      !previousIds.has(version.id) && version.annotations?.['workers/tag'] === sha);
+    assert(uploaded.length <= 1, 'Ambiguous newly uploaded Worker versions for this SHA');
+    if (uploaded.length === 1) break;
+    if (attempt < 3) await sleep(250 * (attempt + 1));
+  }
+  assert.equal(uploaded.length, 1, 'Expected one newly uploaded Worker Version tagged with main SHA');
+  const id = uploaded[0].id;
   assert(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id), 'Invalid Worker version ID');
   await privateWorker();
   await currentMain(); // Immediately before the only traffic-changing operation.
