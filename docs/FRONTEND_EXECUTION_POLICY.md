@@ -1,7 +1,7 @@
 # Frontend execution and resource policy
 
-Status: Quasar SPA remains browser-rendered; report pages use a separate static build
-Updated: 2026-11-04
+Status: Browser-rendered Quasar and separate runtime-generated Astro reports; edge UI delivery APPROVED AS PLAN, NOT YET DEPLOYED
+Updated: 2026-11-06
 
 ## Objective
 
@@ -22,7 +22,8 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 
 - Quasar 2 + Vue 3 + TypeScript, Quasar CLI with Vite, static SPA with browser-only rendering. [UI_DESIGN.md](UI_DESIGN.md) is the UI design contract.
 - Feed-reader-inspired, source-first information layout using Quasar components; not a Feedly copy. Vue pages and a small shared stylesheet still require maintenance.
-- Build the static assets into the digest-pinned MCP origin image and serve them at `/` through the existing Access-required Tunnel. The browser's same-origin `/v1` API is a strict GET-only proxy behind the Access JWT verifier; the underlying FastAPI listener stays loopback-only on the host.
+- **Current implementation:** build Quasar static assets into the digest-pinned MCP origin image and serve them at `/` through the Access-required Tunnel. The same-origin `/v1` path includes read-only query APIs and explicitly allowlisted administrator methods, all behind Access JWT and role validation.
+- **Approved migration (not deployed):** publish only Quasar assets via Workers Static Assets on a Worker **Route** for the same hostname; forward `/v1`, `/mcp`, and the runtime-generated `/reports/` archive unchanged to the current Tunnel origin. GitHub Actions will deploy UI-only changes without rebuilding the backend image. See [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
 - Reuse PostgreSQL views/functions as the canonical query contract; PostgREST is a candidate for read endpoints, while existing FastAPI can remain for domain-specific operations and feed output. Avoid redundant API surfaces unless justified.
 - PGroonga is a candidate for Japanese search; verify extension/container compatibility and search relevance before adoption.
 - Avoid Appsmith and other persistent low-code UI backends in the initial architecture due to compute/memory costs unrelated to Nous's core processing.
@@ -38,7 +39,7 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 
 ## Performance and acceptance
 
-- Quasar assets are produced at image build time; the VM does not run Node for the Quasar UI and serves those static files from the existing MCP process.
+- **Current:** Quasar assets are produced at backend-image build time and served by the MCP origin. **Target after the edge rollout:** assets are built/deployed by an independent GitHub Actions edge job; a UI-only change must not publish a backend image or require a VM update. The cutover must first prove Access/MCP/report continuity and rollback.
 - Astro is present only in the separate report Worker image. It runs once per publication to generate static report files; no Node listener, SSR, or persistent presentation process runs on the VM. The MCP gateway serves the private report volume read-only through the existing Access boundary.
 - Verify browser-side list/detail/filter navigation and usability on desktop/mobile; prevent loading an entire result set into memory.
 - Measure JS transfer size, initial render and interaction responsiveness in browsers; avoid claiming a measured budget before testing.

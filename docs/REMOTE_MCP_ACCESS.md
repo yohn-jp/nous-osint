@@ -13,7 +13,7 @@ This document adds a subsequent remote-access phase. It **does not** change the 
 
 Use **Cloudflare Tunnel + Cloudflare Access Managed OAuth** with a **VM-hosted, read-only Streamable HTTP MCP endpoint**.
 
-- **Do not deploy a Cloudflare Worker** to terminate OAuth or proxy MCP traffic.
+- **Do not implement OAuth termination or an MCP-specific proxy in a Cloudflare Worker.** A later edge SPA Worker Route is authorized only to serve UI assets and transparently pass all MCP/Access/API/report traffic to the existing protected Tunnel origin; see [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
 - **Do not create a Workers VPC Service**, Workers KV, Durable Objects, D1, a custom authorization server, or a separate SaaS MCP gateway.
 - **Do not expose the database, scheduler, worker, admin API, or an unauthenticated fallback hostname.**
 - One canonical public host: `nous.yohn.jp`. Avoid alternate names such as `mcp.osint.yohn.jp`, `osint.yohn.jp` and `nous-osint.yohn.jp` unless a later migration explicitly authorizes them.
@@ -58,7 +58,7 @@ The scheduler and worker never accept incoming traffic. No public PostgreSQL por
 - Prefer a **separate rootless Podman ingress network** shared only by `cloudflared` and the MCP-serving app; keep PostgreSQL on the pre-existing backend network, which `cloudflared` must not join. Connect the API process to both networks only if required. Inspect actual Quadlet service/network names before writing files; do not replace working deployments blindly.
 - On the Tunnel, map the single public hostname to the combined MCP/UI origin. The origin admits `/mcp`, static UI files, report HTML, an explicit read-only `/v1` allowlist, and the dedicated `/v1/admin/*` and `/admin/*` administration flows added in PR #8/#13. Administrative data/actions require verified Access identity, an explicit administrator subject allowlist, same-origin write controls and a separate limited SQL role. It returns `404` for `/api/v1`, diagnostics and every other unapproved path even after authentication.
 - Cloudflare Access covers the **whole public hostname**. All reachable paths, including error pages, inherit the Access policy; no broad Bypass policy. Health probes use local/VM-only addresses.
-- No direct public DNS A/AAAA to the VM and no secondary unprotected public hostname. Disable extra `workers.dev` routes because no Worker is deployed.
+- No direct public DNS A/AAAA to the VM and no secondary unprotected public hostname. The *current* deployment has no Worker Route. The planned edge UI Worker must keep `workers.dev` and unprotected preview routes disabled, or separately Access-protected; its production Route stays on the same hostname. See [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
 
 ## 3. Identity and OAuth boundary
 

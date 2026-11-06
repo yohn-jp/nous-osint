@@ -1,6 +1,6 @@
 # Nous OSINT — System Architecture
 
-Status: **approved single-VM implementation; automated reports merged into main (PR #13–#15), VM/Codex acceptance NOT_CHECKED**
+Status: **single-VM runtime implemented; edge UI separation approved as a plan (NOT IMPLEMENTED); report VM/Codex acceptance NOT_CHECKED**
 Target: **single Linux VM / rootless Podman / systemd Quadlet / PostgreSQL**  
 Updated: 2026-11-03
 
@@ -114,8 +114,9 @@ Set per-source failure thresholds and report degraded sources individually rathe
 - **ADR-004**: Collection is code-driven and deterministic; AI enrichment is optional and downstream.
 - **ADR-005**: The public repository contains implementation and configuration only, not unrestricted third-party content.
 - **ADR-006**: PostgreSQL version and container digest are explicitly pinned during implementation; upgrades are deliberate migrations with backup/restore validation.
+- **ADR-007 (planned)**: Keep the existing Access-protected hostname, Tunnel, MCP Managed OAuth, runtime reports and monorepo; deploy only Quasar static UI from GitHub Actions to a Cloudflare Worker Route and leave API/MCP/reports at the protected VM origin. See [Edge UI delivery and release isolation](EDGE_FRONTEND_DEPLOYMENT.md) for phased implementation, test gates and rollback. This design is **not yet deployed**.
 
-See [DATA_MODEL.md](DATA_MODEL.md), [QUADLET_DEPLOYMENT.md](QUADLET_DEPLOYMENT.md), and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+See [DATA_MODEL.md](DATA_MODEL.md), [QUADLET_DEPLOYMENT.md](QUADLET_DEPLOYMENT.md), [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
 
 ## CVE identity and KEV evidence
 
@@ -135,8 +136,10 @@ Astro runs only as a one-shot static build inside that Worker after a candidate
 passes deterministic validation. It writes a complete release to the private
 `nous-report-site` volume. The MCP origin mounts that volume read-only and
 serves only explicitly allowed `/reports/` paths through its existing Access
-JWT boundary. The Quasar UI remains the existing browser-rendered SPA; no Node
-server, SSR process, or public content origin is introduced.
+JWT boundary. The Quasar UI remains browser-rendered. Its **current** build is
+still bundled with the MCP origin image; ADR-007 plans to move only its static
+assets to a Cloudflare Worker Route, retaining report delivery on the VM and
+without adding a Node server, SSR process or unprotected public origin.
 
 PostgreSQL migration `0008` adds report runs, schedules, published article
 metadata, evidence references, and the active report-site digest. A separate

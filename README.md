@@ -36,6 +36,7 @@ Nous ships an official Git-maintained source catalog and also supports **per-ins
 4. [Implementation plan](docs/IMPLEMENTATION_PLAN.md) — 順序、検証、受入条件
 5. [Quasar information portal UI](docs/UI_DESIGN.md) — ブラウザ描画、Feedly型の情報階層、実装範囲と受入条件
 6. [Frontend execution policy](docs/FRONTEND_EXECUTION_POLICY.md) — VMとブラウザの実行責務
+   - [Edge UI deployment plan](docs/EDGE_FRONTEND_DEPLOYMENT.md) — Cloudflare Static Assetsへの分離、CI/CD、Access保護、受入検証とロールバック（計画段階）
 7. [Remote MCP and Cloudflare Access](docs/REMOTE_MCP_ACCESS.md) — 今後のTunnel/Managed OAuth/MCP公開設計
 
 ## Design principles
