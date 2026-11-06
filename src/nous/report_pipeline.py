@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import hashlib
 from html.parser import HTMLParser
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -47,6 +48,9 @@ _FACT_TABLE_HEADERS = (
 )
 _UNSAFE_TEXT = re.compile(r"(?:<\/?[a-z!]|https?://|javascript:|data:|\bon\w+\s*=)", re.I)
 _EXPLOIT_TEXT = re.compile(r"(?:悪用|エクスプロイト|exploit|ransomware|ランサムウェア)", re.I)
+
+
+log = logging.getLogger('nous.report_pipeline')
 
 
 class ReportError(RuntimeError):
@@ -601,6 +605,24 @@ def _codex_failure_code(detail: str) -> str:
         return "codex_schema_rejected"
     if any(text in detail for text in ("permission denied", "os error 13")):
         return "codex_permission_denied"
+    if any(text in detail for text in ("unknown option", "unexpected argument", "unrecognized option",
+                                       "found argument", "unknown flag")):
+        return "codex_cli_argument_rejected"
+    if any(text in detail for text in ("connection refused", "connection reset", "dns error",
+                                       "failed to resolve", "network is unreachable",
+                                       "failed to connect", "connection timed out")):
+        return "codex_network_unavailable"
+    if any(text in detail for text in ("no space left on device", "os error 28",
+                                       "disk quota exceeded")):
+        return "codex_storage_exhausted"
+    if any(text in detail for text in ("read-only file system", "os error 30")):
+        return "codex_read_only_filesystem"
+    if any(text in detail for text in ("operation not permitted", "os error 1",
+                                       "seccomp", "sandbox initialization failed")):
+        return "codex_sandbox_rejected"
+    if any(text in detail for text in ("model not found", "unsupported model",
+                                       "model is not supported", "model does not exist")):
+        return "codex_model_unavailable"
     return "codex_execution_failed"
 
 
@@ -806,7 +828,16 @@ class CodexRunner:
             raise ReportError("codex_unavailable", retryable=True) from exc
         if status:
             code = _codex_failure_code(detail)
-            raise ReportError(code, retryable=code == "codex_execution_failed")
+            # Never emit stderr: it may contain credentials or private source data.
+            # Stage, fixed classification and exit status are sufficient to locate
+            # the failing invocation without collapsing every failure to one code.
+            log.warning(json.dumps({
+                "event": "codex_process_failed", "stage": stage,
+                "error_code": code, "exit_status": status,
+            }))
+            raise ReportError(code, retryable=code in {
+                "codex_execution_failed", "codex_network_unavailable",
+            })
         try:
             if output.stat().st_size > 200_000:
                 raise ReportError("codex_output_too_large")
