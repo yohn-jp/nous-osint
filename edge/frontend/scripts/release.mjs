@@ -24,6 +24,8 @@ export async function release(options, { apiFetch = fetch, run = runCLI, load = 
   assert.equal(worker.previewUrls, false);
   assert.equal(worker.domains, undefined);
   assert.equal(worker.triggers, undefined);
+  assert.equal(worker.assets.runWorkerFirst, false, 'Static assets must bypass Worker script');
+  assert.equal(worker.assets.notFoundHandling, 'single-page-application', 'SPA fallback must be served by assets runtime');
   assert.equal(worker.env.PASSTHROUGH_ONLY, undefined, 'Origin passthrough binding is forbidden');
 
   async function currentMain() {
