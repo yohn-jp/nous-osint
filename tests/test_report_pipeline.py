@@ -1,6 +1,9 @@
+from datetime import datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 from jsonschema import Draft202012Validator
-from pathlib import Path
 
 from nous.report_pipeline import (
     CodexRunner,
@@ -9,6 +12,7 @@ from nous.report_pipeline import (
     run_editorial_pipeline,
     validate_article,
     _evidence_record,
+    _safe_publisher_url,
     _check_site,
     _codex_article_schema,
     _codex_failure_code,
@@ -24,6 +28,45 @@ def test_report_release_allows_only_canonical_library_return_link(tmp_path):
     (tmp_path / "index.html").write_text('<a href="/admin/sources">管理</a>', encoding="utf-8")
     with pytest.raises(ReportError, match="renderer_relative_link_rejected"):
         _check_site(tmp_path)
+
+
+def test_safe_publisher_url_drops_only_fragment_and_rejects_other_unsafe_parts():
+    original = "https://publisher.example/advisory?id=7#impact"
+    assert _safe_publisher_url(original) == "https://publisher.example/advisory?id=7"
+    assert _safe_publisher_url("https://publisher.example/advisory#") == (
+        "https://publisher.example/advisory")
+
+    for unsafe in (
+        "http://publisher.example/advisory#impact",
+        "https://user@publisher.example/advisory#impact",
+        "https://publisher.example:8443/advisory#impact",
+        "https://publisher.example/advisory\n#impact",
+    ):
+        with pytest.raises(ReportError, match="invalid_publisher_url"):
+            _safe_publisher_url(unsafe)
+
+
+def test_evidence_record_defrags_public_url_without_mutating_immutable_item_data():
+    original = "https://publisher.example/advisory?id=7#impact"
+    version = SimpleNamespace(
+        attributes={"title": "Security advisory with a tested title", "url": original},
+        provenance={"item_url": original},
+        sha256="a" * 64,
+        id=11,
+        observed_at=datetime(2026, 11, 3, tzinfo=timezone.utc),
+    )
+    item = SimpleNamespace(id=7, canonical_url=original, kind="advisory")
+    source = SimpleNamespace(
+        source_key="fixture-advisories",
+        config={"policy": {"content_storage": "metadata_only", "license_id": "CC-BY-4.0"}},
+    )
+
+    record = _evidence_record(version, item, source, "record", "E001")
+
+    assert record["publisher_url"] == "https://publisher.example/advisory?id=7"
+    assert version.attributes["url"] == original
+    assert version.provenance["item_url"] == original
+    assert version.sha256 == "a" * 64
 
 
 def _codex_runner_for_home(home, monkeypatch):

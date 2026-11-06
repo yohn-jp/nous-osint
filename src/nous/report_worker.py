@@ -40,6 +40,7 @@ from .report_pipeline import (
     ReportSkipped,
     _all_article_evidence,
     _json_bytes,
+    _safe_publisher_url,
     build_evidence_bundle,
     build_static_release,
     release_manifest,
@@ -652,7 +653,7 @@ def _evidence_db_rows(db, report_id: str, article: dict, bundle: dict) -> list[R
         source = db.get(Source, item.source_id)
         attrs = version.attributes if isinstance(version.attributes, dict) else {}
         if (source is None or source.source_key != item_data["source_key"] or
-                attrs.get("url") != item_data["publisher_url"]):
+                _safe_publisher_url(attrs.get("url")) != item_data["publisher_url"]):
             raise ReportError("evidence_source_identity_mismatch")
         observed_at = version.observed_at
         if observed_at.tzinfo is None:
