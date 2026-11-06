@@ -12,8 +12,8 @@ test('built static-only Worker serves real Quasar assets and never forwards to o
   assert.equal(config.previewUrls, false);
   assert.equal(config.triggers, undefined);
   assert.equal(config.domains, undefined);
-  assert.equal(config.assets.runWorkerFirst, true);
-  assert.equal(config.assets.notFoundHandling, 'none');
+  assert.equal(config.assets.runWorkerFirst, false);
+  assert.equal(config.assets.notFoundHandling, 'single-page-application');
   assert.equal(config.env.PASSTHROUGH_ONLY, undefined);
   config.manifest = { mainModule: 'index.js', modules: {
     'index.js': { type: 'esm', contents: await readFile(new URL('bundle/index.js', root), 'utf8') },
