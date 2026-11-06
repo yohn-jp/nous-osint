@@ -1,4 +1,4 @@
-# Access -> optional Edge Worker Route -> Named Tunnel -> Nous MCP. No VPC Service.
+# Access protects both explicit static UI routes and direct Tunnel traffic. No VPC Service.
 resource "cloudflare_zero_trust_access_policy" "nous" {
   account_id = var.account_id
   name       = "Allow selected Nous MCP identities"
@@ -81,12 +81,30 @@ output "tunnel_id" {
   value = cloudflare_zero_trust_tunnel_cloudflared.nous.id
 }
 
-# CI owns Worker script + assets; Terraform exclusively owns this zone Route.
-# No Worker Custom Domain, script content, Access or DNS edits for UI releases.
-# Remains absent until Phase C's effective-state preflight and passthrough test.
+# UI-only Worker Route patterns; dynamic traffic has no matching Worker Route.
+# Exact root path does not match root query URLs; those stay on the retained
+# origin fallback until a separate compatible design is approved.
+# Cloudflare route wildcards only support trailing *, not infix regex/globs.
+locals {
+  frontend_static_routes = toset([
+    "nous.yohn.jp",
+    "nous.yohn.jp/index.html*",
+    "nous.yohn.jp/assets/*",
+    "nous.yohn.jp/explore*",
+    "nous.yohn.jp/changes*",
+    "nous.yohn.jp/sources*",
+    "nous.yohn.jp/admin/sources*",
+    "nous.yohn.jp/admin/reports*",
+    "nous.yohn.jp/items/*",
+    "nous.yohn.jp/cves/*",
+  ])
+}
+
+# CI owns the script and static assets; Terraform owns only these zone routes.
+# NEVER attach nous.yohn.jp/*: API/MCP/OAuth/reports must bypass the Worker.
 resource "cloudflare_workers_route" "frontend" {
-  count   = var.frontend_route_enabled ? 1 : 0
-  zone_id = var.zone_id
-  pattern = "nous.yohn.jp/*"
-  script  = "nous-frontend"
+  for_each = var.frontend_route_enabled ? local.frontend_static_routes : toset([])
+  zone_id  = var.zone_id
+  pattern  = each.value
+  script   = "nous-frontend"
 }
