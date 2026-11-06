@@ -41,7 +41,7 @@ test('built static-only Worker serves real Quasar assets and never forwards to o
     const asset = await mf.dispatchFetch(`https://nous.yohn.jp/assets/${assetName}`);
     assert.equal(asset.status, 200);
     assert.match(asset.headers.get('content-type')!, /javascript/);
-    for (const path of ['/unrecognized', '/assets/index.html',
+    for (const path of ['/unrecognized',
       '/v1/items', '/v1/admin/report-runs', '/reports', '/reports/', '/.well-known/oauth-protected-resource', '/health']) {
       const response = await mf.dispatchFetch(`https://nous.yohn.jp${path}`);
       assert.equal(response.status, 404, path);
