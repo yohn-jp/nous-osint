@@ -15,7 +15,9 @@ from nous.report_pipeline import (
     _safe_publisher_url,
     _check_site,
     _codex_article_schema,
+    _codex_response_schema,
     _codex_failure_code,
+    _validate_schema,
 )
 from nous.report_templates import template_snapshot
 
@@ -139,6 +141,7 @@ def test_codex_article_schema_is_strict_and_keeps_publication_contract():
     def check(node):
         if isinstance(node, dict):
             assert "oneOf" not in node
+            assert "uniqueItems" not in node
             if node.get("type") == "object" and "properties" in node:
                 assert set(node["required"]) == set(node["properties"])
                 assert node["additionalProperties"] is False
@@ -153,6 +156,40 @@ def test_codex_article_schema_is_strict_and_keeps_publication_contract():
     Draft202012Validator(generation_schema).validate(article_for(evidence_bundle()))
     _, cve_article, _ = cve_fact_fixture()
     Draft202012Validator(generation_schema).validate(cve_article)
+
+
+def test_codex_stage_schemas_drop_unique_items_but_canonical_validation_rejects_duplicates():
+    for schema_name in ("plan.schema.json", "fact-check.schema.json", "article-v1.schema.json"):
+        generation_schema = _codex_response_schema(schema_name)
+
+        def check(node):
+            if isinstance(node, dict):
+                assert "uniqueItems" not in node
+                for child in node.values():
+                    check(child)
+            elif isinstance(node, list):
+                for child in node:
+                    check(child)
+
+        check(generation_schema)
+        Draft202012Validator.check_schema(generation_schema)
+
+    plan = {
+        "decision": "publish", "thesis": "A tested thesis", "audience": "Readers",
+        "outline": ["Verified facts"], "evidence_ids": ["E001", "E001"],
+        "reason": "The fixture contains a valid reason.",
+    }
+    with pytest.raises(ReportError, match="schema_invalid"):
+        _validate_schema(plan, "plan.schema.json")
+
+    fact_check = {
+        "claims": [{"claim_id": "C001", "text": "A sufficiently long claim.",
+                    "classification": "observed", "evidence_ids": ["E001", "E001"],
+                    "assessment": "supported"}],
+        "revision_request": [], "summary": "A valid summary.",
+    }
+    with pytest.raises(ReportError, match="schema_invalid"):
+        _validate_schema(fact_check, "fact-check.schema.json")
 
 
 def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
