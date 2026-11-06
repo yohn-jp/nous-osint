@@ -15,7 +15,9 @@ from nous.report_pipeline import (
     _safe_publisher_url,
     _check_site,
     _codex_article_schema,
+    _codex_response_schema,
     _codex_failure_code,
+    _validate_schema,
 )
 from nous.report_templates import template_snapshot
 
@@ -139,6 +141,7 @@ def test_codex_article_schema_is_strict_and_keeps_publication_contract():
     def check(node):
         if isinstance(node, dict):
             assert "oneOf" not in node
+            assert "uniqueItems" not in node
             if node.get("type") == "object" and "properties" in node:
                 assert set(node["required"]) == set(node["properties"])
                 assert node["additionalProperties"] is False
@@ -155,6 +158,40 @@ def test_codex_article_schema_is_strict_and_keeps_publication_contract():
     Draft202012Validator(generation_schema).validate(cve_article)
 
 
+def test_codex_stage_schemas_drop_unique_items_but_canonical_validation_rejects_duplicates():
+    for schema_name in ("plan.schema.json", "fact-check.schema.json", "article-v1.schema.json"):
+        generation_schema = _codex_response_schema(schema_name)
+
+        def check(node):
+            if isinstance(node, dict):
+                assert "uniqueItems" not in node
+                for child in node.values():
+                    check(child)
+            elif isinstance(node, list):
+                for child in node:
+                    check(child)
+
+        check(generation_schema)
+        Draft202012Validator.check_schema(generation_schema)
+
+    plan = {
+        "decision": "publish", "thesis": "A tested thesis", "audience": "Readers",
+        "outline": ["Verified facts"], "evidence_ids": ["E001", "E001"],
+        "reason": "The fixture contains a valid reason.",
+    }
+    with pytest.raises(ReportError, match="schema_invalid"):
+        _validate_schema(plan, "plan.schema.json")
+
+    fact_check = {
+        "claims": [{"claim_id": "C001", "text": "A sufficiently long claim.",
+                    "classification": "observed", "evidence_ids": ["E001", "E001"],
+                    "assessment": "supported"}],
+        "revision_request": [], "summary": "A valid summary.",
+    }
+    with pytest.raises(ReportError, match="schema_invalid"):
+        _validate_schema(fact_check, "fact-check.schema.json")
+
+
 def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
     runner = object.__new__(CodexRunner)
     runner.binary, runner.model = "codex", None
@@ -168,6 +205,51 @@ def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
     assert args[:2] == ["codex", "exec"]
     assert "--skip-git-repo-check" in args
     assert "--output-schema" in args and "--output-last-message" in args
+    command = runner._exec_command(Path("/tmp/job/plan"), Path("/tmp/plan.json"),
+                                   Path("/tmp/job/plan/output.json"))
+    assert command[:4] == ["prlimit", "--fsize=16777216", "--core=0", "--"]
+
+
+@pytest.mark.parametrize(
+    "write_kind,expected_error",
+    [("stdout", "codex_log_limit"), ("output", "codex_output_too_large")],
+)
+def test_codex_runtime_file_limit_keeps_response_and_log_caps(
+        tmp_path, monkeypatch, write_kind, expected_error):
+    runner = object.__new__(CodexRunner)
+    runner.binary, runner.model = "codex", None
+    runner.uid, runner.gid = 10002, 10002
+    runner.setpriv, runner.prlimit = "setpriv", "prlimit"
+    runner.workdir = tmp_path
+    runner._set_group_mode = lambda *_args: None
+    observed = {}
+
+    class FakeProcess:
+        returncode = 0
+
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+        def communicate(self, *, input, timeout):
+            assert input and timeout
+            if write_kind == "stdout":
+                self.stdout.write(b"x" * (262_144 + 1))
+            else:
+                output = Path(observed["command"][
+                    observed["command"].index("--output-last-message") + 1
+                ])
+                output.write_bytes(b"x" * 200_001)
+
+    def fake_popen(command, **kwargs):
+        observed["command"] = command
+        return FakeProcess(kwargs["stdout"])
+
+    monkeypatch.setattr("nous.report_pipeline.subprocess.Popen", fake_popen)
+
+    with pytest.raises(ReportError, match=expected_error):
+        runner.run("plan", {"bundle": {}}, run_id="safe-fixture")
+
+    assert observed["command"][1] == "--fsize=16777216"
 
 
 @pytest.mark.parametrize("message,code", [
