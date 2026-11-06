@@ -402,6 +402,7 @@ jobs:
           runner = object.__new__(CodexRunner)
           runner.codex_home = codex_home
           runner.gid = 10002
+          runner.uid = 10002
           runner._prepare_codex_home()
           assert not arg0_root.exists()
           assert credentials.read_text(encoding="utf-8") == "credential-sentinel"

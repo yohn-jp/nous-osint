@@ -74,10 +74,28 @@ def test_evidence_record_defrags_public_url_without_mutating_immutable_item_data
 def _codex_runner_for_home(home, monkeypatch):
     runner = object.__new__(CodexRunner)
     runner.codex_home = home
+    runner.uid = 10002
     runner.gid = 10002
     monkeypatch.setattr("nous.report_pipeline.os.geteuid", lambda: 0)
     monkeypatch.setattr("nous.report_pipeline.os.chown", lambda *_args: None)
     return runner
+
+
+def test_codex_home_is_owned_by_runtime_identity(tmp_path, monkeypatch):
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    state = home / "state.sqlite"
+    state.write_bytes(b"existing state")
+    runner = _codex_runner_for_home(home, monkeypatch)
+    ownership = []
+    monkeypatch.setattr("nous.report_pipeline.os.chown",
+                        lambda path, uid, gid: ownership.append((path, uid, gid)))
+
+    runner._prepare_codex_home()
+
+    assert set(ownership) == {(home, runner.uid, runner.gid),
+                              (state, runner.uid, runner.gid)}
+    assert state.read_bytes() == b"existing state"
 
 
 def test_codex_home_clears_only_official_arg0_runtime_and_preserves_credentials(tmp_path, monkeypatch):
