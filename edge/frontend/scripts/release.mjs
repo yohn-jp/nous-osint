@@ -1,4 +1,4 @@
-/** Script/assets only: never deploy triggers, domains, DNS, Tunnel or Access. */
+/** Upload static UI script/assets only: never deploy routes, DNS, Tunnel or Access. */
 import assert from 'node:assert/strict';
 import { readFile, appendFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 export async function release(options, { apiFetch = fetch, run = runCLI, load = readFile } = {}) {
   const { sha, mode, accountId, zoneId, token, githubToken, repository } = options;
   assert(/^[a-f0-9]{40}$/.test(sha), 'Expected immutable main SHA');
-  assert(['production', 'passthrough'].includes(mode), 'Invalid release mode');
+  assert.equal(mode, 'production', 'Only static UI production releases are allowed');
   assert(/^[a-f0-9]{32}$/.test(accountId || ''), 'Missing/invalid CLOUDFLARE_ACCOUNT_ID');
   assert(/^[a-f0-9]{32}$/.test(zoneId || ''), 'Missing/invalid CLOUDFLARE_ZONE_ID context');
   assert(token && githubToken && /^[\w.-]+\/[\w.-]+$/.test(repository), 'Missing release credentials/context');
@@ -24,7 +24,7 @@ export async function release(options, { apiFetch = fetch, run = runCLI, load = 
   assert.equal(worker.previewUrls, false);
   assert.equal(worker.domains, undefined);
   assert.equal(worker.triggers, undefined);
-  assert.equal(worker.env.PASSTHROUGH_ONLY.value, mode === 'passthrough' ? 'true' : 'false');
+  assert.equal(worker.env.PASSTHROUGH_ONLY, undefined, 'Origin passthrough binding is forbidden');
 
   async function currentMain() {
     const response = await apiFetch(`https://api.github.com/repos/${repository}/git/ref/heads/main`, {

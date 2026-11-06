@@ -31,6 +31,27 @@ Cloudflare Access (existing app and authentication)
 
 **Important:** This is a logical target, not a claim that Cloudflare automatically selects the two branches. Route precedence, exact path matching, Access execution order, and the existing Access application type must be proven with the actual account configuration. No Worker Route covering `nous.yohn.jp/*` is permitted in the target design.
 
+## Concrete Cloudflare zone routes (to be applied only after live Access validation)
+
+The Terraform resource `cloudflare_workers_route.frontend` is a **set of separate, narrow routes**, not `nous.yohn.jp/*`:
+
+```text
+nous.yohn.jp                        # exact root; no query string
+nous.yohn.jp/index.html*            # explicit SPA shell
+nous.yohn.jp/assets/*               # immutable Quasar files
+nous.yohn.jp/explore*               # SPA navigation and query strings
+nous.yohn.jp/changes*
+nous.yohn.jp/sources*
+nous.yohn.jp/admin/sources*
+nous.yohn.jp/admin/reports*
+nous.yohn.jp/items/*
+nous.yohn.jp/cves/*
+```
+
+Cloudflare route patterns support only a trailing wildcard; they cannot express arbitrary internal exclusions. The Worker therefore returns 404 for invalid/non-UI matches **within these prefixes**, and never performs an origin fetch. Route selection is based on the full request URL, so `/?q=...` does not match the exact root route; the VM UI fallback **must be retained** while this case remains unsupported. Do not claim full independence or remove the origin fallback until every required UI navigation is covered.
+
+The existing `FRONTEND_RELEASE_MODE=passthrough` approach is retired; the only authorized Worker release is a static-only `production` version. CI controls script/asset deployments. Terraform owns the route set and leaves it disabled by default. Both releases and infrastructure must be validated independently.
+
 ## Routing contract
 
 | Request | Owner |

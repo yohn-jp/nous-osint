@@ -13,7 +13,7 @@ This document adds a subsequent remote-access phase. It **does not** change the 
 
 Use **Cloudflare Tunnel + Cloudflare Access Managed OAuth** with a **VM-hosted, read-only Streamable HTTP MCP endpoint**.
 
-- **Do not implement OAuth termination or an MCP-specific proxy in a Cloudflare Worker.** A later edge SPA Worker Route is authorized only to serve UI assets and transparently pass all MCP/Access/API/report traffic to the existing protected Tunnel origin; see [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
+- **Do not implement OAuth termination, a reverse proxy or MCP-specific forwarding in a Cloudflare Worker.** Explicit UI/static Worker Routes may serve Quasar assets, but all MCP/Access/API/report paths must bypass Worker and continue directly through the protected Tunnel. See [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
 - **Do not create a Workers VPC Service**, Workers KV, Durable Objects, D1, a custom authorization server, or a separate SaaS MCP gateway.
 - **Do not expose the database, scheduler, worker, admin API, or an unauthenticated fallback hostname.**
 - One canonical public host: `nous.yohn.jp`. Avoid alternate names such as `mcp.osint.yohn.jp`, `osint.yohn.jp` and `nous-osint.yohn.jp` unless a later migration explicitly authorizes them.
@@ -58,7 +58,7 @@ The scheduler and worker never accept incoming traffic. No public PostgreSQL por
 - Prefer a **separate rootless Podman ingress network** shared only by `cloudflared` and the MCP-serving app; keep PostgreSQL on the pre-existing backend network, which `cloudflared` must not join. Connect the API process to both networks only if required. Inspect actual Quadlet service/network names before writing files; do not replace working deployments blindly.
 - On the Tunnel, map the single public hostname to the combined MCP/UI origin. The origin admits `/mcp`, static UI files, report HTML, an explicit read-only `/v1` allowlist, and the dedicated `/v1/admin/*` and `/admin/*` administration flows added in PR #8/#13. Administrative data/actions require verified Access identity, an explicit administrator subject allowlist, same-origin write controls and a separate limited SQL role. It returns `404` for `/api/v1`, diagnostics and every other unapproved path even after authentication.
 - Cloudflare Access covers the **whole public hostname**. All reachable paths, including error pages, inherit the Access policy; no broad Bypass policy. Health probes use local/VM-only addresses.
-- No direct public DNS A/AAAA to the VM and no secondary unprotected public hostname. The *current* deployment has no Worker Route. The planned edge UI Worker must keep `workers.dev` and unprotected preview routes disabled, or separately Access-protected; its production Route stays on the same hostname. See [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
+- No direct public DNS A/AAAA to the VM and no secondary unprotected public hostname. The catch-all Worker Route discovered on 2026-11-06 was removed; verify effective routes again before each rollout. The planned static-only edge Worker must keep `workers.dev` and preview routes disabled. Only narrow UI/static routes may be attached on the same hostname; no catch-all Worker Route is permitted. See [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
 
 ## 3. Identity and OAuth boundary
 
@@ -172,7 +172,7 @@ The feature is **not complete** until actual VM + Cloudflare evidence demonstrat
 
 ## 9. Cost model
 
-There is **no Worker request billing** in the selected architecture because there is no Worker. Cloudflare Tunnel can publish the origin without opening inbound VM ports; Cloudflare Access is subject to current account plan, seat and policy limits. Record the applicable account entitlement during deployment, not an unconditional claim of permanently free unlimited traffic.
+The initial MCP architecture requires no Worker. A later static-UI-only Worker may invoke scripts for matching UI routes, but API/MCP/report requests must never consume Worker invocations. Monitor current account usage and billing after cutover. Cloudflare Tunnel can publish the origin without opening inbound VM ports; Cloudflare Access is subject to current account plan, seat and policy limits. Record the applicable account entitlement during deployment, not an unconditional claim of permanently free unlimited traffic.
 
 ## CVE/KEV correlation
 

@@ -63,5 +63,5 @@ variable "origin_service" {
 variable "frontend_route_enabled" {
   type        = bool
   default     = false
-  description = "Enable only during Phase C after private passthrough Worker deployment and conflict preflight. False removes just the Route for rollback."
+  description = "Enable only after static-only Worker upload and Access/protocol preflight. False removes all UI-specific routes for rollback; never enable a catch-all."
 }
