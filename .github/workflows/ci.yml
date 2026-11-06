@@ -7,9 +7,43 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  changes:
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.scope.outputs.python }}
+      frontend: ${{ steps.scope.outputs.frontend }}
+      backend_image: ${{ steps.scope.outputs.backend_image }}
+      reports: ${{ steps.scope.outputs.reports }}
+      report_image: ${{ steps.scope.outputs.report_image }}
+      terraform: ${{ steps.scope.outputs.terraform }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Classify complete push or PR diff
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/changes.py
+
+  ci-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Test release scope decisions and Git history edge cases
+        run: python -m unittest discover -s tests/ci -v
+
   check:
+    needs: [changes, ci-contracts]
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -73,6 +107,8 @@ jobs:
 
 
   cve-role-grants:
+    needs: [changes, ci-contracts]
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -104,6 +140,10 @@ jobs:
 
 
   frontend:
+    outputs:
+      release_mode: ${{ steps.release-build.outputs.mode }}
+    needs: [changes, ci-contracts]
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -136,9 +176,34 @@ jobs:
       - name: Test routing and emulated origin contracts
         working-directory: edge/frontend
         run: npm test
+      - name: Validate script-only version upload offline
+        working-directory: edge/frontend
+        run: npx cf workers versions create --dry-run --prebuilt --mode production
+
+      - name: Build release mode and record SHA provenance
+        id: release-build
+        if: github.event_name == 'push' && vars.FRONTEND_DEPLOY_ENABLED == 'true'
+        working-directory: edge/frontend
+        env:
+          FRONTEND_RELEASE_MODE: ${{ vars.FRONTEND_RELEASE_MODE || 'passthrough' }}
+        run: |
+          node -e "if (!['production', 'passthrough'].includes(process.env.FRONTEND_RELEASE_MODE)) process.exit(1)"
+          npx cf build --mode "$FRONTEND_RELEASE_MODE"
+          node --input-type=module -e "import {writeFileSync} from 'node:fs'; writeFileSync('.cloudflare/output/v0/provenance.json', JSON.stringify({sha: process.env.GITHUB_SHA, mode: process.env.FRONTEND_RELEASE_MODE}))"
+          echo "mode=$FRONTEND_RELEASE_MODE" >> "$GITHUB_OUTPUT"
+      - name: Transfer main release build to the protected deploy job
+        if: github.event_name == 'push' && vars.FRONTEND_DEPLOY_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-release-${{ github.sha }}
+          path: edge/frontend/.cloudflare/output/v0/
+          include-hidden-files: true
+          retention-days: 7
 
 
   reports:
+    needs: [changes, ci-contracts]
+    if: needs.changes.outputs.reports == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -212,7 +277,12 @@ jobs:
 
 
   image:
-    needs: [check, frontend, reports]
+    needs: [changes, check, frontend, reports]
+    if: >-
+      always() && needs.changes.outputs.backend_image == 'true' &&
+      needs.check.result == 'success' &&
+      (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
+      (needs.reports.result == 'success' || needs.reports.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -256,7 +326,10 @@ jobs:
 
 
   report-worker-image:
-    needs: [check, reports]
+    needs: [changes, check, reports]
+    if: >-
+      always() && needs.changes.outputs.report_image == 'true' &&
+      needs.check.result == 'success' && needs.reports.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -359,3 +432,74 @@ jobs:
           name: nous-report-worker-image-digest
           path: report-worker-image-ref.txt
           retention-days: 90
+
+
+  terraform:
+    needs: [changes, ci-contracts]
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/cloudflare/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.13.5'
+      - run: terraform fmt -check
+      - run: terraform init -backend=false -input=false -lockfile=readonly
+      - run: terraform validate
+
+  frontend-deploy:
+    needs: [changes, frontend]
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.frontend == 'true' &&
+      needs.frontend.result == 'success' && vars.FRONTEND_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: frontend-production
+    concurrency:
+      group: frontend-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: edge/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.22.0'
+          cache: npm
+          cache-dependency-path: edge/frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          name: edge-release-${{ github.sha }}
+          path: edge/frontend/.cloudflare/output/v0/
+      - name: Release only the validated main SHA (preserve Terraform routes)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+          GITHUB_TOKEN: ${{ github.token }}
+          FRONTEND_RELEASE_MODE: ${{ needs.frontend.outputs.release_mode }}
+        run: node scripts/release.mjs
+
+  ci:
+    if: always()
+    needs: [changes, ci-contracts, check, cve-role-grants, frontend, reports, image, report-worker-image, terraform, frontend-deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all selected lanes to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python - <<'PY'
+          import json, os
+          jobs = json.loads(os.environ['RESULTS'])
+          assert jobs['changes']['result'] == 'success'
+          assert jobs['ci-contracts']['result'] == 'success'
+          assert all(job['result'] in {'success', 'skipped'} for job in jobs.values()), jobs
+          PY

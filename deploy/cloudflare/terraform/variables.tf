@@ -59,3 +59,9 @@ variable "origin_service" {
     error_message = "Tunnel ingress must target the dedicated MCP container."
   }
 }
+
+variable "frontend_route_enabled" {
+  type        = bool
+  default     = false
+  description = "Enable only during Phase C after private passthrough Worker deployment and conflict preflight. False removes just the Route for rollback."
+}
