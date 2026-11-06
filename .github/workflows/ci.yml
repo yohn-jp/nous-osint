@@ -67,15 +67,17 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
-      - run: python -m pip install -e '.[dev]'
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: reports/site/package-lock.json
-      - name: Install Astro dependencies used by report pipeline fixture tests
-        working-directory: reports/site
-        run: npm ci --no-audit --no-fund
+      - parallel:
+          - name: Install Python test dependencies
+            run: python -m pip install -e '.[dev]'
+          - name: Install Astro dependencies used by report pipeline fixture tests
+            working-directory: reports/site
+            run: npm ci --no-audit --no-fund
       # Independent checks share a runner and execute via GitHub Actions' native
       # parallel steps. The database migration completes before the dependent
       # snapshot/pytest steps below.
@@ -157,22 +159,28 @@ jobs:
           cache-dependency-path: |
             ui/package-lock.json
             edge/frontend/package-lock.json
-      - name: Install UI dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Typecheck Quasar UI
-        run: npm run typecheck
-      - name: Build static Quasar SPA
-        run: npm run build
+      # UI and Edge install into separate node_modules directories.
+      - parallel:
+          - name: Install UI dependencies
+            run: npm ci --no-audit --no-fund
+          - name: Install pinned Edge tools
+            working-directory: edge/frontend
+            run: npm ci --no-audit --no-fund
+      # Typechecks are read-only; the Quasar build writes only ui/dist.
+      # Edge bundling starts after the real SPA assets exist.
+      - parallel:
+          - name: Typecheck Quasar UI
+            run: npm run typecheck
+          - name: Build static Quasar SPA
+            run: npm run build
+          - name: Typecheck Edge Worker
+            working-directory: edge/frontend
+            run: npm run typecheck
       - name: Verify static output
         run: test -f dist/spa/index.html
-      - name: Install pinned Edge tools
+      - name: Build Edge Worker (no upload)
         working-directory: edge/frontend
-        run: npm ci --no-audit --no-fund
-      - name: Typecheck and build Edge Worker (no upload)
-        working-directory: edge/frontend
-        run: |
-          npm run typecheck
-          npm run build
+        run: npm run build
       - name: Test routing and emulated origin contracts
         working-directory: edge/frontend
         run: npm test
@@ -207,12 +215,17 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - run: python -m pip install jsonschema==4.25.1
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: reports/site/package-lock.json
+      - parallel:
+          - name: Install JSON Schema validator
+            run: python -m pip install jsonschema==4.25.1
+          - name: Install pinned Astro dependencies
+            working-directory: reports/site
+            run: npm ci --no-audit --no-fund
       - name: Validate report JSON schemas
         run: |
           python - <<'PY'
@@ -223,9 +236,6 @@ jobs:
           for path in sorted(Path('reports/schemas').glob('*.schema.json')):
               Draft202012Validator.check_schema(json.loads(path.read_text(encoding='utf-8')))
           PY
-      - name: Install pinned Astro dependencies
-        working-directory: reports/site
-        run: npm ci --no-audit --no-fund
       - name: Build report site
         working-directory: reports/site
         run: npm run build
@@ -452,6 +462,7 @@ jobs:
     needs: [changes, frontend]
     if: >-
       github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      vars.FRONTEND_DEPLOY_ENABLED == 'true' &&
       needs.changes.outputs.frontend == 'true' &&
       needs.frontend.result == 'success'
     runs-on: ubuntu-latest
