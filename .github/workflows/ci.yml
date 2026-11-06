@@ -112,9 +112,11 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '24.22.0'
           cache: npm
-          cache-dependency-path: ui/package-lock.json
+          cache-dependency-path: |
+            ui/package-lock.json
+            edge/frontend/package-lock.json
       - name: Install UI dependencies
         run: npm ci --no-audit --no-fund
       - name: Typecheck Quasar UI
@@ -123,6 +125,17 @@ jobs:
         run: npm run build
       - name: Verify static output
         run: test -f dist/spa/index.html
+      - name: Install pinned Edge tools
+        working-directory: edge/frontend
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck and build Edge Worker (no upload)
+        working-directory: edge/frontend
+        run: |
+          npm run typecheck
+          npm run build
+      - name: Test routing and emulated origin contracts
+        working-directory: edge/frontend
+        run: npm test
 
 
   reports:

@@ -1,0 +1,24 @@
+{
+  "name": "nous-edge-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "build": "node scripts/prepare-assets.mjs && cf build",
+    "build:passthrough": "node scripts/prepare-assets.mjs && cf build --mode passthrough",
+    "deploy": "cf deploy --prebuilt --mode production"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.12",
+    "@types/node": "24.19.2",
+    "cf": "1.0.0-beta.28",
+    "miniflare": "5.20261104.0-beta",
+    "typescript": "5.9.3",
+    "vite": "8.3.6"
+  },
+  "private": true,
+  "engines": {
+    "node": "24.22.0"
+  }
+}
