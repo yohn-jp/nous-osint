@@ -229,7 +229,7 @@ def test_saved_bundle_evidence_uses_immutable_version_link_after_current_link_ch
         db.flush()
         item = Item(
             source_id=source.id, external_id="advisory-1",
-            canonical_url="https://publisher.example/advisory-1", kind="advisory",
+            canonical_url="https://publisher.example/advisory-1#section", kind="advisory",
             title="Advisory references CVE-2026-12345", state="current",
             first_seen_at=observed_at, last_seen_at=observed_at,
             current_version=2, current_hash="b" * 64,
@@ -241,10 +241,10 @@ def test_saved_bundle_evidence_uses_immutable_version_link_after_current_link_ch
             sha256="a" * 64,
             attributes={
                 "title": "Advisory references CVE-2026-12345",
-                "url": "https://publisher.example/advisory-1",
+                "url": "https://publisher.example/advisory-1#section",
                 "cve_relations": {cve_id: "title_mention"},
             },
-            provenance={"adapter": "rss_v1"},
+            provenance={"adapter": "rss_v1", "item_url": "https://publisher.example/advisory-1#section"},
         )
         db.add(version)
         db.flush()
@@ -275,9 +275,18 @@ def test_saved_bundle_evidence_uses_immutable_version_link_after_current_link_ch
         first_attempt = worker._evidence_db_rows(db, "report-1", article, bundle)
         retry_attempt = worker._evidence_db_rows(db, "report-1", article, bundle)
 
-    assert len(first_attempt) == len(retry_attempt) == 1
-    assert first_attempt[0].item_version_id == retry_attempt[0].item_version_id == version.id
-    assert first_attempt[0].relation == retry_attempt[0].relation == "title_mention"
+        assert len(first_attempt) == len(retry_attempt) == 1
+        assert first_attempt[0].item_version_id == retry_attempt[0].item_version_id == version.id
+        assert first_attempt[0].relation == retry_attempt[0].relation == "title_mention"
+        assert first_attempt[0].publisher_url == "https://publisher.example/advisory-1"
+        assert version.attributes["url"] == "https://publisher.example/advisory-1#section"
+        assert version.provenance["item_url"] == "https://publisher.example/advisory-1#section"
+        assert version.sha256 == "a" * 64
+
+        version.attributes = {**version.attributes, "url": "https://publisher.example/changed#section"}
+        db.commit()
+        with pytest.raises(worker.ReportError, match="evidence_source_identity_mismatch"):
+            worker._evidence_db_rows(db, "report-1", article, bundle)
 
 
 def test_archive_capacity_rejects_candidate_without_breaking_recovery(publication, monkeypatch):

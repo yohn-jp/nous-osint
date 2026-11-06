@@ -78,9 +78,11 @@ def _safe_publisher_url(value: object) -> str:
         raise ReportError("invalid_publisher_url")
     parts = urlsplit(value)
     if (parts.scheme != "https" or not parts.hostname or parts.username or parts.password or
-            parts.fragment or parts.port not in (None, 443) or any(ord(c) < 32 for c in value)):
+            parts.port not in (None, 443) or any(ord(c) < 32 for c in value)):
         raise ReportError("invalid_publisher_url")
-    return value
+    # A fragment is browser-side only. Drop it for the public citation URL;
+    # the immutable ItemVersion attributes and provenance remain unchanged.
+    return value.partition("#")[0]
 
 
 def _published_from_version(value) -> str | None:
