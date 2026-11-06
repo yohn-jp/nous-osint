@@ -9,7 +9,7 @@ The Cloudflare resource changes remain unapplied. The VM-side MCP origin and Tun
 - Implemented in the repository and VM: strict allowlisted Access/Managed OAuth IaC, standalone Python read-only MCP adapter and Access JWT verifier; pinned MCP/Tunnel Quadlets, dedicated ingress network and SELECT-only MCP database credential.
 - Not performed: Cloudflare Terraform import/init/plan/apply, Access app/IdP/OAuth policy inspection, or live ChatGPT OAuth verification.
 - Reuse: Majiwari's Access application/Managed OAuth policy and Proprium's Tunnel/Gateway transport model. Do not copy their credentials or reuse their Tunnel routes.
-- No Worker, Workers VPC Service, KV, D1 or custom OAuth service.
+- Phase B defines a disabled-by-default frontend Worker Route. Script/assets belong to CI; no Workers VPC Service, KV, D1 or custom OAuth service. See [Edge release pipeline](../../docs/EDGE_RELEASE_PIPELINE.md).
 
 ## After PR #1 is merged
 
@@ -45,3 +45,14 @@ Cloudflare Tunnel token-file https://developers.cloudflare.com/cloudflare-one/ne
 MCP Python SDK ASGI https://py.sdk.modelcontextprotocol.io/run/asgi/ .
 
 **Cloudflare account unchanged.** The VM-side runtime is deployed and reboot-tested; its current loaded Tunnel route is recorded in [QUADLET_DEPLOYMENT.md](../../docs/QUADLET_DEPLOYMENT.md#6-initial-vm-deployment-record-2026-11-03).
+
+
+## Frontend Route preparation (Phase B)
+
+`frontend_route_enabled=false` preserves the current Tunnel-only hostname.
+Terraform owns only the `nous.yohn.jp/*` Route; CI owns `nous-frontend` script/assets.
+Do not enable it or apply changes until the approved Phase C preflight, private
+passthrough Worker deployment and conflict inspection. Never let a UI deploy token
+write Access/Tunnel/DNS or Routes. The separate Terraform operator requires scoped
+Workers Routes write permission for this zone in addition to its existing scopes.
+Disabling just this Route is the planned fallback to the retained VM UI.

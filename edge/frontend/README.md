@@ -1,4 +1,4 @@
-# Edge frontend — Phase A (not deployed)
+# Edge frontend — Phase A + Phase B preparation (not deployed)
 
 This project builds the existing Quasar SPA for Workers Static Assets. It does
 not create a route or change production. The retained VM UI remains the fallback.
@@ -77,22 +77,21 @@ MCP session and incremental stream propagation. The emulated outbound origin is
 synthetic: it does not simulate Access, Tunnel or Managed OAuth and never calls
 production. No live Cloudflare/VM changes or authenticated probes are performed.
 
-The repository is public. CI builds/tests locally on the runner, but does not
-publish artifacts or preview URLs; no restricted private artifact destination
+The repository is public. PR CI builds/tests locally on the runner, but does not
+publish preview artifacts or URLs; no restricted private artifact destination
 has been provided. Private preview artifact publication is **BLOCKED** pending
 such a destination. Build output can be reviewed locally with the commands above.
 
-## Ownership for later phases
+## Ownership and release pipeline
 
 Terraform (`deploy/cloudflare/terraform/`) owns the zone Worker Route, Access,
-Tunnel and DNS. CI will own script + assets only. This config declares no routes,
-triggers or custom domains. Phase B must preserve Terraform-owned routes when
-selecting script upload/deploy commands; do not apply empty trigger configuration
-as a substitute for a script release. Phase A's build-only CI has no Cloudflare
-credentials and no deploy job. A future deploy token needs only intended-account
-Workers Scripts Write (plus any asset-upload permissions required by the selected
-CLI), not Access/Tunnel/DNS/Route write; verify effective token scopes in Phase B.
+Tunnel and DNS. CI owns script + assets only. See
+[the Phase B pipeline](../../docs/EDGE_RELEASE_PIPELINE.md) for scopes, the
+Environment/credential setup, immutable version release and remaining live gates.
+The Route defaults to disabled. The release wrapper uses version upload and
+exact-version activation, never trigger deployment; `npm run deploy` invokes this
+wrapper and requires the CI environment/provenance checks.
 
-Rollback stays the approved plan: deploy passthrough and/or remove only the zone
-Route using Terraform, restoring the retained VM UI. This has **not** been
-rehearsed live. Phase B–D are intentionally not implemented here.
+Rollback remains the approved plan: deploy passthrough and/or remove only the
+zone Route using Terraform, restoring the retained VM UI. This has **not** been
+rehearsed live. Phase C/D remain gated.

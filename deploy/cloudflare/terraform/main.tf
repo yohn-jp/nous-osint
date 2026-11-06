@@ -1,4 +1,4 @@
-# Direct Access -> Named Tunnel -> Nous MCP. No Worker or VPC Service.
+# Access -> optional Edge Worker Route -> Named Tunnel -> Nous MCP. No VPC Service.
 resource "cloudflare_zero_trust_access_policy" "nous" {
   account_id = var.account_id
   name       = "Allow selected Nous MCP identities"
@@ -79,4 +79,14 @@ output "access_issuer" {
 }
 output "tunnel_id" {
   value = cloudflare_zero_trust_tunnel_cloudflared.nous.id
+}
+
+# CI owns Worker script + assets; Terraform exclusively owns this zone Route.
+# No Worker Custom Domain, script content, Access or DNS edits for UI releases.
+# Remains absent until Phase C's effective-state preflight and passthrough test.
+resource "cloudflare_workers_route" "frontend" {
+  count   = var.frontend_route_enabled ? 1 : 0
+  zone_id = var.zone_id
+  pattern = "nous.yohn.jp/*"
+  script  = "nous-frontend"
 }

@@ -6,7 +6,7 @@
     "test": "node --test test/*.test.ts",
     "build": "node scripts/prepare-assets.mjs && cf build",
     "build:passthrough": "node scripts/prepare-assets.mjs && cf build --mode passthrough",
-    "deploy": "cf deploy --prebuilt --mode production"
+    "deploy": "node scripts/release.mjs"
   },
   "type": "module",
   "devDependencies": {
