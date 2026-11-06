@@ -27,6 +27,10 @@ _REPORTS_DIR = Path(os.getenv("NOUS_REPORTS_DIR", str(Path(__file__).resolve().p
 _SCHEMA_DIR = _REPORTS_DIR / "schemas"
 _SITE_DIR = _REPORTS_DIR / "site"
 _METADATA_LIMIT = 300
+# Codex exec writes runtime state in addition to the bounded response and logs.
+# Keep an individual-file ceiling for its working state; response and captured
+# stdout/stderr are still checked against their smaller limits in run().
+_CODEX_RUNTIME_FILE_SIZE_LIMIT = 16 * 1024 * 1024
 _ALLOWED_BLOCKS = {"paragraph", "bullet_list", "fact_table", "source_list", "cve_fact", "quote"}
 # These are editorial labels, not statements. Generated headings and table
 # columns must not introduce a new, unreviewed claim outside fact_check.
@@ -697,6 +701,10 @@ class CodexRunner:
             args.extend(["--model", self.model])
         return args
 
+    def _exec_command(self, stage_dir: Path, schema_path: Path, output: Path) -> list[str]:
+        return [self.prlimit, f"--fsize={_CODEX_RUNTIME_FILE_SIZE_LIMIT}", "--core=0", "--",
+                *self._identity_args(), *self._codex_args(stage_dir, schema_path, output)]
+
     def _version(self) -> str:
         try:
             with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
@@ -769,8 +777,7 @@ class CodexRunner:
             "要求されたJSONオブジェクトだけを返してください。\nINPUT_JSON:\n" +
             json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
-        command = [self.prlimit, "--fsize=262144", "--core=0", "--",
-                   *self._identity_args(), *self._codex_args(stage_dir, schema_path, output)]
+        command = self._exec_command(stage_dir, schema_path, output)
         try:
             with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
                 process = subprocess.Popen(command, cwd=stage_dir, stdin=subprocess.PIPE,
