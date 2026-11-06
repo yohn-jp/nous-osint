@@ -128,9 +128,10 @@ References: [cf versions/deployments](https://developers.cloudflare.com/cf/proje
 Offline scope/history tests, route/release tests and Terraform validation are
 implemented. GitHub Actions results must be recorded against the PR's latest HEAD.
 
-**BLOCKED (live Phase B acceptance):** repository Secrets, Environments and
-variables are empty, and no Cloudflare credentials are present in the execution
-environment. The restricted Environment, narrow deploy token, account/zone context
+**BLOCKED (live Phase B acceptance):** the least-privilege GitHub release
+configuration remains unprovisioned. Existing local Wrangler OAuth was subsequently
+found and used for a private passthrough bootstrap; see
+[the partial rollout record](EDGE_ROLLOUT_2026-11-06.md). The restricted Environment, narrow deploy token, account/zone context
 and existing private Worker must be provisioned before testing an actual UI-only
 main deployment. No successful independent Cloudflare deployment is claimed.
 No Terraform plan/apply, live Access/OAuth/MCP check or rollout/rollback is claimed.
