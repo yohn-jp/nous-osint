@@ -21,7 +21,9 @@ REPORT_MODULES = {
 def classify(paths: list[str]) -> dict[str, bool]:
     result = dict.fromkeys(SCOPES, False)
     for path in paths:
-        if path.startswith('docs/') or path.endswith('.md'):
+        if (path.startswith(('docs/', '.github/ISSUE_TEMPLATE/'))
+                or ('/' not in path and path.endswith('.md'))
+                or path.rsplit('/', 1)[-1] == 'README.md'):
             continue
         if path.startswith(('ui/', 'edge/frontend/')):
             result['frontend'] = True

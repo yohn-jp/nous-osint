@@ -18,6 +18,7 @@ class Scopes(unittest.TestCase):
             (['edge/frontend/src/index.ts'], {'frontend'}),
             (['src/nous/api.py'], {'python', 'backend_image'}),
             (['reports/site/package-lock.json'], {'python', 'reports', 'report_image'}),
+            (['reports/site/src/pages/article.md'], {'python', 'reports', 'report_image'}),
             (['reports/templates/security-daily.yaml'], {'python', 'reports', 'report_image', 'backend_image'}),
             (['docs/ARCHITECTURE.md', 'README.md'], set()),
             (['ui/src/app.ts', 'src/nous/api.py'], {'frontend', 'python', 'backend_image'}),
