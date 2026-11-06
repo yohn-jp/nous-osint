@@ -459,6 +459,7 @@ jobs:
       - run: terraform validate
 
   frontend-deploy:
+    environment: frontend-production
     needs: [changes, frontend]
     if: >-
       github.event_name == 'push' && github.ref == 'refs/heads/main' &&
