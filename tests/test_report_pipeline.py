@@ -182,7 +182,9 @@ def test_codex_stage_schemas_drop_unique_items_but_canonical_validation_rejects_
 
         def check(node):
             if isinstance(node, dict):
-                assert "uniqueItems" not in node
+                for unsupported in ("$schema", "$id", "uniqueItems", "minLength",
+                                    "maxLength", "minItems", "maxItems", "pattern", "format", "oneOf"):
+                    assert unsupported not in node
                 for child in node.values():
                     check(child)
             elif isinstance(node, list):
@@ -223,6 +225,7 @@ def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
     assert args[:2] == ["codex", "exec"]
     assert "--skip-git-repo-check" in args
     assert "--output-schema" in args and "--output-last-message" in args
+    assert args[-1] == "-"  # Bounded input arrives explicitly on stdin.
     command = runner._exec_command(Path("/tmp/job/plan"), Path("/tmp/plan.json"),
                                    Path("/tmp/job/plan/output.json"))
     assert command[:4] == ["prlimit", "--fsize=16777216", "--core=0", "--"]
@@ -273,6 +276,7 @@ def test_codex_runtime_file_limit_keeps_response_and_log_caps(
 @pytest.mark.parametrize("message,code", [
     ("Not a git repository", "codex_git_repo_rejected"),
     ("Invalid JSON schema for response_format", "codex_schema_rejected"),
+    ("invalid_json_schema", "codex_schema_rejected"),
     ("Permission denied (os error 13)", "codex_permission_denied"),
     ("Not logged in", "codex_auth"),
     ("Usage limit reached", "codex_usage_limit"),
