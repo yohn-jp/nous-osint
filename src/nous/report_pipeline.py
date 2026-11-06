@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import hashlib
 from html.parser import HTMLParser
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -47,6 +48,9 @@ _FACT_TABLE_HEADERS = (
 )
 _UNSAFE_TEXT = re.compile(r"(?:<\/?[a-z!]|https?://|javascript:|data:|\bon\w+\s*=)", re.I)
 _EXPLOIT_TEXT = re.compile(r"(?:悪用|エクスプロイト|exploit|ransomware|ランサムウェア)", re.I)
+
+
+log = logging.getLogger('nous.report_pipeline')
 
 
 class ReportError(RuntimeError):
@@ -563,9 +567,12 @@ def _codex_response_schema(schema_name: str) -> dict:
 
     def rewrite(value):
         if isinstance(value, dict):
-            # The provider's strict response format does not accept uniqueItems.
-            # The canonical schema still enforces uniqueness after generation.
-            value.pop("uniqueItems", None)
+            # Generation is a structural request, not the publication authority.
+            # Codex/model variants reject or stall on these JSON Schema keywords.
+            # Keep the original canonical schema for strict local validation.
+            for name in ("$schema", "$id", "uniqueItems", "minLength", "maxLength",
+                         "minItems", "maxItems", "pattern", "format"):
+                value.pop(name, None)
             # OpenAI structured outputs supports nested anyOf, not oneOf.
             if "oneOf" in value:
                 value["anyOf"] = value.pop("oneOf")
@@ -595,12 +602,30 @@ def _codex_failure_code(detail: str) -> str:
     if any(text in detail for text in ("not a git repository", "not inside a trusted directory",
                                        "git repository check")):
         return "codex_git_repo_rejected"
-    if any(text in detail for text in ("invalid response_format", "invalid json schema",
+    if any(text in detail for text in ("invalid response_format", "invalid_json_schema", "invalid json schema",
                                        "invalid output schema", "schema is invalid",
                                        "schema validation error")):
         return "codex_schema_rejected"
     if any(text in detail for text in ("permission denied", "os error 13")):
         return "codex_permission_denied"
+    if any(text in detail for text in ("unknown option", "unexpected argument", "unrecognized option",
+                                       "found argument", "unknown flag")):
+        return "codex_cli_argument_rejected"
+    if any(text in detail for text in ("connection refused", "connection reset", "dns error",
+                                       "failed to resolve", "network is unreachable",
+                                       "failed to connect", "connection timed out")):
+        return "codex_network_unavailable"
+    if any(text in detail for text in ("no space left on device", "os error 28",
+                                       "disk quota exceeded")):
+        return "codex_storage_exhausted"
+    if any(text in detail for text in ("read-only file system", "os error 30")):
+        return "codex_read_only_filesystem"
+    if any(text in detail for text in ("operation not permitted", "os error 1",
+                                       "seccomp", "sandbox initialization failed")):
+        return "codex_sandbox_rejected"
+    if any(text in detail for text in ("model not found", "unsupported model",
+                                       "model is not supported", "model does not exist")):
+        return "codex_model_unavailable"
     return "codex_execution_failed"
 
 
@@ -706,6 +731,7 @@ class CodexRunner:
                 str(output), "-C", str(stage_dir)]
         if self.model:
             args.extend(["--model", self.model])
+        args.append("-")  # Explicitly consume the bounded prompt from stdin.
         return args
 
     def _exec_command(self, stage_dir: Path, schema_path: Path, output: Path) -> list[str]:
@@ -797,7 +823,9 @@ class CodexRunner:
                 stderr_size = os.fstat(stderr.fileno()).st_size
                 if stdout_size > 262_144 or stderr_size > 262_144:
                     raise ReportError("codex_log_limit")
-                stderr.seek(0)
+                # Errors are at the end of verbose Codex progress, not at
+                # the beginning. The full log is never persisted or exposed.
+                stderr.seek(max(0, stderr_size - 65_536))
                 detail = stderr.read(65_536).decode("utf-8", errors="replace").lower()
                 status = process.returncode
         except ReportError:
@@ -806,7 +834,16 @@ class CodexRunner:
             raise ReportError("codex_unavailable", retryable=True) from exc
         if status:
             code = _codex_failure_code(detail)
-            raise ReportError(code, retryable=code == "codex_execution_failed")
+            # Never emit stderr: it may contain credentials or private source data.
+            # Stage, fixed classification and exit status are sufficient to locate
+            # the failing invocation without collapsing every failure to one code.
+            log.warning(json.dumps({
+                "event": "codex_process_failed", "stage": stage,
+                "error_code": code, "exit_status": status,
+            }))
+            raise ReportError(code, retryable=code in {
+                "codex_execution_failed", "codex_network_unavailable",
+            })
         try:
             if output.stat().st_size > 200_000:
                 raise ReportError("codex_output_too_large")
