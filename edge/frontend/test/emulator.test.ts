@@ -13,7 +13,7 @@ test('built static-only Worker serves real Quasar assets and never forwards to o
   assert.equal(config.triggers, undefined);
   assert.equal(config.domains, undefined);
   assert.equal(config.assets.runWorkerFirst, false);
-  assert.equal(config.assets.notFoundHandling, 'single-page-application');
+  assert.equal(config.assets.notFoundHandling, 'none');
   assert.equal(config.env.PASSTHROUGH_ONLY, undefined);
   config.manifest = { mainModule: 'index.js', modules: {
     'index.js': { type: 'esm', contents: await readFile(new URL('bundle/index.js', root), 'utf8') },
@@ -47,8 +47,7 @@ test('built static-only Worker serves real Quasar assets and never forwards to o
       assert.equal(response.status, 404, path);
     }
     const missingAsset = await mf.dispatchFetch('https://nous.yohn.jp/assets/missing.js');
-    assert.equal(missingAsset.status, 200, 'SPA fallback is intentionally asset-first');
-    assert.match(await missingAsset.text(), /<html/);
+    assert.equal(missingAsset.status, 404, 'Missing JS must not be rewritten to the SPA shell');
     const mcp = await mf.dispatchFetch('https://nous.yohn.jp/mcp', { method: 'POST', body: 'initialize', headers: { Authorization: 'Bearer opaque', Cookie: 'session=opaque', 'Cf-Access-Jwt-Assertion': 'opaque-jwt' } });
     assert.equal(mcp.status, 404);
     assert.equal(calls.length, 0, 'Worker performed an origin fetch');

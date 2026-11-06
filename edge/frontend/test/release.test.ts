@@ -6,12 +6,12 @@ const options = { sha: 'a'.repeat(40), mode: 'production', accountId: 'b'.repeat
 const version = '12345678-1234-1234-1234-123456789012';
 function fixture({ staleAt = 0, publicURL = false, badArtifact = false, missingWorker = false,
   badUpload = false, missingVersion = false, duplicateVersion = false, wrongVersionTag = false,
-  versionListForbidden = false, oldTaggedVersion = false } = {}) {
+  versionListForbidden = false, oldTaggedVersion = false, badAssetFallback = false } = {}) {
   const commands: string[][] = [];
   let headChecks = 0;
   return { commands, dependencies: {
     load: async (url: URL) => JSON.stringify(url.pathname.endsWith('provenance.json') ? { sha: badArtifact ? 'd'.repeat(40) : options.sha, mode: options.mode }
-      : url.pathname.endsWith('worker.config.json') ? { name: 'nous-frontend', workersDev: false, previewUrls: false, env: {}, assets: { runWorkerFirst: false, notFoundHandling: 'single-page-application' } }
+      : url.pathname.endsWith('worker.config.json') ? { name: 'nous-frontend', workersDev: false, previewUrls: false, env: {}, assets: { runWorkerFirst: false, notFoundHandling: badAssetFallback ? 'single-page-application' : 'none' } }
       : { buildContext: { isPreview: false, mode: options.mode } }),
     apiFetch: async (url: string) => {
       assert(url.startsWith('https://api.github.com/') || url.startsWith('https://api.cloudflare.com/'));
@@ -46,7 +46,8 @@ test('release finds newly tagged Worker Version through API despite changed CLI 
 test('stale commits, public endpoints, missing Worker and wrong artifacts cannot activate', async () => {
   for (const config of [{ staleAt: 1 }, { staleAt: 2 }, { publicURL: true }, { missingWorker: true },
     { badArtifact: true }, { badUpload: true }, { missingVersion: true },
-    { duplicateVersion: true }, { wrongVersionTag: true }, { versionListForbidden: true }]) {
+    { duplicateVersion: true }, { wrongVersionTag: true }, { versionListForbidden: true },
+    { badAssetFallback: true }]) {
     const f = fixture(config);
     await assert.rejects(release(options, f.dependencies));
     assert(!f.commands.some(command => command[1] === 'deployments'));

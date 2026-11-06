@@ -1,8 +1,8 @@
 # Nous OSINT — System Architecture
 
-Status: **single-VM runtime implemented; edge UI separation approved as a plan (NOT IMPLEMENTED); report VM/Codex acceptance NOT_CHECKED**
+Status: **single-VM runtime implemented; edge UI code/Routes deployed, authenticated E2E NOT VERIFIED; report VM/Codex acceptance NOT_CHECKED**
 Target: **single Linux VM / rootless Podman / systemd Quadlet / PostgreSQL**  
-Updated: 2026-11-03
+Updated: 2026-11-07
 
 ## 1. Purpose and scope
 
@@ -114,7 +114,7 @@ Set per-source failure thresholds and report degraded sources individually rathe
 - **ADR-004**: Collection is code-driven and deterministic; AI enrichment is optional and downstream.
 - **ADR-005**: The public repository contains implementation and configuration only, not unrestricted third-party content.
 - **ADR-006**: PostgreSQL version and container digest are explicitly pinned during implementation; upgrades are deliberate migrations with backup/restore validation.
-- **ADR-007 (planned)**: Keep the existing Access-protected hostname, Tunnel, MCP Managed OAuth, runtime reports and monorepo; deploy only Quasar static UI from GitHub Actions using explicit UI/static routes, while API/MCP/reports continue directly through the protected Tunnel without Worker interception. Do not install a catch-all Worker Route; validate route feasibility before cutover. See [Edge UI delivery and release isolation](EDGE_FRONTEND_DEPLOYMENT.md) for phased implementation, test gates and rollback. This design is **not yet deployed**.
+- **ADR-007 (deployed, acceptance pending)**: Keep the Access-protected hostname, Tunnel, MCP Managed OAuth, runtime reports and monorepo. GitHub Actions releases only Quasar static UI through a private Worker and ten explicit zone Routes; API/MCP/reports must bypass Worker. Catch-all routes and origin forwarding are prohibited. CI and Cloudflare control-plane state are confirmed, but authenticated browser/MCP validation and rollback are **NOT VERIFIED**. See [Edge delivery](EDGE_FRONTEND_DEPLOYMENT.md).
 
 See [DATA_MODEL.md](DATA_MODEL.md), [QUADLET_DEPLOYMENT.md](QUADLET_DEPLOYMENT.md), [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
 
@@ -136,10 +136,10 @@ Astro runs only as a one-shot static build inside that Worker after a candidate
 passes deterministic validation. It writes a complete release to the private
 `nous-report-site` volume. The MCP origin mounts that volume read-only and
 serves only explicitly allowed `/reports/` paths through its existing Access
-JWT boundary. The Quasar UI remains browser-rendered. Its **current** build is
-still bundled with the MCP origin image; ADR-007 plans to move only its static
-assets to a Cloudflare Worker Route, retaining report delivery on the VM and
-without adding a Node server, SSR process or unprotected public origin.
+JWT boundary. The Quasar UI remains browser-rendered. Its static assets are released to
+Cloudflare's explicit UI Routes; the VM/MCP image still bundles Quasar as a
+rollback fallback pending authenticated acceptance. Reports stay on the VM;
+no Node server, SSR service or new public origin is introduced.
 
 PostgreSQL migration `0008` adds report runs, schedules, published article
 metadata, evidence references, and the active report-site digest. A separate

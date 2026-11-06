@@ -1,7 +1,7 @@
 # Nous OSINT — UI static delivery separated from Tunnel traffic
 
-Status: **revised architecture decision; production cutover NOT VERIFIED**
-Updated: 2026-11-06
+Status: **private Worker and ten UI Routes deployed; authenticated end-to-end cutover NOT VERIFIED**
+Updated: 2026-11-07
 Authority: [ARCHITECTURE.md](ARCHITECTURE.md), [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [REMOTE_MCP_ACCESS.md](REMOTE_MCP_ACCESS.md).
 
 ## Decision
@@ -31,7 +31,7 @@ Cloudflare Access (existing app and authentication)
 
 **Important:** This is a logical target, not a claim that Cloudflare automatically selects the two branches. Route precedence, exact path matching, Access execution order, and the existing Access application type must be proven with the actual account configuration. No Worker Route covering `nous.yohn.jp/*` is permitted in the target design.
 
-## Concrete Cloudflare zone routes (to be applied only after live Access validation)
+## Cloudflare zone Routes (ten active; authenticated Access validation pending)
 
 The Terraform resource `cloudflare_workers_route.frontend` is a **set of separate, narrow routes**, not `nous.yohn.jp/*`:
 
@@ -50,7 +50,20 @@ nous.yohn.jp/cves/*
 
 Cloudflare route patterns support only a trailing wildcard; they cannot express arbitrary internal exclusions. The Worker therefore returns 404 for invalid/non-UI matches **within these prefixes**, and never performs an origin fetch. Route selection is based on the full request URL, so `/?q=...` does not match the exact root route; the VM UI fallback **must be retained** while this case remains unsupported. Do not claim full independence or remove the origin fallback until every required UI navigation is covered.
 
-**Cost invariant:** configure Workers Static Assets with `runWorkerFirst: false` and `notFoundHandling: 'single-page-application'`. Matching static files are served without invoking Worker script, so they do not consume Worker requests. SPA navigation fallback is handled by the assets runtime. The previous `runWorkerFirst: true` configuration caused all UI asset requests to count as Worker invocations and is forbidden. Non-navigation unknown paths and API routing require live verification; retain the Tunnel fallback until confirmed.\n\nThe existing `FRONTEND_RELEASE_MODE=passthrough` approach is retired; the only authorized Worker release is a static-only `production` version. CI controls script/asset deployments. Terraform owns the route set and leaves it disabled by default. Both releases and infrastructure must be validated independently.
+**Cost and 404 invariants:** configure Workers Static Assets with
+`runWorkerFirst: false` and `notFoundHandling: 'none'`.
+Existing static files are served directly without Worker invocation.
+Known SPA paths reach the static-only Worker **after** the asset lookup
+misses; it serves `/index.html` using the assets binding.
+Missing JS/CSS and unknown paths return **404**, never generic
+`index.html` with HTTP 200. Valid navigation may invoke Worker;
+only existing static assets are guaranteed to bypass the script.
+
+The retired `FRONTEND_RELEASE_MODE=passthrough` and
+`nous.yohn.jp/*` origin-forwarding Worker designs are prohibited.
+CI owns static Worker/asset versions; Terraform owns narrow zone
+Routes. Access, MCP, OAuth and reports remain on their existing
+boundaries.
 
 ## Routing contract
 
@@ -94,4 +107,12 @@ If the current Cloudflare routing primitives cannot satisfy all of these constra
 
 ## Current state
 
-The repository previously documented a catch-all Worker Route and same-host origin forwarding. This document supersedes that **design**. It does not claim that existing implementation, Terraform, deployed Worker or production routing has already been migrated. Production remains **NOT_VERIFIED** until inspected and tested.
+The catch-all Worker Route and forwarding design are retired.
+On 2026-11-07 Cloudflare API confirmed ten UI-only Routes, a private
+Worker version tagged `a3a85d0bced7efca58bafb318a454b50fb2ed6af`,
+`run_worker_first=false`, and disabled public endpoints.
+The baseline version still had automatic SPA 200 handling for missing
+assets; the subsequent release changes it to `none`.
+CI for the baseline succeeded (run 42230090976).
+Authenticated browser/MCP operation, all negative-case routing,
+per-route Access enforcement and rollback remain **NOT VERIFIED**.

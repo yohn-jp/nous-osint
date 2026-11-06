@@ -1,10 +1,17 @@
-# Edge frontend — Phase A + Phase B preparation (not deployed)
+# Edge frontend — static UI release
 
-This project builds the existing Quasar SPA for Workers Static Assets. It does
-not create a route or change production. The retained VM UI remains the fallback.
+Status (2026-11-07): Cloudflare script and ten narrow zone Routes deployed;
+authenticated end-to-end cutover and rollback **NOT VERIFIED**.
 
-Use Node **24.22.0** (also pinned in `.node-version` and frontend CI). Dependencies
-and the beta `cf` / Vite plugin are exact-pinned in the package lock.
+The private `nous-frontend` Worker serves only the prebuilt Quasar UI.
+`/v1/*`, `/mcp*`, OAuth/discovery and `/reports/*` continue through the
+existing Cloudflare Access + Tunnel + VM. No origin-fetch reverse proxy,
+catch-all `nous.yohn.jp/*` Route, Workers VPC Service, public workers.dev
+endpoint or preview URL is allowed.
+
+## Build and test
+
+Use Node 24.22.0, exact-pinned `cf` and Miniflare dependencies.
 
 ```sh
 cd ui
@@ -19,79 +26,46 @@ npm test
 npx cf deploy --dry-run --prebuilt --mode production
 ```
 
-`npm run build` copies only `index.html` and flat Quasar assets from the actual
-`ui/dist/spa` into an ignored staging directory, rejecting source maps, symlinks
-and nested files. All other files are ignored. Vite then emits the Worker and
-assets under `.cloudflare/output/v0/`; `cf build` validates that output offline.
-There is one authoritative `cloudflare.config.ts`, no Wrangler config.
+`prepare-assets.mjs` stages only `index.html` and flat Quasar assets.
+Source maps, symlinks, nested and unapproved files are excluded.
+`cf build` validates `.cloudflare/output/v0/` offline. The only config is
+`cloudflare.config.ts`; obsolete passthrough mode is prohibited.
 
-`npm run build:passthrough` builds the **same Worker name** with
-`PASSTHROUGH_ONLY=true`; validate it with
-`npx cf deploy --dry-run --prebuilt --mode passthrough`.
-Normal builds default the flag to false. A request header/query cannot select it.
-Only a later approved rollout may deploy either mode. Never use a preview deploy.
-`workers.dev` and version preview URLs are disabled, and preview builds fail.
+## Static assets and SPA navigation
 
-## Request contract
+`runWorkerFirst: false` keeps **existing** assets on Cloudflare's direct
+static-serving path, without invoking user Worker code. Do not claim zero
+Worker calls overall: SPA navigations invoke the Worker after the asset
+lookup misses. With `notFoundHandling: 'none'`, only canonical GET/HEAD
+allowlisted UI paths are rewritten to `/index.html` by the static-only
+Worker; unknown paths, non-UI requests and absent JS/CSS files return
+HTTP 404, not a generic SPA HTTP 200. Access protects the Worker and
+its static assets; origin JWT/role checks protect dynamic traffic.
 
-All requests run the Worker first. Only canonical-host GET/HEAD requests to the
-current explicit Python SPA allowlist use `/index.html`. Flat `/assets/*` uses
-the asset binding with no fallback; missing files stay 404. Safe unknown screen
-paths return a plain 404 with no backend diagnostics. `/mcp*`, reserved paths,
-API, reports, discovery, non-GET/HEAD, percent-encoded/ambiguous paths and unknown
-methods go to `fetch(request)`. No identity header is used to authorize anything.
-URL parser normalization already performed before a Worker receives a Request
-cannot be reversed here; encoded or otherwise observable ambiguous paths are
-never decoded into an allowed screen path.
+Terraform owns the ten specific zone Routes in
+`deploy/cloudflare/terraform/main.tf`. CI only deploys Worker code and
+assets; it must never mutate routes, Access, DNS or Tunnel. The exact
+root Route does not match `/?query=...`; the VM UI fallback is retained.
+Do not run Terraform apply before live resources/state are reconciled.
 
-Origin requests and responses are returned unchanged: no buffering, response
-caching, redirect following, URL rewriting or header reconstruction. Incoming
-Worker requests use manual redirect mode. The origin owns signed JWT validation,
-API/admin authorization, OAuth responses, streaming and report cache/security
-headers. Static responses use `no-store` and `nosniff`, preserving binding CSP
-and content types. Immutable caching and asset fast paths are deferred until
-Access is proven in the effective deployment.
+## Automatic deployment
 
-## Evidence and remaining gates
+Frontend-affecting main changes select `frontend` tests/build, followed
+by `frontend-deploy` using the GitHub `frontend-production` Environment.
+The immutable SHA-bound artifact is uploaded with the exact-pinned CLI;
+`scripts/release.mjs` identifies the newly tagged Worker version through
+Cloudflare's paginated Versions API (not human-readable CLI output).
+The script checks current main and disabled public endpoints before
+activating the exact version. UI-only commits do not rebuild the VM image.
 
-Pre-implementation checks on 2026-11-06 used main
-`d6409f27fb0ed41b2d2ff342d32d8e1609dea4ca` (no open PRs; main CI successful).
-The existing Gateway, Terraform, Actions, Containerfile and MCP/Tunnel Quadlets
-match the plan: no Edge project/route, Quasar built into the application image,
-reports served from their private VM volume. None of those runtime resources
-are changed by Phase A.
+Baseline: `main@a3a85d0`, [CI 42230090976](https://github.com/yohn-jp/nous-osint/actions/runs/42230090976)
+passed and Cloudflare API confirmed version `813875ab-a155-45f6-a72e-514ce140a3d5`,
+ten active Routes, `run_worker_first=false` and disabled public URLs.
+That version still had automatic SPA handling for **missing** assets;
+the subsequent 404 fix removes it. These are control-plane observations,
+not real-browser, real-MCP or rollback proof.
 
-Cloudflare's [Routes documentation](https://developers.cloudflare.com/workers/configuration/routing/routes/)
-confirms same-host `fetch` goes to the proxied DNS origin, rather than recursively
-invoking the Route. [Access documentation](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)
-states hostname Access runs before Workers. The pinned [cf project workflow](https://developers.cloudflare.com/cf/projects/)
-and [configuration](https://developers.cloudflare.com/cf/projects/cloudflare-config/)
-support offline builds, assets, disabled public endpoints and versioned modes.
-These product contracts do **not** prove compatibility with the effective
-Managed OAuth MCP application: retain the live passthrough, JWT, OAuth challenge,
-SSE, anonymous asset, browser and rollback gates in Phase C.
-
-Tests cover routing parity with the Python regexes, actual Quasar files in
-Miniflare, origin denial/redirect preservation, request identity/body/headers,
-MCP session and incremental stream propagation. The emulated outbound origin is
-synthetic: it does not simulate Access, Tunnel or Managed OAuth and never calls
-production. No live Cloudflare/VM changes or authenticated probes are performed.
-
-The repository is public. PR CI builds/tests locally on the runner, but does not
-publish preview artifacts or URLs; no restricted private artifact destination
-has been provided. Private preview artifact publication is **BLOCKED** pending
-such a destination. Build output can be reviewed locally with the commands above.
-
-## Ownership and release pipeline
-
-Terraform (`deploy/cloudflare/terraform/`) owns the zone Worker Route, Access,
-Tunnel and DNS. CI owns script + assets only. See
-[the Phase B pipeline](../../docs/EDGE_RELEASE_PIPELINE.md) for scopes, the
-Environment/credential setup, immutable version release and remaining live gates.
-The Route defaults to disabled. The release wrapper uses version upload and
-exact-version activation, never trigger deployment; `npm run deploy` invokes this
-wrapper and requires the CI environment/provenance checks.
-
-Rollback remains the approved plan: deploy passthrough and/or remove only the
-zone Route using Terraform, restoring the retained VM UI. This has **not** been
-rehearsed live. Phase C/D remain gated.
+Rollback removes only UI Routes, retaining the VM fallback; do not
+restore the rejected catch-all Worker proxy. See
+[release pipeline](../../docs/EDGE_RELEASE_PIPELINE.md) and
+[edge decision](../../docs/EDGE_FRONTEND_DEPLOYMENT.md).

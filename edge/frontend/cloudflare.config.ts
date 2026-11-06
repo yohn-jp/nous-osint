@@ -10,7 +10,9 @@ export default defineConfig(({ mode, isPreview }) => {
       compatibilityDate: '2026-11-06',
       workersDev: false,
       previewUrls: false,
-      assets: { runWorkerFirst: false, htmlHandling: 'none', notFoundHandling: 'single-page-application' },
+      // Existing assets bypass Worker; misses use the explicit SPA route classifier.
+      // Never return index.html for a missing JS/CSS file.
+      assets: { runWorkerFirst: false, htmlHandling: 'none', notFoundHandling: 'none' },
       env: { ASSETS: bindings.assets() },
       // Never attach a catch-all route. Terraform owns explicit UI-only paths.
     },

@@ -1,7 +1,7 @@
 # Frontend execution and resource policy
 
-Status: Browser-rendered Quasar and separate runtime-generated Astro reports; edge UI delivery APPROVED AS PLAN, NOT YET DEPLOYED
-Updated: 2026-11-06
+Status: Browser-rendered Quasar/Astro reports; static Edge UI deployed, authenticated E2E NOT VERIFIED
+Updated: 2026-11-07
 
 ## Objective
 
@@ -22,8 +22,8 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 
 - Quasar 2 + Vue 3 + TypeScript, Quasar CLI with Vite, static SPA with browser-only rendering. [UI_DESIGN.md](UI_DESIGN.md) is the UI design contract.
 - Feed-reader-inspired, source-first information layout using Quasar components; not a Feedly copy. Vue pages and a small shared stylesheet still require maintenance.
-- **Current implementation:** build Quasar static assets into the digest-pinned MCP origin image and serve them at `/` through the Access-required Tunnel. The same-origin `/v1` path includes read-only query APIs and explicitly allowlisted administrator methods, all behind Access JWT and role validation.
-- **Approved migration (not deployed):** publish only Quasar assets via explicit path-specific static routes using assets-first delivery (`runWorkerFirst: false`), without billable Worker invocations for asset hits on the same hostname; `/v1`, `/mcp`, and the runtime-generated `/reports/` archive continue directly through the existing Tunnel, without a Worker proxy. A catch-all `nous.yohn.jp/*` Worker Route is prohibited; route feasibility and Access on every static path must be validated before cutover. Root URLs with query strings are not selected by an exact root route and must keep the existing VM UI fallback until resolved. GitHub Actions will deploy UI-only changes without rebuilding the backend image. See [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
+- **Current implementation:** Quasar static assets are released to explicit Cloudflare UI Routes; the MCP origin still retains the image-baked UI as fallback. Same-origin `/v1`, MCP/OAuth and reports remain behind Access/Tunnel and origin JWT/role enforcement.
+- **Current edge contract (E2E unverified):** deliver existing files assets-first (`runWorkerFirst: false`); only valid SPA navigations are handled by Worker. `notFoundHandling: 'none'` returns 404 for missing JS/CSS, rather than a global SPA 200 response. Dynamic APIs/MCP/reports bypass Worker Routes; no catch-all route or reverse proxy is allowed. Root query URLs retain the VM fallback, and Access/MCP/rollback still need live validation. GitHub Actions deploys UI-only commits independently. See [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
 - Reuse PostgreSQL views/functions as the canonical query contract; PostgREST is a candidate for read endpoints, while existing FastAPI can remain for domain-specific operations and feed output. Avoid redundant API surfaces unless justified.
 - PGroonga is a candidate for Japanese search; verify extension/container compatibility and search relevance before adoption.
 - Avoid Appsmith and other persistent low-code UI backends in the initial architecture due to compute/memory costs unrelated to Nous's core processing.
@@ -39,7 +39,7 @@ PostgreSQL remains the authoritative store for observations, normalized items, p
 
 ## Performance and acceptance
 
-- **Current:** Quasar assets are produced at backend-image build time and served by the MCP origin. **Target after the edge rollout:** assets are built/deployed by an independent GitHub Actions edge job; a UI-only change must not publish a backend image or require a VM update. The cutover must first prove Access/MCP/report continuity and rollback.
+- **Current:** Quasar assets are built/deployed by an independent GitHub Actions Edge job without rebuilding the backend image for UI-only commits; the VM image still retains Quasar for rollback. Live Access/MCP/report continuity and rollback remain unverified.
 - Astro is present only in the separate report Worker image. It runs once per publication to generate static report files; no Node listener, SSR, or persistent presentation process runs on the VM. The MCP gateway serves the private report volume read-only through the existing Access boundary.
 - Verify browser-side list/detail/filter navigation and usability on desktop/mobile; prevent loading an entire result set into memory.
 - Measure JS transfer size, initial render and interaction responsiveness in browsers; avoid claiming a measured budget before testing.

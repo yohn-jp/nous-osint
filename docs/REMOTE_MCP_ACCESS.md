@@ -1,11 +1,11 @@
 # Remote MCP ingress — Cloudflare Tunnel + Access Managed OAuth
 
-**Status:** VM-side MCP origin and Tunnel connector deployed on 2026-11-03. The running Tunnel reports the expected hostname, origin, Access-required flag, team and audience. Cloudflare resources and Access application/IdP/OAuth settings were not changed. GitHub login and end-to-end OAuth remain unverified.
+**Status:** VM-side MCP origin and Tunnel connector deployed on 2026-11-03. The running Tunnel reports the expected hostname, origin, Access-required flag, team and audience. On 2026-11-06 a private static UI Worker and ten narrow UI-only Routes were deployed without changing the MCP origin/Tunnel architecture. GitHub login and end-to-end OAuth remain unverified.
 **Canonical hostname:** `nous.yohn.jp`  
 **Target URL:** `https://nous.yohn.jp/mcp`  
 **Target host:** single VM, reachable for implementation as `ssh nous.osint.vm`  
 **Implementation sequencing:** VM deployment uses the merged foundation; Cloudflare control-plane work remains separate.
-**Last updated:** 2026-11-03
+**Last updated:** 2026-11-07
 
 This document adds a subsequent remote-access phase. It **does not** change the acceptance criteria for Phase 1–3 in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and must not trigger unrelated changes to work currently in progress.
 
@@ -131,7 +131,7 @@ Cloudflared's token-file mechanism, Podman secret delivery, container command an
 | Public path | Current target state | Trust requirement |
 | --- | --- | --- |
 | `https://nous.yohn.jp/mcp` | MCP | Access Managed OAuth + valid Access JWT + read-only tools |
-| `https://nous.yohn.jp/` | Static UI | Access JWT required; assets are image-baked and hash-routed |
+| `https://nous.yohn.jp/` | Static UI | Narrow Cloudflare UI Routes; VM image-baked fallback retained. Access E2E still unverified |
 | `https://nous.yohn.jp/v1/*` | UI read API | Access JWT required; allowlisted GET routes proxy to the private API |
 | `https://nous.yohn.jp/admin/sources`, `/admin/reports` | Admin SPA routes | Access JWT required; backend authorizes each admin request by subject |
 | `https://nous.yohn.jp/v1/admin/*` | Source/report administration | Strict route/method allowlist + Access JWT + admin subject allowlist + same-origin write controls + limited admin SQL role |
@@ -143,7 +143,7 @@ A shared hostname is **not** permission to expose every FastAPI route. If a futu
 
 ## 7. Remaining Cloudflare control-plane work
 
-The VM-side origin, connector and read-only UI are deployed and reboot-tested. Cloudflare resources were not changed. The following remains a separate control-plane task:
+The VM origin and Tunnel were previously deployed and reboot-tested. Cloudflare now has ten narrow UI Routes and a private Worker version, but authenticated OAuth/browser acceptance has not been demonstrated. Remaining control-plane tasks:
 
 1. Import the existing account, zone, Access policy/application, Tunnel, DNS record and Tunnel configuration into Terraform state. Inspect provider import identifiers and ensure the plan contains only Nous changes.
 2. Verify the existing Access app and policy enforce only the approved GitHub IdP and named email; verify Managed OAuth is on and no Everyone/Bypass rule exists.
@@ -168,11 +168,11 @@ The feature is **not complete** until actual VM + Cloudflare evidence demonstrat
 9. Tunnel/Access/identity logs correlate with origin request IDs without logging bearer tokens; failure and recovery paths are tested.
 10. A rollback can disable **only this** public ingress while leaving the internal collector, API and PostgreSQL working.
 
-**Initial MCP phase non-goals:** Admin UI and report generation were not part of the initial MCP delivery, but were subsequently implemented behind independent origin-side authorization in PR #8 and #13. Still out of scope: a Cloudflare Worker, MCP Portal, duplicate persistence, unreviewed collector changes, or bypassing the existing Access boundary.
+**Initial MCP phase non-goals:** Admin UI and report generation were not part of the initial MCP delivery, but were subsequently implemented behind independent origin-side authorization in PR #8 and #13. Still out of scope: Cloudflare Worker forwarding/terminating MCP or APIs, MCP Portal, duplicate persistence, unreviewed collector changes, or bypassing the existing Access boundary.
 
 ## 9. Cost model
 
-The initial MCP architecture requires no Worker. A later static-UI-only Worker may invoke scripts for matching UI routes, but API/MCP/report requests must never consume Worker invocations. Monitor current account usage and billing after cutover. Cloudflare Tunnel can publish the origin without opening inbound VM ports; Cloudflare Access is subject to current account plan, seat and policy limits. Record the applicable account entitlement during deployment, not an unconditional claim of permanently free unlimited traffic.
+The initial MCP architecture requires no Worker. The current static-UI-only Worker may invoke code on navigation/misses, but real static asset hits bypass the script; API/MCP/report requests must never consume Worker invocations. Monitor current account usage and billing after cutover. Cloudflare Tunnel can publish the origin without opening inbound VM ports; Cloudflare Access is subject to current account plan, seat and policy limits. Record the applicable account entitlement during deployment, not an unconditional claim of permanently free unlimited traffic.
 
 ## CVE/KEV correlation
 
