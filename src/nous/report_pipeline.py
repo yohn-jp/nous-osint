@@ -647,7 +647,7 @@ class CodexRunner:
                 raise ReportError("codex_home_unsafe")
             try:
                 if os.geteuid() == 0:
-                    os.chown(path, 0, self.gid)
+                    os.chown(path, self.uid, self.gid)
                 elif os.getegid() != self.gid:
                     raise ReportError("codex_uid_isolation_unavailable")
                 path.chmod(0o770 if path.is_dir() else 0o660)
