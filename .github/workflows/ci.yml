@@ -184,13 +184,10 @@ jobs:
         id: release-build
         if: github.event_name == 'push' && vars.FRONTEND_DEPLOY_ENABLED == 'true'
         working-directory: edge/frontend
-        env:
-          FRONTEND_RELEASE_MODE: ${{ vars.FRONTEND_RELEASE_MODE || 'passthrough' }}
         run: |
-          node -e "if (!['production', 'passthrough'].includes(process.env.FRONTEND_RELEASE_MODE)) process.exit(1)"
-          npx cf build --mode "$FRONTEND_RELEASE_MODE"
-          node --input-type=module -e "import {writeFileSync} from 'node:fs'; writeFileSync('.cloudflare/output/v0/provenance.json', JSON.stringify({sha: process.env.GITHUB_SHA, mode: process.env.FRONTEND_RELEASE_MODE}))"
-          echo "mode=$FRONTEND_RELEASE_MODE" >> "$GITHUB_OUTPUT"
+          npx cf build --mode production
+          node --input-type=module -e "import {writeFileSync} from 'node:fs'; writeFileSync('.cloudflare/output/v0/provenance.json', JSON.stringify({sha: process.env.GITHUB_SHA, mode: 'production'}))"
+          echo "mode=production" >> "$GITHUB_OUTPUT"
       - name: Transfer main release build to the protected deploy job
         if: github.event_name == 'push' && vars.FRONTEND_DEPLOY_ENABLED == 'true'
         uses: actions/upload-artifact@v4
