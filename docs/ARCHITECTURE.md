@@ -114,7 +114,7 @@ Set per-source failure thresholds and report degraded sources individually rathe
 - **ADR-004**: Collection is code-driven and deterministic; AI enrichment is optional and downstream.
 - **ADR-005**: The public repository contains implementation and configuration only, not unrestricted third-party content.
 - **ADR-006**: PostgreSQL version and container digest are explicitly pinned during implementation; upgrades are deliberate migrations with backup/restore validation.
-- **ADR-007 (planned)**: Keep the existing Access-protected hostname, Tunnel, MCP Managed OAuth, runtime reports and monorepo; deploy only Quasar static UI from GitHub Actions to a Cloudflare Worker Route and leave API/MCP/reports at the protected VM origin. See [Edge UI delivery and release isolation](EDGE_FRONTEND_DEPLOYMENT.md) for phased implementation, test gates and rollback. This design is **not yet deployed**.
+- **ADR-007 (planned)**: Keep the existing Access-protected hostname, Tunnel, MCP Managed OAuth, runtime reports and monorepo; deploy only Quasar static UI from GitHub Actions using explicit UI/static routes, while API/MCP/reports continue directly through the protected Tunnel without Worker interception. Do not install a catch-all Worker Route; validate route feasibility before cutover. See [Edge UI delivery and release isolation](EDGE_FRONTEND_DEPLOYMENT.md) for phased implementation, test gates and rollback. This design is **not yet deployed**.
 
 See [DATA_MODEL.md](DATA_MODEL.md), [QUADLET_DEPLOYMENT.md](QUADLET_DEPLOYMENT.md), [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), and [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md).
 
