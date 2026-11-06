@@ -1,4 +1,6 @@
 import pytest
+from jsonschema import Draft202012Validator
+from pathlib import Path
 
 from nous.report_pipeline import (
     CodexRunner,
@@ -8,6 +10,8 @@ from nous.report_pipeline import (
     validate_article,
     _evidence_record,
     _check_site,
+    _codex_article_schema,
+    _codex_failure_code,
 )
 from nous.report_templates import template_snapshot
 
@@ -80,6 +84,60 @@ def test_codex_home_rejects_symlinked_tmp_parent_without_traversing_it(tmp_path,
 
     assert launcher.is_symlink()
     assert target.read_text(encoding="utf-8") == "untouched"
+
+
+def test_codex_article_schema_is_strict_and_keeps_publication_contract():
+    generation_schema = _codex_article_schema()
+    assert "cve" not in generation_schema["properties"]
+    assert "sources" not in generation_schema["properties"]
+    assert "cve" not in generation_schema["$defs"]
+    assert "source" not in generation_schema["$defs"]
+
+    def check(node):
+        if isinstance(node, dict):
+            assert "oneOf" not in node
+            if node.get("type") == "object" and "properties" in node:
+                assert set(node["required"]) == set(node["properties"])
+                assert node["additionalProperties"] is False
+            for child in node.values():
+                check(child)
+        elif isinstance(node, list):
+            for child in node:
+                check(child)
+
+    check(generation_schema)
+    Draft202012Validator.check_schema(generation_schema)
+    Draft202012Validator(generation_schema).validate(article_for(evidence_bundle()))
+    _, cve_article, _ = cve_fact_fixture()
+    Draft202012Validator(generation_schema).validate(cve_article)
+
+
+def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
+    runner = object.__new__(CodexRunner)
+    runner.binary, runner.model = "codex", None
+    runner.uid, runner.gid = 10002, 10002
+    runner.setpriv, runner.prlimit = "setpriv", "prlimit"
+    identity = runner._identity_args()
+    assert identity[:5] == ["setpriv", "--reuid", "10002", "--regid", "10002"]
+    assert "--no-new-privs" in identity
+    args = runner._codex_args(Path("/tmp/job/plan"), Path("/tmp/plan.json"),
+                              Path("/tmp/job/plan/output.json"))
+    assert args[:2] == ["codex", "exec"]
+    assert "--skip-git-repo-check" in args
+    assert "--output-schema" in args and "--output-last-message" in args
+
+
+@pytest.mark.parametrize("message,code", [
+    ("Not a git repository", "codex_git_repo_rejected"),
+    ("Invalid JSON schema for response_format", "codex_schema_rejected"),
+    ("Permission denied (os error 13)", "codex_permission_denied"),
+    ("Not logged in", "codex_auth"),
+    ("Usage limit reached", "codex_usage_limit"),
+    ("unrelated temporary failure", "codex_execution_failed"),
+])
+def test_codex_error_codes_never_include_stderr(message, code):
+    assert _codex_failure_code(message) == code
+    assert message.lower() not in code
 
 
 def evidence_bundle(template_id="security-daily"):

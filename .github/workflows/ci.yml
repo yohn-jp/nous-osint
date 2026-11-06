@@ -319,7 +319,17 @@ jobs:
           runner._prepare_codex_home()
           assert not arg0_root.exists()
           assert credentials.read_text(encoding="utf-8") == "credential-sentinel"
-          print("Production report Worker: Astro releases built read-only; Codex CLI arg0 runtime safely cleaned")
+          # The real production entry point must run its version probe under
+          # UID 10002, not leave root-owned launcher files for codex exec.
+          os.environ["NOUS_CODEX_HOME"] = str(codex_home)
+          probe = CodexRunner(workdir=Path("/tmp/codex-smoke"))
+          assert probe.version == "0.166.0"
+          assert (codex_home / "tmp" / "arg0-linux").is_dir()
+          assert credentials.read_text(encoding="utf-8") == "credential-sentinel"
+          assert "--skip-git-repo-check" in probe._codex_args(
+              Path("/tmp/codex-smoke/stage"), Path("/app/reports/schemas/plan.schema.json"),
+              Path("/tmp/codex-smoke/stage/output.json"))
+          print("Production report Worker: Astro release, Codex unprivileged version and launcher smoke passed")
           '
       - name: Record immutable report Worker image reference
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
