@@ -50,7 +50,7 @@ nous.yohn.jp/cves/*
 
 Cloudflare route patterns support only a trailing wildcard; they cannot express arbitrary internal exclusions. The Worker therefore returns 404 for invalid/non-UI matches **within these prefixes**, and never performs an origin fetch. Route selection is based on the full request URL, so `/?q=...` does not match the exact root route; the VM UI fallback **must be retained** while this case remains unsupported. Do not claim full independence or remove the origin fallback until every required UI navigation is covered.
 
-The existing `FRONTEND_RELEASE_MODE=passthrough` approach is retired; the only authorized Worker release is a static-only `production` version. CI controls script/asset deployments. Terraform owns the route set and leaves it disabled by default. Both releases and infrastructure must be validated independently.
+**Cost invariant:** configure Workers Static Assets with `runWorkerFirst: false` and `notFoundHandling: 'single-page-application'`. Matching static files are served without invoking Worker script, so they do not consume Worker requests. SPA navigation fallback is handled by the assets runtime. The previous `runWorkerFirst: true` configuration caused all UI asset requests to count as Worker invocations and is forbidden. Non-navigation unknown paths and API routing require live verification; retain the Tunnel fallback until confirmed.\n\nThe existing `FRONTEND_RELEASE_MODE=passthrough` approach is retired; the only authorized Worker release is a static-only `production` version. CI controls script/asset deployments. Terraform owns the route set and leaves it disabled by default. Both releases and infrastructure must be validated independently.
 
 ## Routing contract
 

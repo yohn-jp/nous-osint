@@ -9,7 +9,7 @@ function fixture({ staleAt = 0, publicURL = false, badArtifact = false, missingW
   let headChecks = 0;
   return { commands, dependencies: {
     load: async (url: URL) => JSON.stringify(url.pathname.endsWith('provenance.json') ? { sha: badArtifact ? 'd'.repeat(40) : options.sha, mode: options.mode }
-      : url.pathname.endsWith('worker.config.json') ? { name: 'nous-frontend', workersDev: false, previewUrls: false, env: {} }
+      : url.pathname.endsWith('worker.config.json') ? { name: 'nous-frontend', workersDev: false, previewUrls: false, env: {}, assets: { runWorkerFirst: false, notFoundHandling: 'single-page-application' } }
       : { buildContext: { isPreview: false, mode: options.mode } }),
     apiFetch: async (url: string) => {
       assert(url.startsWith('https://api.github.com/') || url.startsWith('https://api.cloudflare.com/'));

@@ -10,7 +10,7 @@ export default defineConfig(({ mode, isPreview }) => {
       compatibilityDate: '2026-11-06',
       workersDev: false,
       previewUrls: false,
-      assets: { runWorkerFirst: true, htmlHandling: 'none', notFoundHandling: 'none' },
+      assets: { runWorkerFirst: false, htmlHandling: 'none', notFoundHandling: 'single-page-application' },
       env: { ASSETS: bindings.assets() },
       // Never attach a catch-all route. Terraform owns explicit UI-only paths.
     },
