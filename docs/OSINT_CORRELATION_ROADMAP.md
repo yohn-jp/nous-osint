@@ -57,6 +57,52 @@ its daily CSV archive: https://www.first.org/epss/data .
 - The runtime/image, migration and role grants must all reach the VM. A
   successful GitHub image build alone does not enable collection.
 
+## Phase 2a: passive public CVE index snapshots (stacked PR)
+
+This phase adds **repository index observations**, not downloaded or executed
+proof-of-concept code. The two configured public sources are:
+
+- `trickest/cve`: a generated CVE-year Markdown reference index. A file name
+  establishes that Trickest has an entry, **not** that any included PoC works,
+  is safe, or represents exploitation in the wild.
+- `projectdiscovery/nuclei-templates`: specifically `http/cves/<year>/`
+  YAML template *path and Git blob hash* metadata. Other Nuclei protocols are
+  explicitly outside this observation. A template is not a validated exploit
+  or proof of a successful attack.
+
+The metadata poller is anchored to the reviewed repository's main branch
+commit, follows only hash-addressed, **nonrecursive** Git trees, validates
+`truncated=false`, and rejects malformed entries or oversized directories.
+It never requests file bodies. Filenames are matched to exact CVE identities,
+and URLs use the immutable commit SHA rather than a mutable main-branch link.
+
+Each successful provider/year scan stores a content-addressed mapping of
+CVE→public file paths and blob hashes, and appends one observation with Git
+commit SHA and **post-fetch** observation time. A missing entry means only
+"not indexed within that complete repository/year scope." Missing, failed,
+partial or older-than-72h observations are not reported as fresh absence.
+Versions are never overwritten on disappearance or rename.
+
+The canonical scheduler cycles one provider/year per tick across at most
+16 tracked CVE publication years; existing DB-backed CVE identifiers determine
+the targets. It does not issue external probes, clone repositories, run Nuclei,
+download exploit code, or treat a GitHub index as CISA KEV.
+
+`/v1/cves/{cve_id}`, the existing read-only MCP `get_cve` tool and the
+CVE dossier surface these two independent metadata grades alongside
+FIRST EPSS and official KEV status. No unreviewed severity/weaponization
+score is inferred. No automatic report trigger is connected to this index yet.
+
+### Release and acceptance
+
+This PR is **stacked on PR #45** and does not imply it has been merged.
+An actual release requires DB migration 0013, runtime/app image rollout, a
+successful public-GitHub API lookup, persisted observations, source-date and
+as-of UI validation, and least-privilege permission verification.
+GitHub's unauthenticated API is rate limited, so each provider/year gets a
+bounded per-day lookup with two-hour error backoff. Tests mock fixed GitHub
+responses and do not prove actual production reachability.
+
 ## Later work in the supplied research concept (not implemented here)
 
 **PoC correlation:** Track explicit CVE-to-commit and template identifiers with
@@ -93,8 +139,9 @@ source time, hypothesis status and human review before publication.
 
 1. EPSS observations: deterministic parser and provenance; retention and as-of
    reading; daily bounded poll; API, MCP and UI. **This PR.**
-2. Passive PoC / template metadata: separate structured evidence, safe indexing
-   and before/after comparisons. **Not yet implemented.**
+2. Passive PoC index / Nuclei HTTP template metadata, with immutable year
+   snapshots and as-of read paths. **This stacked PR.** Expanding protocols and
+   alert-to-report triggers still requires separate review.
 3. Issuer/filing identities and reviewed disclosure readers; cross-domain
    timeline distinguishes co-occurrence from causal inference. **Not yet
    implemented.**

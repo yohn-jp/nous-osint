@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import case, func, select
 from .cve_index import valid_cve_id, version_cve_relations
 from .epss import epss_as_of
+from .public_artifacts import repository_artifacts_as_of
 from .models import (CveItemVersionLink, Item, ItemVersion,
                      KevCatalogContent, KevCatalogObservation, Source)
 
@@ -206,6 +207,7 @@ def query_cve(db, cve_id: str, *, observed_cutoff: datetime | None = None):
         "canonical_url": f"https://www.cve.org/CVERecord?id={cve_id}",
         "kev": kev,
         "epss": epss_as_of(db, cve_id, cutoff),
+        "public_artifacts": repository_artifacts_as_of(db, cve_id, cutoff),
         "references": associated,
         "references_truncated": len(rows) > 50,
     }

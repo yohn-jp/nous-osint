@@ -157,6 +157,38 @@ class EpssPollState(Base):
     last_error: Mapped[str | None] = mapped_column(String(60))
 
 
+class PublicArtifactContent(Base):
+    """Content-addressed year index of public repository paths, not exploit code."""
+    __tablename__ = "public_artifact_contents"
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    entries: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class PublicArtifactObservation(Base):
+    """Immutable complete provider/year Git tree observation."""
+    __tablename__ = "public_artifact_observations"
+    __table_args__ = (
+        Index("ix_public_artifact_provider_year_asof",
+              "provider", "year", "observed_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    commit_sha: Mapped[str] = mapped_column(String(40), nullable=False)
+    digest: Mapped[str] = mapped_column(
+        ForeignKey("public_artifact_contents.digest"), nullable=False)
+
+
+class PublicArtifactPollState(Base):
+    __tablename__ = "public_artifact_poll_state"
+    provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    next_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(60))
+
+
 class ReportSchedule(Base):
     __tablename__ = "report_schedules"
     __table_args__ = (CheckConstraint("cadence IN ('daily','weekly')", name="ck_report_schedule_cadence"),)

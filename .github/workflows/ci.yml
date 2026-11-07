@@ -103,7 +103,7 @@ jobs:
             cat /tmp/nous-ci.meta >&2
             exit 1
           fi
-          grep -Fq 'NOUS_SNAPSHOT_METADATA=0012|0|0|0|0|0|0|0|none' /tmp/nous-ci.meta
+          grep -Fq 'NOUS_SNAPSHOT_METADATA=0013|0|0|0|0|0|0|0|none' /tmp/nous-ci.meta
           docker exec -i "$db" pg_restore -l < /tmp/nous-ci.dump | grep -q sources
       - run: pytest -q
 

@@ -118,11 +118,29 @@ class EpssResponse(APIModel):
     source_url: str
 
 
+class PublicArtifactReferenceResponse(APIModel):
+    url: str
+    path: str
+    blob_sha: str
+
+
+class PublicArtifactResponse(APIModel):
+    provider: Literal["trickest", "nuclei_http"]
+    scope: str
+    status: Literal["unknown", "stale", "not_indexed", "indexed"]
+    observed_at: datetime | None
+    commit_sha: str | None
+    repository_url: str
+    references: list[PublicArtifactReferenceResponse]
+    references_truncated: bool
+
+
 class CveResponse(APIModel):
     cve_id: str = Field(pattern=r"^CVE-[0-9]{4}-[0-9]{4,}$")
     canonical_url: str
     kev: KevStatusResponse
     epss: EpssResponse
+    public_artifacts: list[PublicArtifactResponse]
     references: list[CveReferenceResponse]
     references_truncated: bool
 

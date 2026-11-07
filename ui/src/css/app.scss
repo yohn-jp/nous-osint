@@ -679,3 +679,25 @@ button.result-row {
  .sources-page .source-summary strong { font-size: 18px; }
 }
 @media (prefers-contrast: more) { .ledger-status::before, .source-state-label::before { outline: 1px solid currentColor; } }
+
+/* CVE provenance: compact source rows, not implied attack-risk signals. */
+.cve-page .cve-artifact-entry {
+  padding: 15px 0;
+  border-bottom: 1px solid var(--nous-line);
+}
+.cve-page .cve-artifact-entry:last-child { border-bottom: 0; }
+.cve-page .cve-artifact-entry strong { font-size: 14px; font-weight: 690; }
+.cve-page .cve-artifact-link {
+  display: block;
+  max-width: 100%;
+  width: fit-content;
+  padding: 5px 0;
+  color: var(--nous-accent);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.cve-page .cve-artifact-link:hover { text-decoration: underline; }
+.cve-page .cve-artifact-link:focus-visible { outline: 2px solid var(--nous-accent); outline-offset: 3px; }

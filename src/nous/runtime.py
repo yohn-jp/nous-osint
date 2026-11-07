@@ -14,6 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert
 from .adapters import extract
 from .epss import refresh_epss
+from .public_artifacts import refresh_public_artifacts
 from .job_postings import fetch_lever_board
 from .cve_index import cve_relations, record_item_version_cves, sync_item_cves
 from .db import session_factory
@@ -379,6 +380,7 @@ def main(mode):
             if mode == "scheduler":
                 schedule_once(factory)
                 refresh_epss(factory)
+                refresh_public_artifacts(factory)
                 time.sleep(30)
             else:
                 claimed = claim(factory)
