@@ -392,24 +392,27 @@ class FixtureRunner:
         self.calls.append(stage)
         if stage in self.outputs:
             return self.outputs[stage]
-        if stage == "plan":
-            return {"decision": "publish", "thesis": "確認された更新を整理します。",
-                    "audience": "運用担当者", "outline": ["事実", "出典"],
-                    "evidence_ids": ["E001"], "reason": "公開日に観測されています。"}
-        if stage == "fact_check":
-            return fact_check_for()
-        return article_for(payload["bundle"] if "bundle" in payload else evidence_bundle())
+        if stage in {"claims", "claim_repair"}:
+            return {"decision": "publish", "theme": "公開情報の観測", "claims": [{
+                "claim_id": "C001", "text": "公表元による更新情報の掲載が観測されました。",
+                "classification": "observed", "evidence_ids": ["E001"],
+                "section": "primary_observations", "importance": "normal",
+            }]}
+        if stage in {"claim_review", "claim_rereview"}:
+            return {"reviews": [{"claim_id": "C001", "decision": "accepted",
+                                 "evidence_ids": ["E001"], "reason_code": "supported"}]}
+        raise AssertionError(stage)
 
 
-def test_fixture_editorial_pipeline_records_four_distinct_stages():
+def test_fixture_editorial_pipeline_uses_two_independent_model_calls():
     bundle = evidence_bundle()
     runner = FixtureRunner()
     persisted = {}
     final, model = run_editorial_pipeline(bundle, template_id="security-daily", run_id="run-1",
                                            runner=runner,
                                            persist_stage=lambda name, value: persisted.update({name: value}))
-    assert runner.calls == ["plan", "fact_check", "draft", "edit"]
-    assert set(persisted) == {"plan", "fact_check", "draft", "article"}
+    assert runner.calls == ["claims", "claim_review"]
+    assert set(persisted) == {"claims", "claim_review", "article"}
     assert final["sources"][0]["evidence_id"] == "E001"
     assert model == "fixture-only"
 
@@ -531,23 +534,17 @@ def test_exploitation_claim_requires_a_fresh_cisa_catalog():
 
 def test_cve_fact_passes_full_fixture_editorial_pipeline():
     bundle, article, fact_check = cve_fact_fixture()
-    plan = {
-        "decision": "publish", "thesis": "公式記録の参照情報を整理します。",
-        "audience": "脆弱性対応担当者", "outline": ["CVEの確認情報", "出典"],
-        "evidence_ids": ["E001"], "reason": "対象CVEに紐づく一次情報があります。",
-    }
-    runner = FixtureRunner({
-        "plan": plan, "fact_check": fact_check, "draft": article, "edit": article,
-    })
+    runner = FixtureRunner()
 
     final, model = run_editorial_pipeline(
         bundle, template_id="cve-kev-deep-dive", run_id="cve-fact-fixture",
         runner=runner, persist_stage=lambda *_args: None,
     )
 
-    assert runner.calls == ["plan", "fact_check", "draft", "edit"]
+    assert runner.calls == ["claims", "claim_review"]
     assert model == "fixture-only"
-    assert final["sections"][0]["blocks"][0] == article["sections"][0]["blocks"][0]
+    assert final["schema_version"] == 2
+    assert final["sections"][0]["claim_ids"] == ["C001"]
     assert final["cve"]["id"] == "CVE-2026-12345"
 
 
