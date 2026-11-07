@@ -244,7 +244,8 @@ Python assembly and the existing Astro publisher. A single repair and re-review
 is the maximum editorial correction budget. Published article-v1 data remains
 readable; new reports use article-v2.
 
-Configure `NOUS_CODEX_MODEL` explicitly in the report Worker Quadlet. Verify
+Configure `NOUS_CODEX_MODEL=gpt-6-luna` and
+`NOUS_CODEX_REASONING_EFFORT=max` explicitly in the report Worker Quadlet. Verify
 `codex --version`, `codex exec --help`, and `codex login status` as UID/GID
 10002 with `HOME` and `CODEX_HOME` set to the mounted private Codex home.
 A successful login status does not prove model entitlement or sandbox readiness;
