@@ -36,9 +36,7 @@ _REPORTS_DIR = Path(os.getenv("NOUS_REPORTS_DIR", str(Path(__file__).resolve().p
 _SCHEMA_DIR = _REPORTS_DIR / "schemas"
 _SITE_DIR = _REPORTS_DIR / "site"
 _METADATA_LIMIT = 300
-# Codex exec writes runtime state in addition to the bounded response and logs.
-# Keep an individual-file ceiling for its working state; response and captured
-# stdout/stderr are still checked against their smaller limits in run().
+# Bound captured diagnostics and validate structured responses independently.
 _ALLOWED_BLOCKS = {"paragraph", "bullet_list", "fact_table", "source_list", "cve_fact", "quote"}
 # These are editorial labels, not statements. Generated headings and table
 # columns must not introduce a new, unreviewed claim outside fact_check.
