@@ -23,7 +23,8 @@ from sqlalchemy import and_, create_engine, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from .models import (FetchJob, Report, ReportRun, ReportSchedule, Source, SourceAudit, now)
+from .models import (FetchJob, Report, ReportRun, ReportRunEvent, ReportSchedule,
+                     Source, SourceAudit, now)
 from .onboard_source import probe
 from .registry import SourceConfig, apply_config, load_registry, revision_of
 from .report_templates import (normalize_parameters, public_template_list,
@@ -312,7 +313,48 @@ def _run_list_row(db, row):
         "stage": row.stage,
         "attempts": row.attempts,
         "error_code": row.error_code,
+        "failed_stage": row.failed_stage,
+        "retry_at": row.retry_at,
         "published_url": _published_url(db, row.report_id),
+    }
+
+
+def _safe_event_usage(value):
+    """Expose only bounded token counters from the already-redacted usage map."""
+    if not isinstance(value, dict):
+        return None
+    allowed = {"input_tokens", "output_tokens", "total_tokens", "cached_input_tokens"}
+    result = {}
+    for key in allowed:
+        count = value.get(key)
+        if isinstance(count, int) and not isinstance(count, bool) and 0 <= count <= 10**12:
+            result[key] = count
+    return result or None
+
+
+def _run_event_row(row):
+    """Serialize the stable event contract; never return prompts, stderr, or exception text."""
+    cli_version = getattr(row, "cli_version", None)
+    jsonl_last_event = getattr(row, "jsonl_last_event", None)
+    stdout_bytes = getattr(row, "stdout_bytes", None)
+    stderr_bytes = getattr(row, "stderr_bytes", None)
+    return {
+        "attempt": row.attempt,
+        "seq": row.seq,
+        "created_at": row.created_at,
+        "stage": row.stage,
+        "event_type": row.event_type,
+        "error_code": row.error_code,
+        "exit_status": row.exit_status,
+        "elapsed_ms": row.elapsed_ms,
+        "usage": _safe_event_usage(row.usage),
+        "artifact_sha256": row.artifact_sha256,
+        "diagnostic_ref": row.diagnostic_ref,
+        "retryable": row.retryable,
+        "cli_version": cli_version[:64] if isinstance(cli_version, str) else None,
+        "stdout_bytes": stdout_bytes if isinstance(stdout_bytes, int) and 0 <= stdout_bytes <= 10**12 else None,
+        "stderr_bytes": stderr_bytes if isinstance(stderr_bytes, int) and 0 <= stderr_bytes <= 10**12 else None,
+        "jsonl_last_event": jsonl_last_event[:80] if isinstance(jsonl_last_event, str) else None,
     }
 
 
@@ -425,7 +467,13 @@ def report_run(run_id: str):
         if row.stage in stage_order and row.stage not in stages:
             stages[row.stage] = "running" if row.state in {
                 "leased", "running", "validating", "publishing"} else row.state
-        result.update(parameters=row.parameters, stages=stages)
+        # Event history is append-only and may grow over a long-lived instance.
+        # Return at most the newest 100 entries, in chronological order.
+        events = db.scalars(select(ReportRunEvent).where(
+            ReportRunEvent.run_id == run_id
+        ).order_by(ReportRunEvent.attempt.desc(), ReportRunEvent.seq.desc()).limit(100)).all()
+        result.update(parameters=row.parameters, stages=stages,
+                      events=[_run_event_row(event) for event in reversed(events)])
         return result
 
 

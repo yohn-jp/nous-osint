@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from nous.admin import app
 from nous.db import Base
-from nous.models import Report, ReportRun
+from nous.models import Report, ReportRun, ReportRunEvent
 from nous.report_templates import resolve_template
 
 
@@ -167,6 +167,53 @@ def test_run_detail_publication_url_only_for_validated_report(managed):
         db.commit()
     detail = client.get(f"/v1/admin/report-runs/{run_id}")
     assert detail.json()["published_url"] == "/reports/security/2026-11-01-security-daily-563b9494f5b2/"
+
+
+def test_run_detail_exposes_bounded_safe_event_timeline(managed):
+    client, factory = managed
+    template = resolve_template("security-daily")
+    run_id = "563b9494-f5b2-4ad0-b345-44da1b2e6a85"
+    current = datetime.now(timezone.utc)
+    with factory() as db:
+        db.add(ReportRun(
+            id=run_id, trigger="manual", created_by="owner", template_id=template["id"],
+            template_revision=template["revision_key"], template_snapshot=template,
+            parameters={"target_date": "2026-11-01"}, idempotency_key="timeline-run",
+            state="failed", stage="claim_review", failed_stage="claim_review",
+            error_code="codex_auth", attempts=2, available_at=current,
+            stage_artifacts={}, created_at=current,
+        ))
+        for seq in range(105):
+            db.add(ReportRunEvent(
+                run_id=run_id, attempt=1 + seq // 100, seq=seq % 100,
+                created_at=current, stage="claim_review", event_type="codex_stage_failed",
+                error_code="codex_auth" if seq == 104 else None,
+                exit_status=1 if seq == 104 else None,
+                elapsed_ms=1354 if seq == 104 else 20,
+                usage={"input_tokens": 42, "output_tokens": 7, "unsafe": "secret"},
+                artifact_sha256="a" * 64,
+                diagnostic_ref="runs/example/attempts/2/claim_review/diagnostic.json",
+                retryable=False,
+            ))
+        db.commit()
+
+    detail = client.get(f"/v1/admin/report-runs/{run_id}")
+    assert detail.status_code == 200
+    result = detail.json()
+    assert result["failed_stage"] == "claim_review"
+    assert result["attempts"] == 2
+    assert len(result["events"]) == 100
+    assert result["events"][0]["attempt"] == 1
+    assert result["events"][-1]["error_code"] == "codex_auth"
+    assert result["events"][-1]["usage"] == {"input_tokens": 42, "output_tokens": 7}
+    assert "secret" not in detail.text
+    assert "stderr" not in detail.text
+
+
+def test_run_timeline_requires_access_identity(managed):
+    client, _ = managed
+    response = TestClient(app).get("/v1/admin/report-runs/563b9494-f5b2-4ad0-b345-44da1b2e6a85")
+    assert response.status_code == 403
 
 
 def test_schedule_create_rejects_nonexistent_spring_forward_time(managed, monkeypatch):
