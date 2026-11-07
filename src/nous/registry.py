@@ -11,7 +11,7 @@ from .source_taxonomy import SOURCE_CATEGORIES
 
 KINDS = {"job_posting", "news", "advisory", "vulnerability", "company_update"}
 ADAPTERS = {"rss": {"rss_v1"}, "json_api": {"json_v1", "greenhouse_jobs_v1",
-                                           "lever_jobs_v1", "ashby_jobs_v1", "cisa_kev_v1", "bluesky_author_v1"},
+                                           "lever_jobs_v1", "ashby_jobs_v1", "cisa_kev_v1", "bluesky_author_v1", "x_user_posts_v1"},
             "html": {"html_v1", "automattic_html_v1"}}
 
 class Policy(BaseModel):
@@ -102,6 +102,14 @@ class SourceConfig(BaseModel):
                     or self.max_pages != 1 or self.json_path or self.field_map):
                 raise ValueError("Bluesky author sources require fixed news metadata mapping")
             author_from_url(self.url)
+        elif self.adapter == "x_user_posts_v1":
+            from .x_timeline import author_id_from_url, X_MAX_PAGES
+            if (self.kind != "json_api" or self.item_kind != "news"
+                    or self.max_pages > X_MAX_PAGES
+                    or self.max_pages > self.max_requests_per_hour
+                    or self.json_path or self.field_map or self.selectors):
+                raise ValueError("X public timeline requires bounded metadata-only news configuration")
+            author_id_from_url(self.url)
         elif self.adapter == "cisa_kev_v1":
             if (self.kind != "json_api" or self.item_kind != "vulnerability" or
                     parsed.hostname != "raw.githubusercontent.com" or
