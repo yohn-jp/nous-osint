@@ -55,8 +55,6 @@ const stateLabel = (state: ReportRunListItem['state']) => ({
 }[state] ?? state)
 const stageLabel = (stage: string) => ({
   queued: '待機中', claimed: 'ワーカー割当', evidence: '根拠スナップショット',
-  claims: '企画・Claim生成', claim_review: '独立レビュー',
-  claim_repair: 'Claim修正', claim_rereview: '修正後レビュー',
   plan: '企画（旧履歴）', fact_check: '事実検証（旧履歴）', draft: '執筆（旧履歴）',
   codex_preflight: '実行環境確認', claims: '企画・主張生成', claim_review: '独立レビュー',
   claim_repair: '主張修正', claim_rereview: '再レビュー', assembly: '記事組立',
