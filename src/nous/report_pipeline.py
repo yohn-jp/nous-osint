@@ -909,7 +909,13 @@ def run_editorial_pipeline(bundle: dict, *, template_id: str, run_id: str,
         validate_review(review, proposal, bundle)
     article = assemble_article(proposal, review, bundle=bundle, template_id=template_id)
     final = validate_article_v2(article, bundle=bundle, template_id=template_id)
-    persist_stage("article", final)
+    if hasattr(persist_stage, "load"):
+        persist_stage("article", final,
+                      input_digest=hashlib.sha256(_json_bytes({"proposal": proposal,
+                                                             "review": review})).hexdigest(),
+                      schema_revision="2", prompt_revision="2")
+    else:
+        persist_stage("article", final)
     return final, getattr(runner, "model", None)
 
 
