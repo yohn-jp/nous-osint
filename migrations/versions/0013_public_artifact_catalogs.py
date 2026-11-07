@@ -50,6 +50,16 @@ def upgrade():
         sa.CheckConstraint("year BETWEEN 1999 AND 2100",
                            name="ck_public_artifact_poll_year"),
     )
+    op.create_table(
+        "public_artifact_throttle",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("next_due_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint("id = 1", name="ck_public_artifact_throttle_singleton"),
+    )
+    op.execute(sa.text(
+        "INSERT INTO public_artifact_throttle (id, next_due_at) "
+        "VALUES (1, '1970-01-01T00:00:00+00:00')"
+    ))
     # Grants apply only to existing roles; cluster provisioning may follow migrations.
     op.execute(sa.text("""
         DO $$
@@ -58,6 +68,7 @@ def upgrade():
                 EXECUTE format('GRANT SELECT, INSERT ON TABLE %I.public_artifact_contents TO nous_runtime', current_schema());
                 EXECUTE format('GRANT INSERT ON TABLE %I.public_artifact_observations TO nous_runtime', current_schema());
                 EXECUTE format('GRANT SELECT, INSERT, UPDATE ON TABLE %I.public_artifact_poll_state TO nous_runtime', current_schema());
+                EXECUTE format('GRANT SELECT, UPDATE ON TABLE %I.public_artifact_throttle TO nous_runtime', current_schema());
             END IF;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nous_api') THEN
                 EXECUTE format('GRANT SELECT ON TABLE %I.public_artifact_contents, %I.public_artifact_observations TO nous_api', current_schema(), current_schema());
@@ -74,6 +85,7 @@ def upgrade():
 
 
 def downgrade():
+    op.drop_table("public_artifact_throttle")
     op.drop_table("public_artifact_poll_state")
     op.drop_index("ix_public_artifact_provider_year_asof",
                   table_name="public_artifact_observations")

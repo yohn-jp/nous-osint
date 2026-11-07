@@ -190,6 +190,13 @@ class PublicArtifactPollState(Base):
     last_error: Mapped[str | None] = mapped_column(String(60))
 
 
+class PublicArtifactThrottle(Base):
+    """Global GitHub API budget across every provider/year repository scan."""
+    __tablename__ = "public_artifact_throttle"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    next_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ReportSchedule(Base):
     __tablename__ = "report_schedules"
     __table_args__ = (CheckConstraint("cadence IN ('daily','weekly')", name="ck_report_schedule_cadence"),)

@@ -97,7 +97,10 @@ Versions are never overwritten on disappearance or rename.
 
 The canonical scheduler cycles one provider/year per tick across at most
 16 tracked CVE publication years; existing DB-backed CVE identifiers determine
-the targets. It does not issue external probes, clone repositories, run Nuclei,
+the targets. A dedicated, transaction-locked PostgreSQL singleton enforces at
+least **15 minutes between all GitHub repository scan claims globally**,
+including initial backlog and after errors, so 16 historical years do not
+immediately burst the unauthenticated GitHub API limit. It does not issue external probes, clone repositories, run Nuclei,
 download exploit code, or treat a GitHub index as CISA KEV.
 
 `/v1/cves/{cve_id}`, the existing read-only MCP `get_cve` tool and the

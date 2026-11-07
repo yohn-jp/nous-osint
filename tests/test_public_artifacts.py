@@ -10,7 +10,8 @@ from nous.api import CveResponse
 from nous.cve_queries import query_cve
 from nous.db import Base
 from nous.models import (CveItemLink, Item, PublicArtifactContent,
-                         PublicArtifactObservation, PublicArtifactPollState, Source)
+                         PublicArtifactObservation, PublicArtifactPollState,
+                         PublicArtifactThrottle, Source)
 
 CVE = "CVE-2026-12345"
 OTHER = "CVE-2026-12346"
@@ -77,6 +78,9 @@ def repo_db(tmp_path):
         db.add(item)
         db.flush()
         db.add(CveItemLink(item_id=item.id, cve_id=CVE, relation="reference"))
+        db.add(PublicArtifactThrottle(
+            id=1, next_due_at=T0 - timedelta(days=1),
+        ))
         db.commit()
     try:
         yield factory
@@ -131,17 +135,18 @@ def test_source_scope_does_not_claim_po_c_without_verified_index(repo_db, monkey
         assert all(x["status"] == "unknown" for x in before)
 
     assert pub.refresh_public_artifacts(repo_db, current=T0)
-    assert pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(minutes=1))
+    assert pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(minutes=1)) is False
+    assert pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(minutes=16))
     assert set(calls) == set(pub.PROVIDERS)
-    assert pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(minutes=2)) is False
+    assert pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(minutes=17)) is False
 
     with repo_db() as db:
-        tracked = pub.repository_artifacts_as_of(db, CVE, T0 + timedelta(minutes=3))
+        tracked = pub.repository_artifacts_as_of(db, CVE, T0 + timedelta(minutes=17))
         assert all(x["status"] == "indexed" for x in tracked)
         assert all(x["references"] for x in tracked)
         assert all("/blob/" + SHA_A + "/" in x["references"][0]["url"]
                    for x in tracked)
-        unknown = pub.repository_artifacts_as_of(db, OTHER, T0 + timedelta(minutes=3))
+        unknown = pub.repository_artifacts_as_of(db, OTHER, T0 + timedelta(minutes=17))
         assert all(x["status"] == "not_indexed" for x in unknown)
         historical = pub.repository_artifacts_as_of(db, CVE, T0 - timedelta(seconds=1))
         assert all(x["status"] == "unknown" for x in historical)
@@ -149,7 +154,7 @@ def test_source_scope_does_not_claim_po_c_without_verified_index(repo_db, monkey
         assert all(x["status"] == "stale" for x in stale)
         assert all(x["references"] for x in stale)
         validated = CveResponse.model_validate(query_cve(
-            db, CVE, observed_cutoff=T0 + timedelta(minutes=3)))
+            db, CVE, observed_cutoff=T0 + timedelta(minutes=17)))
         assert validated.public_artifacts[0].status == "indexed"
         assert validated.kev.status == "unknown"
 
@@ -161,13 +166,13 @@ def test_complete_removal_is_versioned_without_rewriting_old_snapshots(repo_db, 
               "blob_sha": SHA_B}]
     }))
     pub.refresh_public_artifacts(repo_db, current=T0)
-    pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(minutes=1))
+    pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(minutes=16))
     monkeypatch.setattr(pub, "fetch_repository_index", lambda provider, year: (SHA_C, {}))
     pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(days=2))
-    pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(days=2, minutes=1))
+    pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(days=2, minutes=16))
     with repo_db() as db:
         earlier = pub.repository_artifacts_as_of(db, CVE, T0 + timedelta(hours=2))
-        later = pub.repository_artifacts_as_of(db, CVE, T0 + timedelta(days=2, minutes=2))
+        later = pub.repository_artifacts_as_of(db, CVE, T0 + timedelta(days=2, minutes=17))
         assert all(x["status"] == "indexed" for x in earlier)
         assert all(x["status"] == "not_indexed" for x in later)
         assert len(db.scalars(select(PublicArtifactObservation)).all()) == 4

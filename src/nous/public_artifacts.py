@@ -18,7 +18,8 @@ from sqlalchemy import func, select
 from .cve_index import valid_cve_id
 from .fetch import fetch
 from .models import (CveItemLink, PublicArtifactContent,
-                     PublicArtifactObservation, PublicArtifactPollState)
+                     PublicArtifactObservation, PublicArtifactPollState,
+                     PublicArtifactThrottle)
 
 log = logging.getLogger(__name__)
 
@@ -174,6 +175,14 @@ def refresh_public_artifacts(factory, *, current: datetime | None = None) -> boo
                     ))
         db.commit()
     with factory() as db:
+        # The per-year cursor alone would burst through GitHub's public API
+        # rate limits during initial discovery across many historical years.
+        # A singleton row serializes and globally throttles all providers.
+        budget = db.scalar(select(PublicArtifactThrottle).where(
+            PublicArtifactThrottle.id == 1,
+        ).with_for_update(skip_locked=True))
+        if budget is None or _utc(budget.next_due_at) > started:
+            return False
         selected = db.scalar(select(PublicArtifactPollState).where(
             PublicArtifactPollState.provider.in_(tuple(PROVIDERS)),
             PublicArtifactPollState.year.in_(years),
@@ -187,6 +196,7 @@ def refresh_public_artifacts(factory, *, current: datetime | None = None) -> boo
             return False
         provider, year = selected.provider, selected.year
         selected.next_due_at = started + timedelta(minutes=40)
+        budget.next_due_at = started + timedelta(minutes=15)
         db.commit()
 
     try:
