@@ -9,7 +9,7 @@ Scope: report generation, Codex invocation, failure diagnostics, recovery, repor
 
 対象は、所有者認証済みの公式 Codex CLI と既存 PostgreSQL / rootless Podman Report Worker / Astro static renderer を利用する自動記事生成。**まず失敗を特定できること、次に有効な記事を安定して生成できること**を完了条件とする。成功を偽装するための validator 無効化、無根拠な記事、無断取材、API キー課金への無断切替、認証情報のコード・ログへの混入、VM 上の別 CMS/常駐 Node サーバ追加は禁止。
 
-既存の [AUTOMATED_INTELLIGENCE_REPORTS.md](AUTOMATED_INTELLIGENCE_REPORTS.md) にある「企画、事実検証、執筆、推敲」の**編集責務**、出典・権利管理、公開の fail-closed と immutable evidence は維持する。ただし、各責務を毎回別々の汎用 LLM 呼び出しとして実装する指定は本 RFC で見直しを提案する。**本 RFC は現在の authority を無断で変更しない。** 設計採用時に既存文書/受入条件を同時更新する。
+既存の [AUTOMATED_INTELLIGENCE_REPORTS.md](AUTOMATED_INTELLIGENCE_REPORTS.md) にある「企画、事実検証、執筆、推敲」の**編集責務**、出典・権利管理、公開の fail-closed と immutable evidence は維持する。ただし、各責務を毎回別々の汎用 LLM 呼び出しとして実装する指定は本 RFC で見直しを提案する。**本 RFC は設計方針として採用する。採用と本番実行切替は別操作とする。** PR #38マージ時点では現行の4回Codex実行・既存記事契約・受入条件を維持する。v2の2回実行は実装・統合・実機受入が完了するまで有効化しない。既存文書にはこの段階移行条件を採用時に追記し、正式切替時に4回実行の規定と受入条件をv2へ更新する。
 
 ## 1. 現在の実装から確認できた障害増幅要因
 
@@ -179,7 +179,7 @@ stdout JSONL はイベント型・phase・usage・失敗型などの **allowlist
 
 **PR B — 編集工程の簡素化。** 2 calls + deterministic assembly、独立 reviewer、bounded revision、article-v2 と v1 互換 renderer、input artifact、stage resume を追加。原文・ライセンス・CVEの安全要件は維持。旧実行データに v2 の新しい制約を遡及適用しない。feature flag で旧系から段階的に切り替える。
 
-**PR C — 管理/UI と受入。** Stage timeline、対処別エラー、明示的な修正後再実行、運用メトリクスを追加。レポート本文の実機閲覧・端末別表示・Access認可・負荷・ロールバックを確認。正式採用後、元の AUTOMATED_INTELLIGENCE_REPORTS.md の4-stage/CLI call定義と受入条件を改訂する。旧系を削除するのは確認後だけ。
+**PR C — 管理/UI と受入。** Stage timeline、対処別エラー、明示的な修正後再実行、運用メトリクスを追加。レポート本文の実機閲覧・端末別表示・Access認可・負荷・ロールバックを確認。設計採用時に追記した移行条件に従い、実機受入が成功してv2を正式有効化する際に、元の AUTOMATED_INTELLIGENCE_REPORTS.md の4-stage/CLI call定義と受入条件をv2へ改訂する。旧系を削除するのは確認後だけ。
 
 各 PR は CONTRIBUTING.md に従い別ブランチ/レビューとし、DB migration と本番更新は別の操作として扱う。不要なフロントエンド/Cloudflare/収集系変更を混ぜない。
 
