@@ -8,6 +8,9 @@ interface Props {
 }
 const { title, description = 'Nous OSINT が保存した公開情報と根拠から構成した分析レポートです。' } = Astro.props;
 const base = import.meta.env.BASE_URL;
+const origin = Astro.site ?? new URL('https://nous.yohn.jp');
+const sourcesUrl = new URL('/sources', origin).toString();
+const changesUrl = new URL('/changes', origin).toString();
 ---
 
 <!doctype html>
@@ -38,8 +41,8 @@ const base = import.meta.env.BASE_URL;
         <nav class="site-rail-nav" aria-label="Nous OSINT の主要画面">
           <span class="rail-caption">RESEARCH</span>
           <a class="workspace-link" href="/explore">探索</a>
-          <a class="workspace-link" href="/changes">変更履歴</a>
-          <a class="workspace-link" href="/sources">情報源</a>
+          <a class="workspace-link" href={changesUrl} rel="noopener noreferrer">変更履歴</a>
+          <a class="workspace-link" href={sourcesUrl} rel="noopener noreferrer">情報源</a>
           <span class="rail-caption rail-caption-secondary">PUBLICATIONS</span>
           <a class="workspace-link workspace-link-active" href={base} aria-current="page">分析レポート</a>
         </nav>
@@ -57,8 +60,8 @@ const base = import.meta.env.BASE_URL;
             </div>
             <nav class="footer-nav" aria-label="他の画面へ移動">
               <a href="/explore">探索</a>
-              <a href="/changes">変更履歴</a>
-              <a href="/sources">情報源</a>
+              <a href={changesUrl} rel="noopener noreferrer">変更履歴</a>
+              <a href={sourcesUrl} rel="noopener noreferrer">情報源</a>
               <a href={base}>レポート一覧</a>
             </nav>
           </div>

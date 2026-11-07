@@ -17,6 +17,14 @@ const loadingOlderSchedules = ref(false)
 const busy = ref('')
 const error = ref('')
 const feedback = ref('')
+const lastSyncedAt = ref<string | null>(null)
+const runFilter = ref<'all' | 'active' | 'failed' | 'published'>('all')
+const runFilterOptions = [
+  { value: 'all', label: 'すべて' },
+  { value: 'active', label: '処理中' },
+  { value: 'failed', label: '失敗' },
+  { value: 'published', label: '公開済み' },
+] as const
 let pollTimer: ReturnType<typeof setInterval> | undefined
 
 function tokyoDate() {
@@ -39,6 +47,12 @@ const scheduleCategory = ref<'security' | 'advisory' | 'vulnerability' | null>(n
 
 const sortedRuns = computed(() => [...runs.value].sort((a, b) =>
   b.created_at.localeCompare(a.created_at)))
+const visibleRuns = computed(() => sortedRuns.value.filter(run => {
+  if (runFilter.value === 'active') return ['queued', 'leased', 'running', 'validating', 'publishing'].includes(run.state)
+  if (runFilter.value === 'failed') return run.state === 'failed'
+  if (runFilter.value === 'published') return run.state === 'published'
+  return true
+}))
 const activeCount = computed(() => runs.value.filter(run =>
   ['queued', 'leased', 'running', 'validating', 'publishing'].includes(run.state)).length)
 const publishedCount = computed(() => runs.value.filter(run => run.state === 'published').length)
@@ -87,6 +101,8 @@ const safeReportUrl = (value: string | null) => value &&
   /^\/reports\/(?:security|cve)\/[a-z0-9-]{1,128}\/$/.test(value) ? value : null
 
 async function loadData(initial = false) {
+  if (loading.value && dataReady.value === false && !initial) return
+  if (refreshing.value && !initial) return
   if (initial) loading.value = true
   else refreshing.value = true
   error.value = ''
@@ -97,6 +113,7 @@ async function loadData(initial = false) {
     ])
     templates.value = templateRows
     dataReady.value = true
+    lastSyncedAt.value = new Date().toISOString()
     const newestIds = new Set(runPage.runs.map(run => run.run_id))
     runs.value = [...runPage.runs, ...runs.value.filter(run => !newestIds.has(run.run_id))]
     nextRunCursor.value = runPage.next_cursor
@@ -252,15 +269,15 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
     <q-banner v-if="feedback" class="bg-green-1 text-positive q-mt-md" role="status">{{ feedback }}</q-banner>
 
     <div v-if="dataReady" class="report-stats q-mt-lg">
-      <div class="admin-stat"><span>直近の実行</span><strong>{{ runs.length }}</strong></div>
+      <div class="admin-stat"><span>読み込み済みの実行</span><strong>{{ runs.length }}</strong></div>
       <div class="admin-stat"><span>処理中・待機中</span><strong>{{ activeCount }}</strong></div>
-      <div class="admin-stat"><span>公開済み</span><strong>{{ publishedCount }}</strong></div>
+      <div class="admin-stat"><span>公開済み（読込範囲）</span><strong>{{ publishedCount }}</strong></div>
     </div>
 
     <section class="content-panel q-mt-lg" aria-labelledby="new-report-heading">
       <div class="section-heading">
         <div>
-          <div class="eyebrow">ON-DEMAND</div>
+          <div class="eyebrow">RUN / AD HOC</div>
           <h2 id="new-report-heading" class="text-h6 q-mb-none q-mt-xs">随時実行</h2>
         </div>
         <q-spinner v-if="loading" color="primary" size="24px" aria-label="読み込み中" />
@@ -311,17 +328,27 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
     <section class="content-panel q-mt-lg" aria-labelledby="runs-heading">
       <div class="section-heading">
         <div>
-          <div class="eyebrow">QUEUE / HISTORY</div>
+          <div class="eyebrow">EXECUTION / HISTORY</div>
           <h2 id="runs-heading" class="text-h6 q-mb-none q-mt-xs">生成ジョブ</h2>
         </div>
-        <q-btn flat round dense icon="refresh" aria-label="実行履歴を更新" :loading="refreshing" @click="loadData()" />
+        <div class="row items-center q-gutter-sm">
+          <span v-if="lastSyncedAt" class="run-sync-time">最終確認 {{ dateLabel(lastSyncedAt) }}</span>
+          <q-btn flat round dense icon="refresh" aria-label="実行履歴を更新" :loading="refreshing" @click="loadData()" />
+        </div>
+      </div>
+      <div v-if="dataReady && runs.length" class="report-run-filters" role="group" aria-label="実行状態で絞り込む">
+        <button v-for="filter in runFilterOptions" :key="filter.value" type="button" class="report-run-filter"
+          :aria-pressed="runFilter === filter.value" :class="{ active: runFilter === filter.value }"
+          @click="runFilter = filter.value">{{ filter.label }}</button>
+        <span class="report-run-filter-count">{{ visibleRuns.length }} 件</span>
       </div>
       <div v-if="loading" class="empty-state" role="status">実行履歴を読み込んでいます。</div>
       <div v-else-if="!dataReady" class="empty-state" role="status">実行履歴を取得できません。</div>
       <div v-else-if="!sortedRuns.length" class="empty-state">実行履歴はありません。テンプレートを選んで実行できます。</div>
+      <div v-else-if="!visibleRuns.length" class="workstation-message report-run-empty">この状態の実行履歴はありません。絞り込みを変更してください。</div>
       <div v-else class="run-grid">
         <div class="run-list" role="list" aria-label="レポート生成ジョブ">
-          <button v-for="run in sortedRuns" :key="run.run_id" class="run-row" :class="{selected:selectedRun?.run_id===run.run_id}"
+          <button v-for="run in visibleRuns" :key="run.run_id" class="run-row" :class="{selected:selectedRun?.run_id===run.run_id}"
             type="button" role="listitem" @click="showRun(run.run_id)">
             <span class="run-row-main">
               <span class="run-title">{{ templateTitle(run.template_id) }}</span>
@@ -393,7 +420,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
       <div v-if="nextRunCursor" class="row justify-center q-pa-md">
         <q-btn flat color="primary" icon="expand_more" label="さらに読み込む" :loading="loadingOlder" @click="loadOlderRuns" />
       </div>
-      <div class="admin-hint">最新50件から表示します。古い履歴は追加で読み込めます。処理中の状態は10秒ごとに更新されます。</div>
+      <div class="admin-hint">最新50件から表示します。古い履歴は追加で読み込めます。状態は10秒ごとに取得します。処理状況はワーカーが最後に保存した状態です。</div>
     </section>
 
     <section class="content-panel q-mt-lg" aria-labelledby="schedule-heading">
@@ -448,6 +475,13 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 
 <style scoped>
 .report-admin section { overflow: hidden; }
+.run-sync-time { color: var(--nous-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.report-run-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 10px 17px; border-bottom: 1px solid var(--nous-line); }
+.report-run-filter { min-height: 36px; padding: 6px 12px; background: none; border: 1px solid transparent; border-radius: 3px; color: var(--nous-muted); cursor: pointer; font: inherit; font-size: 12px; font-weight: 650; }
+.report-run-filter:hover { border-color: var(--nous-line); }
+.report-run-filter.active { color: var(--nous-ink); background: var(--nous-accent-wash); border-color: var(--nous-line); }
+.report-run-filter-count { margin-left: auto; color: var(--nous-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.report-run-empty { min-height: 95px; font-size: 13px; }
 .report-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 19px 22px; border-bottom: 1px solid var(--nous-line); }
 .report-form-wrap { padding: 0 22px 22px; }

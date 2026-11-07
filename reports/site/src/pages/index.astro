@@ -39,16 +39,11 @@ function dateLabel(value: string) {
         <span class="publication-register-label">DOCUMENT REGISTER</span>
         <h2 id="register-heading">記事一覧</h2>
       </div>
-      <div class="publication-controls" role="group" aria-label="記事の分類">
-        <button type="button" class="publication-filter is-active" data-report-filter="all" aria-pressed="true">すべて</button>
-        <button type="button" class="publication-filter" data-report-filter="cve" aria-pressed="false">CVE / KEV</button>
-        <button type="button" class="publication-filter" data-report-filter="security" aria-pressed="false">セキュリティ動向</button>
-      </div>
     </div>
     {reports.length > 0 ? (
       <>
         <div class="publication-count" role="status" aria-live="polite">
-          <span id="visible-report-count">{reports.length} 件を表示</span>
+          <span>{reports.length} 件を表示</span>
           <span>公開日の新しい順</span>
         </div>
         <div class="publication-list">
@@ -57,7 +52,7 @@ function dateLabel(value: string) {
             const assessments = report.claims.filter(claim => claim.classification === 'inference').length;
             const unconfirmed = report.claims.filter(claim => claim.classification === 'unconfirmed').length;
             return (
-              <article class="publication-entry" data-report-category={report.category}>
+              <article class="publication-entry">
                 <div class="publication-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</div>
                 <div class="publication-document">
                   <div class="publication-entry-meta">
@@ -85,7 +80,6 @@ function dateLabel(value: string) {
             );
           })}
         </div>
-        <p class="publication-filter-empty" id="report-filter-empty" hidden>この分類の記事はまだありません。</p>
       </>
     ) : (
       <div class="publication-empty">
@@ -97,27 +91,3 @@ function dateLabel(value: string) {
   </section>
 </BaseLayout>
 
-<script>
-  const filters = document.querySelectorAll<HTMLButtonElement>('[data-report-filter]');
-  const articles = document.querySelectorAll<HTMLElement>('[data-report-category]');
-  const count = document.getElementById('visible-report-count');
-  const empty = document.getElementById('report-filter-empty');
-  for (const button of filters) {
-    button.addEventListener('click', () => {
-      const category = button.dataset.reportFilter;
-      let visible = 0;
-      for (const article of articles) {
-        const show = category === 'all' || article.dataset.reportCategory === category;
-        article.hidden = !show;
-        if (show) visible += 1;
-      }
-      for (const other of filters) {
-        const pressed = other === button;
-        other.setAttribute('aria-pressed', String(pressed));
-        other.classList.toggle('is-active', pressed);
-      }
-      if (count) count.textContent = visible + ' 件を表示';
-      if (empty) empty.hidden = visible > 0;
-    });
-  }
-</script>
