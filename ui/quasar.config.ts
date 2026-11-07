@@ -2,18 +2,18 @@ import { defineConfig } from '#q-app'
 
 export default defineConfig(() => ({
   extras: ['material-icons'],
-  css: ['app.scss'],
+  css: ['app.scss', 'workstation.scss'],
   framework: {
     config: {
       brand: {
-        primary: '#0b685f',
-        secondary: '#486967',
-        accent: '#236b83',
-        dark: '#142521',
-        positive: '#207b56',
-        negative: '#b04740',
-        info: '#236b83',
-        warning: '#96621d',
+        primary: '#315f9e',
+        secondary: '#526777',
+        accent: '#a76b35',
+        dark: '#151c22',
+        positive: '#347353',
+        negative: '#a43d37',
+        info: '#315f9e',
+        warning: '#a76b35',
       },
     },
   },

@@ -8,22 +8,22 @@ Authority: [ARCHITECTURE.md](ARCHITECTURE.md), [FRONTEND_EXECUTION_POLICY.md](FR
 
 Nous is an intelligence desk for reading observed records, assessing provenance and tracing changes, not a promotional dashboard. The dominant artifact is the collected title or the published report; source identity, timestamp, evidence and state come next. Use a continuous scan-friendly register, an evidence reading lane and an accessible operational layout.
 
-- Quasar 2 + Vue 3 + TypeScript `ui/` and Astro `reports/site/` share paper/panel, deep ink, teal action and restrained separators. Source text remains plain escaped content.
+- Quasar 2 + Vue 3 + TypeScript `ui/` and Astro `reports/site/` share paper/panel, deep ink, measured blue action, warm provenance accents and restrained separators. Source text remains plain escaped content.
 - Use real API data only. Loading, empty, permission denied, failed, unknown, disabled and stale states must not collapse into the same visual state.
 - Color supports meaning but does not replace status labels. Focus is visible, targets are usable on touch, Japanese titles and identifiers wrap without horizontal clipping.
 - Motion is short action feedback, not delayed content appearance; honor `prefers-reduced-motion`. No invented counts, decorative charts, fake progress or pseudo-buttons.
 
-## Art direction — evidence ledger, not a generic dashboard
+## Art direction — research workstation, not a generic dashboard
 
-We evaluated two distinct compositions: (A) a provenance-first **ledger with a reading inspector**; (B) an editorial briefing that enlarges the newest item and pushes older evidence below. We selected A. Comparison across sources, versions and observation dates is Nous's frequent operation; newest-first hero storytelling would hide peers and make the first item look editorially recommended without evidence.
+We compared a promotional news-feed composition with a split register-and-dossier workspace. The selected instrument preserves a scannable primary table and puts the provenance dossier beside it. The main object is the real ingested record, not an invented threat score or a decorative health chart.
 
-The ledger uses a compact sequence gutter (display order only, **not a rank**), a title column with category and explicit state, and an observation stamp with source identity and recorded time. On large screens, the first actual fetched item is available in the inspector immediately; users can select another item without losing query state. Mobile reflows these fields into a single readable record with an explicit detail route.
+The exploration register is a genuine table: record title/kind, organization/source, published-or-observed time, explicit lifecycle state and version. Only the title is an interactive button (not the table row), honoring table semantics and keyboard navigation. In compact mode it favors rapid scanning; standard mode allows multi-line titles. Row numbers indicate sequence on the loaded page, **not priority, severity or global ranking**. The same URL stores `q`, `kind`, `source` and optionally selected `item`. Selected item is inspected inline from 1200px upward, otherwise opened as a document route. The inspector can be closed, resized between 300–640px by pointer or arrow keys, and switched among Overview, Attributes/Provenance and Observation History using existing immutable item/version APIs. Filter chips support independent removal; `/` focuses search, and `j/k` advances selection outside form controls. Arrow keys only change the record while focus is inside the register.
 
-The report index uses a publication masthead and numbered article register rather than a promotional hero. The report content and citation trail own most of the canvas; provenance links remain perceivable and reachable. Source status is a register of **configuration / last success / last error**, not a health score.
+The common navigational geometry is a 54px brand/search bar, a 186px research/publications/operations rail on desktop, and mobile destinations on narrow screens. The Astro publication experience uses the same header and rail for orientation but remains a separate, script-free static renderer. Its archive is a publication register of **actual** report content: category, date, report title, verified claim-classification counts, evidence count and documented KEV status; no CVSS/EPSS scores without a verified source field. Article pages keep their reading lane, linked citations and source list. The report admin displays counts **within the loaded API page**, filterable observed execution states, the last successful refresh, and real run stage/events without fake progress bars or ETAs.
 
-Design controls: real sources and actual dates only; no stock photography, invented graphs, generic KPI card wall, arbitrary shader, staggered animations, or promotional microcopy. UI copy is Japanese and task-specific; long identifiers and evidence links wrap. Semantically meaningful state is expressed in text as well as shape/color.
+Visual language: neutral paper/graphite, restrained institutional blue for interactions, desaturated warm provenance marker; one thin-rule grammar and contextual typesetting. No marketing hero, card-wall KPIs, stock images, shaders, cyber neon, decorative background gradients or fabricated telemetry. Short CSS transitions only on selection, navigation, filtering and first-record entry, with `prefers-reduced-motion` removing animations. Compact data cells retain title access on mobile and show source/time inline. Light/low-contrast appearances are not a substitute for accessible keyboard focus or statuses in text.
 
-References were interpreted **selectively**: [Taste Skill](https://github.com/Leonxlnx/taste-skill/blob/main/skills/taste-skill/SKILL.md) for product-specific content, aligned geometry and finished interactions; [DADS](https://design.digital.go.jp/dads/) for layout, typography, contrast, focus and navigation; [Impeccable](https://github.com/pbakaus/impeccable) for critique, distill and harden. Marketing-site rules such as one-screen hero, hover lift and photographs do **not** apply to this daily research instrument.
+References were interpreted selectively: [Taste Skill](https://github.com/Leonxlnx/taste-skill/blob/main/skills/taste-skill/SKILL.md) for content-specific identity, consistent alignment and restrained finishing; [DADS](https://design.digital.go.jp/dads/) for data tables, typography and accessibility; [Impeccable](https://github.com/pbakaus/impeccable) for critique/distill/harden; [Linear](https://linear.app/now) for navigation receding behind the work object; [OpenCTI](https://docs.opencti.io/latest/usage/filters/) for URL-persisted investigation filters. We did not incorporate external runtime code/assets or the marketing-site-specific rules. User-supplied UX audit identifies useful friction, but speculative real-time protocols, STIX export, severity signals and hardcoded 32px rows are **not approved API contracts**.
 
 ## Navigation and interaction contract
 
@@ -38,7 +38,7 @@ References were interpreted **selectively**: [Taste Skill](https://github.com/Le
 | Report admin | Enqueue template runs; inspect actual state/stage/events and schedules | Queued is not published; read published output in `/reports/` |
 | Report publication | Read article, follow claim/evidence references, navigate back to the library | Persistent shared navigation and contextual links to archive, evidence and Explore |
 
-Desktop uses a left navigation rail and, only above 1250px, an optional record preview. Below that breakpoint, selecting a record opens a readable detail route. Mobile uses bottom navigation and full-width actions. Report articles use a reading column and a reference register: sticky alongside on wide screens, placed after the body on narrow screens. The workspace nav remains available across the SPA and separate report pages.
+Desktop uses a left navigation rail and, from 1200px upward, an optional resizable record preview. Below that breakpoint, selecting a record opens a readable detail route. Mobile uses bottom navigation, inline source/time metadata and full-width actions. Report articles use a reading column and a reference register: sticky alongside on wide screens, placed after the body on narrow screens. The workspace nav remains available across the SPA and separate report pages.
 
 ## Technical contracts
 
@@ -46,13 +46,13 @@ Desktop uses a left navigation rail and, only above 1250px, an optional record p
 - Bounded `/v1/items` cursor pagination; cancel stale requests when filters change. Independent errors do not imply zero sources or records.
 - Source state must distinguish **configured enabled**, **successful collection**, and **last error**; do not derive service health from enabled alone.
 - Static SPA routes on Cloudflare must remain narrow. `/v1/*`, `/mcp*`, OAuth and `/reports/*` remain behind the existing Access/Tunnel origin. No catch-all Worker forwarding.
-- Astro outputs are built one-shot by the report Worker, not rendered by a persistent VM frontend server. Publisher links use `noopener noreferrer`.
+- Astro outputs are built one-shot by the report Worker, not rendered by a persistent VM frontend server. Its trusted renderer rejects scripts, JS assets, unapproved internal links and external links without `noopener noreferrer`. Keep archive filtering server-side or omit it rather than weakening this gate.
 
 ## Verification gates
 
 1. `ui/` typecheck and production build; `reports/site/` build and report fixtures.
-2. 320px, 390px and 1280px: navigation, overflowing text, filtering, item return, source-status triage, report-to-library return, and long evidence registers.
-3. Keyboard and screen reader labels, visible focus, Japanese IME, dark mode, reduced motion, loading, empty, permission and error states.
+2. 320px, 390px, 1199px, 1200px and 1440px: navigation, overflowing text, filtering, item return, source-status triage, report-to-library return, and long evidence registers.
+3. Keyboard (`/`, `j/k`, arrow keys inside register, resize keys), focus return, Japanese IME, contrast, dark mode, reduced motion, loading, empty, permission and error states.
 4. Actual API/JWT/role checks and live Cloudflare routing, including unknown paths and rollback, separately from CI.
 
 **A checked code path is not a verified live browser or deployment path.** Record runtime test evidence only when it is actually observed.

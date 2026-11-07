@@ -1,11 +1,11 @@
 ---
 import '../styles/global.css';
+import '../styles/workstation.css';
 
 interface Props {
   title: string;
   description?: string;
 }
-
 const { title, description = 'Nous OSINT が保存した公開情報と根拠から構成した分析レポートです。' } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const origin = Astro.site ?? new URL('https://nous.yohn.jp');
@@ -21,7 +21,7 @@ const changesUrl = new URL('/changes', origin).toString();
     <meta name="robots" content="noindex, nofollow, noarchive" />
     <meta name="description" content={description} />
     <meta name="color-scheme" content="light dark" />
-    <title>{title} | Nous OSINT Reports</title>
+    <title>{title} | Nous OSINT</title>
     <slot name="head" />
   </head>
   <body>
@@ -32,37 +32,41 @@ const changesUrl = new URL('/changes', origin).toString();
           <span class="brand-mark" aria-hidden="true">N</span>
           <span class="brand-wordmark">nous<span class="brand-product"> / osint</span></span>
         </a>
-        <span class="header-context" aria-hidden="true">INTELLIGENCE / REPORTS</span>
-        <a class="header-return" href="/explore">
-          <span aria-hidden="true">←</span>
-          <span>探索画面へ戻る</span>
-        </a>
+        <span class="header-context" aria-hidden="true">INTELLIGENCE WORKSPACE</span>
+        <span class="site-context-tag">REPORT LIBRARY</span>
       </div>
-      <nav class="workspace-nav" aria-label="Nous OSINT 内の移動">
-        <div class="workspace-nav-inner">
+    </header>
+    <div class="site-workspace">
+      <aside class="site-rail" aria-label="ワークスペースの移動">
+        <nav class="site-rail-nav" aria-label="Nous OSINT の主要画面">
+          <span class="rail-caption">RESEARCH</span>
           <a class="workspace-link" href="/explore">探索</a>
           <a class="workspace-link" href={changesUrl} rel="noopener noreferrer">変更履歴</a>
           <a class="workspace-link" href={sourcesUrl} rel="noopener noreferrer">情報源</a>
+          <span class="rail-caption rail-caption-secondary">PUBLICATIONS</span>
           <a class="workspace-link workspace-link-active" href={base} aria-current="page">分析レポート</a>
-        </div>
-      </nav>
-    </header>
-    <main id="main-content" class="site-main">
-      <slot />
-    </main>
-    <footer class="site-footer">
-      <div class="footer-inner">
-        <div class="footer-identity">
-          <span class="footer-brand">nous / osint</span>
-          <span>収集情報と出典に基づく分析</span>
-        </div>
-        <nav class="footer-nav" aria-label="他の画面へ移動">
-          <a href="/explore">探索</a>
-          <a href={sourcesUrl} rel="noopener noreferrer">情報源</a>
-          <a href={changesUrl} rel="noopener noreferrer">変更履歴</a>
-          <a href={base}>レポート一覧</a>
         </nav>
+        <div class="site-rail-footer">NOUS / RESEARCH INSTRUMENT</div>
+      </aside>
+      <div class="site-workspace-body">
+        <main id="main-content" class="site-main">
+          <slot />
+        </main>
+        <footer class="site-footer">
+          <div class="footer-inner">
+            <div class="footer-identity">
+              <span class="footer-brand">nous / osint</span>
+              <span>出典を追跡できる分析</span>
+            </div>
+            <nav class="footer-nav" aria-label="他の画面へ移動">
+              <a href="/explore">探索</a>
+              <a href={changesUrl} rel="noopener noreferrer">変更履歴</a>
+              <a href={sourcesUrl} rel="noopener noreferrer">情報源</a>
+              <a href={base}>レポート一覧</a>
+            </nav>
+          </div>
+        </footer>
       </div>
-    </footer>
+    </div>
   </body>
 </html>
