@@ -1,17 +1,17 @@
 # Nous OSINT — Automated Intelligence Reports
 
-Status: **code integrated into main (PR #13 and #14); owner-authenticated Codex and VM acceptance NOT_CHECKED**
+Status: **v1 code exists in main; v2 is the authoritative replacement target (NOT YET IMPLEMENTED); owner-authenticated Codex / VM acceptance NOT_CHECKED**
 Date: **2026-11-05**  
 Authority: [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [REMOTE_MCP_ACCESS.md](REMOTE_MCP_ACCESS.md), [SOURCE_LICENSES.md](SOURCE_LICENSES.md), [CVE_KEV_CORRELATION.md](CVE_KEV_CORRELATION.md)
 
-> **移行条件（RFC #38採用時）:** 現行の4回Codex実行（企画・事実検証・執筆・推敲）、既存の生成契約および受入条件は引き続き有効です。`REPORT_PIPELINE_REDESIGN_RFC.md` の採用は設計方針の承認であり、v2実行への切替を意味しません。v2の2回実行・記事契約への切替は実装統合と実機受入の成功後にのみ行い、その時点で本書の工程定義と受入条件を改訂します。
+> **v2実装authority:** [REPORT_PIPELINE_REDESIGN_RFC.md](REPORT_PIPELINE_REDESIGN_RFC.md) と本書を一体の仕様とする。既存の4回Codex呼出しは旧実装の事実であって、今後維持する要件ではない。v2の通常2回実行・検査・公開・診断・管理UIを一つの実装成果として完成させる。v1で公開された記事の互換性、immutable evidence、権限境界、原子的な公開は維持する。本番検証不能を成功扱いしない。
 
 ## 1. Goal and decisions
 
 Nous OSINT に、取得済みの公開情報から**利用者向けの品質の高い記事を自動生成し、Cloudflare Access 配下で公開する**機能を追加する。記事生成は既存の収集基盤の代替ではなく、出典付きの派生物である。初期実装は単一 VM のセルフホストを基準とする。
 
 - **利用モード**: (A) スケジュールによる自動実行、(B) UI からの随時実行。テーマ・期間・識別子等は**テンプレートの検証済みパラメータ**として両モードから指定する。任意プロンプト入力・任意 URL 取材は MVP 対象外。
-- **編集工程**: 企画 → 事実検証 → 執筆 → 推敲。その後、決定論的な最終検査を通った場合だけ**人間の承認なし**で公開する。掲載価値がなければ `skipped` とし、穴埋め記事を生成しない。
+- **編集工程**: 企画・主張候補生成（Codex 1回）→独立事実レビュー（Codex 1回）→決定論的な記事組立・推敲・最終検査→公開。通常2回のみCodexを呼ぶ。修復が必要な場合の追加呼出しは最大2回まで。根拠が不十分なら `skipped` とし、空記事を公開しない。
 - **AI ハーネス**: VM 上で所有者が正規に認証した **公式 Codex CLI** の `codex exec` を専用 Worker から非対話実行する。サブスクリプションの認証情報は Nous にコピーしない。モデル・利用上限・利用可能な認証方式は実行時に確認し、保証しない。Pi への差し替えは後続候補であり、初期導入に必要ない。
 - **出版**: **Astro の静的 HTML ビルド**を選択する。記事の意味構造だけを Codex に生成させ、デザイン・HTML テンプレート・リンクとコンポーネントは Git 管理の固定実装とする。SSR、常駐 Node サーバ、独立した CMS、メッセージブローカーを追加しない。
 - **公開先**: 既存 `https://nous.yohn.jp/reports/` の**同一オリジン・同一 Access アプリケーション**。既存 Quasar は収集 UI・実行管理 UI として維持する。記事は DB と VM 内の private volume に置き、公開 Git リポジトリへ生成記事や原資料をコミットしない。
@@ -35,38 +35,29 @@ Nous OSINT に、取得済みの公開情報から**利用者向けの品質の�
 ## 3. 処理と責務
 
 ```text
-Official & custom approved sources
-       | existing scheduler / adapters / history
-       v
-PostgreSQL: items / item_versions / cve_item_links
-       | read-only snapshot, bounded and source-policy aware
-       v
-Report scheduler + UI on-demand enqueue ----> report_runs (durable SQL queue)
-                                              |
-                                     lease / retry / timeout
-                                              v
-                                   Report Worker (rootless)
-                                   1) evidence bundle
-                                   2) Codex: planning
-                                   3) Codex: fact verification
-                                   4) Codex: drafting
-                                   5) Codex: editing
-                                   6) deterministic validation
-                                              |
-                                    structured article + Markdown
-                                              v
-                                  Astro static build (one-shot)
-                                  validate links/assets/HTML
-                                              |
-                                    atomic release promotion
-                                              v
-                      private read-only volume -> MCP/UI gateway
-                                     /reports/* via Access
+Approved sources -> PostgreSQL immutable ItemVersion
+                        |
+         read-only bounded evidence snapshot (SHA-256, source policy)
+                        |
+             report_runs durable SQL queue (manual/scheduled)
+                        |
+                 Report Worker (rootless)
+                   - Codex auth/model/UID readiness and diagnostics
+                   - Call #1: editorial proposal + evidence-linked claims
+                   - Call #2: independent claim review
+                   - Optional bounded repair / re-review (+2 calls maximum)
+                   - Deterministic article-v2 assembly and quality gates
+                        |
+              Astro static build + HTML/links/assets check
+                        |
+                Atomic release promotion (old site preserved on failure)
+                        |
+          Access-protected /reports/* and Admin run diagnostics
 ```
 
-**Report Worker** は既存の取得 Worker と別のコマンド・別の Quadlet・別のイメージで動く。Python 側が SQL と Codex 実行を統括し、記事のビルド時だけ同じ専用 Worker イメージ内の Node/Astro を起動する。Podman ソケットをコンテナにマウントしない。Codex や Astro を毎回ダウンロードするのではなく、検証済みバージョンをビルド時に固定する。API・MCP 用イメージには Codex CLI やその認証情報を入れない。
+Report Worker は既存収集Workerと別イメージ・Quadlet・DB secretで稼働する。公式Codex CLIは固定引数・同一の非特権UID/GID/認証ホームで実行し、認証情報・非許諾本文・DB資格情報をモデルやjournaldへ漏らさない。Pythonがキュー・モデル呼出し・検査を統括し、Node/Astroは公開ビルド時の使い捨てプロセスとしてのみ起動する。
 
-MVP は単一 Report Worker（同時生成 1 件）。同一ループで期限到来した `report_schedules` の投入と `report_runs` の claim を行い、SQL 一意制約により再起動・二重 tick を無害化する。後のスケール時にスケジューラを分離しても DB 契約は変えない。
+単一Worker（同時生成1件）とSQL lease、idempotency、retry fenceは維持する。各試行のstage・exit status・安全なJSONL・timing・error codeを追跡可能にし、失敗したstageから同一immutable snapshotで再開する。実装範囲と完全な受入条件はv2 RFCを参照する。
 
 ## 4. テンプレート仕様
 
@@ -97,61 +88,30 @@ Bundle のレコードには最低限 `evidence_id`, `source_key`, `item_id`, `i
 
 原資料の記載は**非信頼データ**であり、原資料内に「プロンプトを無視」「秘密情報を送信」「別 URL にアクセス」等の命令があっても処理命令として扱わない。Codex は原則として bundle 内だけを根拠に執筆し、勝手に外部取材を追加しない。bundle 自体とその SHA-256、入力パラメータ、テンプレート revision、抽出コード revision を保存する。
 
-## 6. 編集工程と品質ゲート
+## 6. 編集工程と品質ゲート（v2）
 
-| Stage | 入力 | 出力 | 制約・失敗時 |
+| Stage | 実行主体 | 入力/出力 | 合否と復旧 |
 | --- | --- | --- | --- |
-| 企画 | template + evidence bundle | `plan.json`: 主題、対象読者、論点、使用 evidence ID、記事を作る理由 | 重要な変化がない場合 `skipped`。事実の創作禁止 |
-| 検証 | plan + bundle | `fact_check.json`: 主張と evidence ID の対応、観測/推論区分、曖昧点、差し戻し | 出典なしの主要主張は採用しない。未検証は未検証とする |
-| 執筆 | verified plan + bundle | `draft.json`: 構造化記事データ + 制限付き Markdown | 見出し・本文・表等はテンプレート許可ブロックのみ |
-| 推敲 | draft + fact_check + bundle | `article.json`: 完成原稿 + claim/evidence map | 可読性・重複・論旨を改善するが新事実は追加しない |
-| 公開前検査 | article + bundle + renderer output | 合否、検査レポート、生成 artifact hash | 不合格なら公開しない。検査は決定論的な fail-closed |
+| Evidence selection | 決定論的処理 | DB snapshot → bounded evidence view + SHA-256 | 元版・権利・日時を検証。根拠不足は skipped |
+| Candidate claims / 企画・執筆 | Codex call #1 | topic, claim_id/text/classification/evidence_ids, section | 根拠ID不整合を拒否。掲載価値なしは skipped |
+| Independent review / 事実検証 | Codex call #2 + gate | claimごとの accepted/rejected/needs_revision | 独立判定と機械的な証拠・KEV・利用条件検査 |
+| Bounded repair | 必要時のみCodex | 指摘されたclaimだけ修正→再レビュー | 最大追加2回。修正不能なら未公開 |
+| Article assembly / 推敲 | 決定論的処理 | 承認claim → article-v2（固定見出し/出典） | 意味を新規生成せず重複/並び/表示を整える |
+| Publication | 決定論的処理 | schema/rights/security gate → Astro → atomic promotion | 実際のHTML/asset検査に合格しなければ現行releaseを維持 |
 
-各 Codex 呼び出しは固定の役割プロンプト + JSON Schema を使用し、ステージごとに**別の実行**として成果物を保存する。構造化出力 API/CLI オプションの対応は採用 CLI バージョンで検証する。無制限な自律再帰・別エージェントへの権限委譲は行わない。有限回の修正（例: 1 回）で検査に通らなければ失敗とする。
+モデルには根拠付きの原子的主張と独立レビューだけを生成させ、HTML・URL・publisher metadata・KEV状態や任意の追加取材は生成させない。四つの編集責務を保持するが**四つの独立したモデル呼出しは仕様としない**。モデルの自己申告のみで真実性を保証したことにしない。
 
-最終検査は少なくとも以下を含む。
-
-1. JSON Schema と必須セクション、文字数・段落数・許可コンポーネント・言語を検査。
-2. **事実主張**の evidence ID が bundle に存在し、参照先の `item_version_id` / immutable hash と整合することを検査。引用先 URL のスキーム・ホスト・長さ等を検査し、改ざん・匿名の出典追加を拒否する。
-3. KEV 三値と鮮度・CVE 一致、観測と推論の表示、日時・数値・比較対象期間の整合を検査。機械的に意味を完全証明できない部分は独立の検証工程でレビューし、検査済みという表示を過大に付けない。
-4. 生 HTML、JavaScript、スタイル埋め込み、外部トラッキング、未承認画像、危険な URL を拒否する。Markdown を安全な AST から描画し、文字列を直接 HTML に挿入しない。
-5. Astro ビルドが成功し、主要ページ・内部リンク・参照 ID・静的アセットが解決することを検査。失敗時は公開中の release に一切変更を加えない。
-
-記事は「確認された事実」「その根拠からの分析・推論」「未確認」を文章上でも区別し、各出典に publisher 名、正規 URL、観測日を示す。生成モデルが正しいと自己申告しただけで事実確認完了とはしない。
+最終ゲートは、canonical JSON schema、claim/evidence/immutable version対応、観測/推論/未確認の区分、CVE/KEV三値・鮮度、引用権利、入力期間、数値・禁止文、未承認HTML/JS/URL、出典一覧、Astro内部リンク/assetを検査する。許諾外の情報が必要な主張は除外し、裏付けできない場合は公開せず理由を記録する。失敗理由は run_id、attempt、failed_stage、終了ステータス、診断参照を持つイベント履歴に残す。
 
 ## 7. 記事スキーマと固定デザイン
 
-`reports/schemas/article-v1.schema.json` で以下のような**許可付きブロックモデル**を定義する。Codex は HTML/CSS/JS を出力できない。
+新規生成の正本は `reports/schemas/` で管理する **candidate/review/article-v2** 契約とする。Codexには浅いJSON構造（claim_id、text、classification、evidence_ids、承認/却下/差戻し）だけを要求し、モデル出力JSONとlocal canonical validationを分離する。記事本文は採用済みclaimを一切意味変更せず決定論的に組み立て、タイトルはテンプレート名・日付・正規CVE ID等の中立的なDB由来メタデータから構築する。新規の根拠・推論・出典URLをレンダラーが補完しない。
 
-```json
-{
-  "schema_version": 1,
-  "template_id": "security-daily",
-  "language": "ja",
-  "title": "...",
-  "dek": "...",
-  "summary": ["..."],
-  "sections": [
-    {"heading": "...", "blocks": [
-      {"type": "paragraph", "markdown": "...", "evidence_ids": ["E001"]},
-      {"type": "source_list", "evidence_ids": ["E001"]}
-    ]}
-  ],
-  "claims": [{"text": "...", "classification": "observed", "evidence_ids": ["E001"]}]
-}
-```
+既刊 `article-v1.schema.json` のJSONと記事URLは変更・再生成しない。Astroの読み込み/レンダリングを **v1/v2両方**に対応させる。v2だけを新規生成に利用し、旧4回の生成モードを残す必要はない。
 
-初期許可ブロックは `paragraph`, `bullet_list`, `fact_table`, `source_list`, `cve_fact`, `quote` に限定する。グラフは正規化された数値データと比較条件を扱えるようになってから追加。記事中に任意の Vue/MDX/HTML コンポーネントは埋め込まない。
+固定コンポーネントは既存 `paragraph`, `bullet_list`, `fact_table`, `source_list`, `cve_fact`, `quote` のうち証拠・権利条件を満たすものを利用する。デザイン、HTML、CSS、リンク/Access、公開slug、noindex、static buildをCodexの自由生成に委ねない。
 
-Astro は `reports/site/` に置き、`static` output と記事 content collection / schema を利用する。共通の `ArticleLayout`、一覧、詳細、テンプレート別ラベル、出典リスト、CVE/KEV 状態部品、関連記事（明示的な関連だけ）を実装する。固定デザイントークンは Git 管理し、編集者風の可読性・長文幅・表・和文組版・モバイル・ダークモード・アクセシビリティを検証する。**CSS/コンポーネントは記事生成プロンプトが編集しない**。
-
-公開 URL 例:
-
-- `GET /reports/` — 全記事一覧（静的）。
-- `GET /reports/security/2026-11-04-security-daily/` — 日次記事。
-- `GET /reports/cve/CVE-2026-12345/` — CVE テーマ記事（同一 CVE の再刊は別 URL/slug とし上書きしない）。
-
-静的記事 URL は `slug` を allowlist 正規化し衝突禁止。`sitemap.xml` 等の外部検索エンジン向け公開物は既定で生成しない。`noindex` と `Cache-Control: private, no-store` は多層防御であり、認証の代替ではない。
+公開URLは既存の `/reports/` と `/reports/{category}/{slug}/` を維持し、既刊との衝突を禁止する。
 
 ## 8. 永続化とジョブ契約
 
@@ -160,15 +120,16 @@ Astro は `reports/site/` に置き、`static` output と記事 content collecti
 | テーブル | 正本として保持する内容 | 主な不変条件 |
 | --- | --- | --- |
 | `report_schedules` | template/revision、検証済み params、タイムゾーン、cadence、次回予定、enabled、作成 actor | next slot を UTC で確定。過去 slot を無制限 catch-up しない |
-| `report_runs` | UUID、trigger(manual/scheduled)、template/revision、params、schedule slot、idempotency key、state、lease/attempt、入力 cutoff/hash、stage、error code、timestamps、生成 report_id | 同一 schedule + slot は一度だけ投入。実行 claim は排他的、期限切れ lease を回収 |
+| `report_runs` | UUID、trigger、template/revision、params、schedule slot、idempotency key、state、lease/attempt、入力 cutoff/hash、stage、failed_stage、error code、timestamps、生成 report_id | 同一 schedule + slot は一度だけ投入。失敗工程と状態は分離し、lease fencingを維持 |
+| `report_run_events`（v2） | run_id、attempt、seq、timestamp、stage、event_type、error_code、exit_status、duration、usage、artifact hash、safe diagnostic reference | append-only。管理者だけ参照可能で、認証情報・生prompt・未加工stderrを含めない |
 | `reports` | UUID、unique slug、article schema version、元 run ID、headline、要約、カテゴリ、published_at、artifact digest/path、supersedes ID、生成モデル/ハーネス version、input digest | 既刊データは不変。修正/再刊は新 UUID + supersedes。失敗時は既刊を維持 |
 | `report_evidence` | report ID、evidence ID、item ID + **item_version ID**、source URL、観測日時、relation、出典種別 | 必ず元データの immutable version に解決し、関係を偽装しない |
 
 静的 HTML サイトは最大 1,000 件の既存公開記事を一括ビルドする。上限に達した場合、新規記事の生成ジョブは `report_archive_limit_exceeded` で失敗し、既存の公開ポインタ・既存記事を変更しない。DB 上の記事を無断削除して解消しない。保持・ページ分割に関する仕様変更は独立して決定する。
 
-中間生成物 (`plan`, `fact_check`, `draft`, `article`) と検査ログは非公開のジョブ領域に保存する。実行履歴のメタデータと最終 immutable 記事は DB に永続化し、ファイルを消しても再ビルド可能にする。巨大な raw bundle は private artifact volume に hash 付きで保存して参照し、DB にその hash と保管期限を保持する。記事への掲載が許されない本文は永続的に転載しない。
+中間生成物（v2: `candidate_claims`, `claim_review`, `article-v2`、必要時のrepair）と検査・診断ログは非公開のジョブ領域に保存する。v1の既存履歴は互換性のため参照可能にする。実行履歴のメタデータと最終 immutable 記事は DB に永続化し、ファイルを消しても再ビルド可能にする。巨大な raw bundle は private artifact volume に hash 付きで保存して参照し、DB にその hash と保管期限を保持する。記事への掲載が許されない本文は永続的に転載しない。
 
-ジョブ状態: `queued → leased/running → validating → publishing → published`。合法的な終端として `skipped`, `failed`, `cancelled` を持つ。公開前の一時的な失敗は有限回 retry（初期最大 2 回）、検査失敗・不正入力は再試行せず失敗。実行時間の上限、lease heartbeat、途中停止時の cleanup、二重刊行を防ぐ unique key を設ける。Codex の実行制限・認証失効・予算不足は分かる error code として保存し、秘密情報はログに残さない。
+ジョブ状態: `queued → leased/running → validating → publishing → published`、終端は `skipped`, `failed`, `cancelled`。`failed_stage` と append-only events は `state` から独立して保存する。一時的なネットワーク障害のみステージ単位の有限再試行を許可し、auth/モデル権限/不正schema/権利違反は無条件再試行しない。lease heartbeat・途中停止時cleanup・重複刊行防止を保持。認証情報はjournaldと通常diagnosticsに残さず、redacted/private diagnosticsには保存上限・保持期間を設ける。
 
 ## 9. API / UI
 
@@ -218,7 +179,8 @@ Quadlet は `nous-report-worker.container` と記事 volume マウント（Worke
 | モード | スケジュール実行と UI 随時実行が同じ pipeline を利用し、各テンプレートの params が反映される |
 | スケジュール/キュー | 二重 tick、同一 slot、worker crash、lease expiry、timeout、retry 上限で二重公開が発生しない |
 | 入力・権利 | DB query で上限、時刻、元 `item_version_id`、source policy が維持され、未許諾本文が出力されない |
-| 4 工程 | schema に適合する各 stage 成果物が保存され、入力証拠にない主要主張・欠損 ID は fail-closed |
+| v2編集工程 | 通常Codex 2回、必要時の修正・再レビューを含め最大4回。claim生成・独立review・決定論的記事組立がschemaに適合し、未裏付け主張・欠損IDはfail-closed | 
+| 障害診断 | run_id/attempt/failed_stage/exit status/JSONL/安全なstderr分類が管理者向け履歴と非公開診断に保存され、無用な再試行をしない |
 | KEV | `listed`/`not_listed`/`unknown` と `catalog_as_of` が記事で誤解なく表示される。title mention は exploit evidence にならない |
 | 出版 | build と検証に成功した場合のみ一括公開。失敗、途中停止、再試行では公開済みサイトを壊さない |
 | Access | `/reports/`、asset、記事 URL、管理 POST は未認証では拒否。一般利用者は管理 POST 不可、MCP に書き込み無し、直接 DB 公開無し |
@@ -229,13 +191,13 @@ Quadlet は `nous-report-worker.container` と記事 volume マウント（Worke
 
 Fixture pipeline と CI はオーナー認証済み Codex 実行や VM acceptance の証拠ではない。実施前の状態は明示的に **NOT_CHECKED** と報告する。
 
-*最終受入シナリオ*: 管理者が `security-daily` を随時実行 → スナップショットと四工程の記録が残る → 製品の禁止事項を満たす記事を静的 HTML として `/reports/` に公開 → 過去記事・出典・元 CVE を開ける → スケジュール実行でも同じ品質ゲートを通る → 生成失敗時は既存公開内容が変化しない。
+*最終受入シナリオ*: 管理者が `security-daily` と `cve-kev-deep-dive` を実行 → evidence snapshot、Codexのclaim生成・独立review、決定論的article-v2生成、検査・静的HTML公開までが一連で成功 → Access経由で記事・既刊v1・出典を閲覧できる → スケジュールでも同じv2経路が動作 → 故障時はfailed_stageと診断情報が確認でき、既存公開内容が変化しない。実機未検証はNOT_CHECKEDと記す。
 
 ## 13. 実装の切り分けとエージェント引継ぎ
 
 **実装 authority**: この文書、ARCHITECTURE / DATA_MODEL / SOURCE_LICENSES / ACCESS と `main` の既存コード・テストを照合する。後続変更は CONTRIBUTING.md に従い専用ブランチと PR で審査し、CI と VM 動作を別々に報告する。
 
-実装は `main` に統合済みである。**GitHub Actions での検証は VM への展開・起動成功の証拠ではない**。オーナー認証済み Codex による実記事生成、VM での Report Worker / HTML 配信、Cloudflare Access を通した受入確認は **NOT_CHECKED** として扱い、実行後の観測結果でのみ更新する。fixture pipeline/CI の結果を実環境受入と混同しない。
+既存v1実装は `main` に統合済みだが、**本書のv2置換実装は未完了**。Codex/DB/記事スキーマ/レンダラー/管理UI/実行診断を統合して一つの完成成果として提供する。旧4回方式を維持するための中間PR/切替feature flagは不要。**GitHub Actions での検証は VM への展開・起動成功の証拠ではない**。オーナー認証済み Codex による実記事生成、VM での Report Worker / HTML 配信、Cloudflare Access を通した受入確認は **NOT_CHECKED** として扱い、実行後の観測結果でのみ更新する。fixture pipeline/CI の結果を実環境受入と混同しない。
 
 ## 14. External references
 
