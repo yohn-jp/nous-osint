@@ -94,7 +94,7 @@ def _numeric_tokens(value: object) -> set[str]:
     if isinstance(value, bool) or value is None:
         return set()
     if isinstance(value, (str, int, float)):
-        return set(_NUMBER.findall(str(value)))
+        return {str(int(token)) for token in _NUMBER.findall(str(value))}
     if isinstance(value, list):
         return set().union(*(_numeric_tokens(item) for item in value)) if value else set()
     if isinstance(value, dict):
@@ -114,8 +114,6 @@ def _validate_claim_rows(claims: list, evidence: dict[str, dict], *, template_id
             _raise("unsafe_claim_text")
         if any(eid not in evidence for eid in claim["evidence_ids"]):
             _raise("invalid_evidence_reference")
-        if claim["section"] != _CLASS_SECTION[claim["classification"]]:
-            _raise("claim_section_mismatch")
         if template_id == "cve-kev-deep-dive" and _KEV_TEXT.search(claim["text"]):
             _raise("kev_text_must_use_deterministic_panel")
         cited_rows = [evidence[eid] for eid in claim["evidence_ids"]]

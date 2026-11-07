@@ -136,3 +136,15 @@ def test_exact_cve_claim_accepts_producer_keV_row_without_embedded_cve_id():
         "CVE-2026-12345についてCISAが悪用を確認した記録があります。"
     )
     assert validate_claims(candidate, cve_bundle, "cve-kev-deep-dive") == candidate
+
+
+def test_date_numbers_allow_unpadded_day_and_section_keeps_classification():
+    snapshot = bundle()
+    snapshot["evidence"][0]["observed_at"] = "2026-11-05T00:00:00+00:00"
+    candidate = proposal()
+    candidate["claims"][0]["text"] = "11月5日に公表元の更新情報を観測しました。"
+    candidate["claims"][0]["section"] = "unknowns"
+    validate_claims(candidate, snapshot, "security-daily")
+    article = assemble_article(candidate, review(), bundle=snapshot, template_id="security-daily")
+    assert article["claims"][0]["classification"] == "observed"
+    assert article["sections"][0]["heading"] == "未確認事項"
