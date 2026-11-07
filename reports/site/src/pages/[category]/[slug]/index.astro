@@ -72,9 +72,9 @@ function templateName(template: string) {
           </dl>
           <p class="dossier-class-heading">記述分類の内訳</p>
           <div class="dossier-claim-rail" aria-hidden="true">
-            {claimCounts.observed > 0 && <span class="rail-observed" style={`flex-grow: ${claimCounts.observed}`}></span>}
-            {claimCounts.inference > 0 && <span class="rail-inference" style={`flex-grow: ${claimCounts.inference}`}></span>}
-            {claimCounts.unconfirmed > 0 && <span class="rail-unconfirmed" style={`flex-grow: ${claimCounts.unconfirmed}`}></span>}
+            {Array.from({ length: claimCounts.observed }).map(() => <span class="rail-observed"></span>)}
+            {Array.from({ length: claimCounts.inference }).map(() => <span class="rail-inference"></span>)}
+            {Array.from({ length: claimCounts.unconfirmed }).map(() => <span class="rail-unconfirmed"></span>)}
           </div>
           <dl class="dossier-claim-legend">
             <div><dt><span class="legend-dot observed"></span>観測事実</dt><dd>{claimCounts.observed}</dd></div>
