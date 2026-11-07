@@ -23,7 +23,7 @@ export interface StreamObservation {
   change: 'new' | 'updated'
   source: string
   category: string
-  platform: 'bluesky' | 'rss' | 'json_api' | 'html'
+  platform: 'bluesky' | 'x' | 'rss' | 'json_api' | 'html'
   organization: string | null
   kind: ItemKind
   title: string

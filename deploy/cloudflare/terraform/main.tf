@@ -91,6 +91,7 @@ locals {
     "nous.yohn.jp/index.html*",
     "nous.yohn.jp/assets/*",
     "nous.yohn.jp/explore*",
+    "nous.yohn.jp/live*",
     "nous.yohn.jp/changes*",
     "nous.yohn.jp/sources*",
     "nous.yohn.jp/admin/sources*",

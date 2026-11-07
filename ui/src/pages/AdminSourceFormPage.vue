@@ -8,9 +8,10 @@ const editId = computed(() => typeof route.params.id === 'string' ? route.params
 const editing = computed(() => !!editId.value)
 const id = ref('')
 const kind = ref<'rss' | 'json_api' | 'html'>('rss')
-type JsonAdapter = 'json_v1' | 'greenhouse_jobs_v1' | 'lever_jobs_v1' | 'ashby_jobs_v1'
+type JsonAdapter = 'json_v1' | 'greenhouse_jobs_v1' | 'lever_jobs_v1' | 'ashby_jobs_v1' | 'x_user_posts_v1'
 const jsonAdapter = ref<JsonAdapter>('json_v1')
-const nativeJobAdapter = computed(() => kind.value === 'json_api' && jsonAdapter.value !== 'json_v1')
+const nativeJobAdapter = computed(() => kind.value === 'json_api' &&
+  ['greenhouse_jobs_v1', 'lever_jobs_v1', 'ashby_jobs_v1'].includes(jsonAdapter.value))
 const maxPages = ref(1)
 const url = ref('')
 const itemKind = ref<SourceDefinition['item_kind']>('advisory')
@@ -67,7 +68,7 @@ onMounted(async () => {
     const c = source.config
     id.value = c.id
     kind.value = c.kind
-    if (['json_v1', 'greenhouse_jobs_v1', 'lever_jobs_v1', 'ashby_jobs_v1'].includes(c.adapter)) {
+    if (['json_v1', 'greenhouse_jobs_v1', 'lever_jobs_v1', 'ashby_jobs_v1', 'x_user_posts_v1'].includes(c.adapter)) {
       jsonAdapter.value = c.adapter as JsonAdapter
     }
     maxPages.value = c.max_pages ?? 1
@@ -99,9 +100,10 @@ async function submit() {
     const config: SourceDefinition = {
       id: id.value.trim(), kind: kind.value, url: url.value.trim(),
       adapter: kind.value === 'rss' ? 'rss_v1' : kind.value === 'json_api' ? jsonAdapter.value : 'html_v1',
-      item_kind: nativeJobAdapter.value ? 'job_posting' : itemKind.value, interval_minutes: interval.value,
+      item_kind: nativeJobAdapter.value ? 'job_posting' : jsonAdapter.value === 'x_user_posts_v1' && kind.value === 'json_api' ? 'news' : itemKind.value,
+      interval_minutes: interval.value,
       max_requests_per_hour: hourly.value, max_concurrency: concurrent.value,
-      max_pages: jsonAdapter.value === 'lever_jobs_v1' && nativeJobAdapter.value ? maxPages.value : 1,
+      max_pages: kind.value === 'json_api' && (jsonAdapter.value === 'lever_jobs_v1' || jsonAdapter.value === 'x_user_posts_v1') ? maxPages.value : 1,
       enabled: editing.value ? enabled.value : false,
       policy: {
         reviewed_at: reviewedAt.value,
@@ -112,7 +114,7 @@ async function submit() {
     }
     if (organization.value.trim()) config.organization = organization.value.trim()
     if (sourceCategory.value) config.category = sourceCategory.value
-    if (kind.value === 'json_api' && !nativeJobAdapter.value) {
+    if (kind.value === 'json_api' && jsonAdapter.value === 'json_v1') {
       config.json_path = jsonPath.value.trim() || null
       config.field_map = linesToMap(fieldMap.value)
     }
@@ -149,18 +151,23 @@ async function submit() {
       <template v-if="kind === 'json_api'">
         <div class="text-weight-bold q-mt-lg q-mb-md">JSONの抽出方式</div>
         <q-select v-model="jsonAdapter" outlined dense emit-value map-options class="q-mb-md"
-          :options="[{label:'一般JSON',value:'json_v1'},{label:'Greenhouse 公開求人（国内セキュリティ）',value:'greenhouse_jobs_v1'},{label:'Lever 公開求人（国内セキュリティ）',value:'lever_jobs_v1'},{label:'Ashby 公開求人（国内セキュリティ）',value:'ashby_jobs_v1'}]" />
-        <template v-if="!nativeJobAdapter">
+          :options="[{label:'一般JSON',value:'json_v1'},{label:'Greenhouse 公開求人（国内セキュリティ）',value:'greenhouse_jobs_v1'},{label:'Lever 公開求人（国内セキュリティ）',value:'lever_jobs_v1'},{label:'Ashby 公開求人（国内セキュリティ）',value:'ashby_jobs_v1'},{label:'X 公式API（公開アカウント投稿・従量課金）',value:'x_user_posts_v1'}]" />
+        <template v-if="jsonAdapter === 'json_v1'">
           <q-input v-model.trim="jsonPath" outlined dense label="配列へのパス（例: results.items）" class="q-mb-md" />
           <q-input v-model="fieldMap" outlined autogrow type="textarea" label="フィールド対応" hint="例: id=uuid、title=headline。1行に1項目。" />
         </template>
+        <q-banner v-else-if="jsonAdapter === 'x_user_posts_v1'" class="q-mb-md">
+          X公式APIのユーザーIDを使い、URLは <code>https://api.x.com/2/users/123456789/tweets</code> 形式で入力します。
+          認証トークンと1日あたりの取得上限をサーバー側に設定するまで課金APIは呼び出されません。
+          対象は公開投稿のみで、返信・リポスト・本文全文・添付メディアは保存しません。
+        </q-banner>
         <q-banner v-else class="bg-grey-2 text-grey-9 q-mb-md">
           提供元の公式公開GETエンドポイントのみ対応します。国内勤務地と技術系セキュリティ職種を判定し、求人本文は保存しません。
           募集終了は確認済みの完全取得時だけ反映します。
         </q-banner>
-        <q-input v-if="jsonAdapter === 'lever_jobs_v1'" v-model.number="maxPages" type="number"
-          outlined dense label="最大ページ数（1〜10・1ページ100件）"
-          :rules="[v => Number.isInteger(v) && v >= 1 && v <= 10 && v <= hourly || '最大ページ数は1〜10かつ時間あたり要求数以下']" />
+        <q-input v-if="jsonAdapter === 'lever_jobs_v1' || jsonAdapter === 'x_user_posts_v1'" v-model.number="maxPages" type="number"
+          outlined dense :label="jsonAdapter === 'x_user_posts_v1' ? '最大ページ数（1〜3・1ページ最大10投稿）' : '最大ページ数（1〜10・1ページ100件）'"
+          :rules="[v => Number.isInteger(v) && v >= 1 && v <= (jsonAdapter === 'x_user_posts_v1' ? 3 : 10) && v <= hourly || '最大ページ数は上限以内かつ時間あたり要求数以下']" />
       </template>
       <template v-if="kind === 'html'">
         <div class="text-weight-bold q-mt-lg q-mb-md">HTMLのCSSセレクタ</div>

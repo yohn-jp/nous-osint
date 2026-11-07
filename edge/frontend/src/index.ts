@@ -9,7 +9,7 @@ export interface Env {
 }
 
 // Compatibility authority: src/nous/access_auth.py (_SPA_ROUTE, _STATIC_ASSET).
-const spaRoute = /^\/(?:explore|changes|sources|sources\/new|admin\/sources|admin\/sources\/new|admin\/reports|admin\/sources\/[a-z][a-z0-9-]{2,99}\/edit|items\/[0-9]+|cves\/CVE-[0-9]{4}-[0-9]{4,})$/;
+const spaRoute = /^\/(?:live|explore|changes|sources|sources\/new|admin\/sources|admin\/sources\/new|admin\/reports|admin\/sources\/[a-z][a-z0-9-]{2,99}\/edit|items\/[0-9]+|cves\/CVE-[0-9]{4}-[0-9]{4,})$/;
 const assetPath = /^\/assets\/[A-Za-z0-9._-]{1,255}$/;
 export type Destination = 'index' | 'asset' | 'not-found';
 

@@ -214,6 +214,7 @@ onBeforeUnmount(() => {
           <div class="live-entry-headline">
             <div class="live-entry-origin">
               <span class="live-entry-platform">{{ observation.platform === 'bluesky' ? 'BLUESKY' :
+                observation.platform === 'x' ? 'X' :
                 observation.platform === 'rss' ? 'RSS / ATOM' : observation.platform.toUpperCase() }}</span>
               <span class="live-entry-author">{{ observation.organization || observation.source }}</span>
               <span class="live-entry-change">{{ observation.change === 'new' ? '新規' : '更新' }}</span>

@@ -13,7 +13,7 @@ const env = { ASSETS: { async fetch(req: Request) {
 } } };
 
 test('only documented UI GET/HEAD renders SPA entry', async () => {
-  for (const path of ['/', '/index.html', '/explore', '/changes', '/sources', '/sources/new', '/items/1', '/cves/CVE-2026-12345', '/admin/sources', '/admin/sources/new', '/admin/sources/example/edit', '/admin/reports', '/explore?q=security']) {
+  for (const path of ['/', '/index.html', '/live', '/explore', '/changes', '/sources', '/sources/new', '/items/1', '/cves/CVE-2026-12345', '/admin/sources', '/admin/sources/new', '/admin/sources/example/edit', '/admin/reports', '/explore?q=security']) {
     for (const method of ['GET', 'HEAD']) {
       assert.equal(classify(request(path, method)), 'index');
       const response = await dispatch(request(path, method), env);
@@ -49,17 +49,17 @@ test('never proxy or turn backend, OAuth, malformed, or unknown paths into SPA',
 test('static paths are selected by explicit zone routes; dynamic paths bypass Worker entirely', async () => {
   const terraform = await readFile(new URL('../../../deploy/cloudflare/terraform/main.tf', import.meta.url), 'utf8');
   const paths = [...terraform.matchAll(/^    "(nous\.yohn\.jp[^"]*)",?$/gm)].map(m => m[1]);
-  assert.equal(paths.length, 10);
+  assert.equal(paths.length, 11);
   assert(!paths.includes('nous.yohn.jp/*'), 'catch-all Worker Route forbidden');
   const matches = (path: string) => paths.some(route => {
     const requestURL = 'nous.yohn.jp' + path;
     if (route === 'nous.yohn.jp') return path === '/';
     return route.endsWith('*') ? requestURL.startsWith(route.slice(0, -1)) : requestURL === route;
   });
-  for (const path of ['/', '/index.html?x=1', '/assets/app-123.js', '/explore?q=1', '/changes', '/sources/new', '/admin/sources/foo/edit', '/admin/reports', '/items/123', '/cves/CVE-2026-12345']) {
+  for (const path of ['/', '/index.html?x=1', '/assets/app-123.js', '/live', '/explore?q=1', '/changes', '/sources/new', '/admin/sources/foo/edit', '/admin/reports', '/items/123', '/cves/CVE-2026-12345']) {
     assert(matches(path), path);
   }
-  for (const path of ['/v1/items', '/v1/admin/report-runs', '/mcp', '/mcp/tools', '/reports', '/reports/', '/reports/_astro/a.css', '/.well-known/oauth-authorization-server', '/cdn-cgi/access/login', '/health', '/api/v1/items', '/metrics', '/oauth/authorize']) {
+  for (const path of ['/v1/items', '/v1/stream', '/v1/admin/report-runs', '/mcp', '/mcp/tools', '/reports', '/reports/', '/reports/_astro/a.css', '/.well-known/oauth-authorization-server', '/cdn-cgi/access/login', '/health', '/api/v1/items', '/metrics', '/oauth/authorize']) {
     assert(!matches(path), path);
   }
   // Worker Routes do not match query strings for an exact root path. Existing

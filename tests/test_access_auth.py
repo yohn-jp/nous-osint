@@ -122,6 +122,13 @@ def test_middleware_only_exposes_mcp_ui_and_allowlisted_read_api(auth):
     })
     assert unknown_screen.status_code == 200
     assert unknown_screen.json()["subject"] == "subject-1"
+    for path in ("/live", "/v1/stream", "/v1/stream?category=threat_research"):
+        assert client.get(path).status_code == 403
+        response = client.get(path, headers={
+            "Cf-Access-Jwt-Assertion": jwt(key, claims),
+        })
+        assert response.status_code == 200, path
+
 
 
 def test_report_routes_require_access_and_have_exact_path_and_method_allowlist(auth):

@@ -29,6 +29,8 @@ test('built static-only Worker serves real Quasar assets and never forwards to o
     }],
   });
   try {
+    const live = await mf.dispatchFetch('https://nous.yohn.jp/live');
+    assert.equal(live.status, 200);
     const ui = await mf.dispatchFetch('https://nous.yohn.jp/explore');
     assert.equal(ui.status, 200);
     assert.match(await ui.text(), /<html/);
