@@ -26,6 +26,8 @@ _EXPLOIT_TEXT = re.compile(r"(?:悪用|エクスプロイト|exploit|ransomware|
 _KEV_TEXT = re.compile(r"\bKEV\b|既知の悪用脆弱性", re.I)
 _CLAIM_ID = re.compile(r"^C[0-9]{3}$")
 _EVIDENCE_ID = re.compile(r"^E[0-9]{3}$")
+_CVE_ID = re.compile(r"(?<![A-Z0-9])CVE-[0-9]{4}-[0-9]{4,}(?![0-9])", re.I)
+_NUMBER = re.compile(r"[0-9]+")
 _HEADINGS = {
     "security-daily": {
         "primary_observations": "確認された事実",
@@ -88,7 +90,20 @@ def _evidence_map(bundle: dict) -> dict[str, dict]:
     return result
 
 
-def _validate_claim_rows(claims: list, evidence: dict[str, dict], *, template_id: str) -> None:
+def _numeric_tokens(value: object) -> set[str]:
+    if isinstance(value, bool) or value is None:
+        return set()
+    if isinstance(value, (str, int, float)):
+        return set(_NUMBER.findall(str(value)))
+    if isinstance(value, list):
+        return set().union(*(_numeric_tokens(item) for item in value)) if value else set()
+    if isinstance(value, dict):
+        return set().union(*(_numeric_tokens(item) for item in value.values())) if value else set()
+    return set()
+
+
+def _validate_claim_rows(claims: list, evidence: dict[str, dict], *, template_id: str,
+                         bundle: dict | None = None) -> None:
     seen = set()
     for claim in claims:
         claim_id = claim["claim_id"]
@@ -103,6 +118,37 @@ def _validate_claim_rows(claims: list, evidence: dict[str, dict], *, template_id
             _raise("claim_section_mismatch")
         if template_id == "cve-kev-deep-dive" and _KEV_TEXT.search(claim["text"]):
             _raise("kev_text_must_use_deterministic_panel")
+        cited_rows = [evidence[eid] for eid in claim["evidence_ids"]]
+        cve_ids = {item.upper() for item in _CVE_ID.findall(claim["text"])}
+        if cve_ids:
+            expected_cve_id = ((bundle or {}).get("parameters") or {}).get("cve_id")
+            if expected_cve_id and cve_ids != {expected_cve_id.upper()}:
+                _raise("cve_claim_id_mismatch")
+            if not any(
+                any(cve_id in str(row.get("title", "")).upper() or
+                    cve_id == str((row.get("vulnerability") or {}).get("cve_id", "")).upper()
+                    for cve_id in cve_ids)
+                for row in cited_rows
+            ):
+                _raise("cve_claim_evidence_mismatch")
+        claim_numbers = _numeric_tokens(claim["text"])
+        if claim_numbers:
+            permitted_numbers: set[str] = set()
+            for row in cited_rows:
+                permitted_numbers.update(_numeric_tokens(row.get("title", "")))
+                permitted_numbers.update(_numeric_tokens(row.get("observed_at")))
+                permitted_numbers.update(_numeric_tokens(row.get("published_at")))
+                allowed_fields = row.get("allowed_fields", [])
+                for field in allowed_fields:
+                    if field == "title":
+                        continue
+                    if field.startswith("vulnerability."):
+                        permitted_numbers.update(_numeric_tokens(
+                            (row.get("vulnerability") or {}).get(field.partition(".")[2])))
+                    elif field in {"observed_at", "published_at"}:
+                        permitted_numbers.update(_numeric_tokens(row.get(field)))
+            if not claim_numbers <= permitted_numbers:
+                _raise("unsupported_claim_number")
 
 
 def validate_claims(proposal: object, bundle: dict, template_id: str) -> dict:
@@ -120,7 +166,7 @@ def validate_claims(proposal: object, bundle: dict, template_id: str) -> dict:
     if len(evidence) < template["publish_policy"]["minimum_evidence"]:
         _raise("insufficient_evidence", skipped=True)
     claims = proposal["claims"]
-    _validate_claim_rows(claims, evidence, template_id=template_id)
+    _validate_claim_rows(claims, evidence, template_id=template_id, bundle=bundle)
     if proposal["decision"] == "skip":
         if claims:
             _raise("skip_with_claims")
@@ -341,7 +387,7 @@ def _validate_article_shape(article: dict, evidence: dict[str, dict], bundle: di
     except (KeyError, ValueError, TypeError):
         _raise("invalid_template_snapshot")
     claims = article["claims"]
-    _validate_claim_rows(claims, evidence, template_id=template_id)
+    _validate_claim_rows(claims, evidence, template_id=template_id, bundle=bundle)
     claim_map = {claim["claim_id"]: claim for claim in claims}
     if len(claim_map) != len(claims):
         _raise("claim_id_invalid")

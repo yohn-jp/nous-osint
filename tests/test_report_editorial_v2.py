@@ -1,4 +1,3 @@
-from copy import deepcopy
 
 import pytest
 
@@ -105,3 +104,16 @@ def test_article_rejects_fabricated_publication_metadata_and_cve_claims():
     cve_proposal["claims"][0]["text"] = "この脆弱性は悪用されています。"
     with pytest.raises(ReportError, match="unsupported_exploitation_claim"):
         validate_claims(cve_proposal, cve_bundle, "cve-kev-deep-dive")
+
+
+def test_claims_reject_unsupported_numbers_and_mismatched_cve_identifiers():
+    candidate = proposal()
+    candidate["claims"][0]["text"] = "2028年に公表元が更新情報を掲載したと観測しました。"
+    with pytest.raises(ReportError, match="unsupported_claim_number"):
+        validate_claims(candidate, bundle(), "security-daily")
+
+    cve_candidate = proposal()
+    cve_candidate["claims"][0]["text"] = "CVE-2026-99999に関する記録を確認しました。"
+    cve_candidate["claims"][0]["evidence_ids"] = ["E001"]
+    with pytest.raises(ReportError, match="cve_claim_id_mismatch"):
+        validate_claims(cve_candidate, bundle("cve-kev-deep-dive"), "cve-kev-deep-dive")
