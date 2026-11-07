@@ -68,7 +68,7 @@ const cve = z.strictObject({
   evidence_ids: z.array(evidenceId).min(1).max(200),
 });
 
-const report = z.strictObject({
+const reportV1 = z.strictObject({
   slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,126}$/),
   category: z.enum(['security', 'cve']),
   published_at: z.string().datetime({ offset: true }),
@@ -223,6 +223,122 @@ const report = z.strictObject({
     context.addIssue({ code: 'custom', path: ['cve', 'kev_status'], message: 'fresh complete snapshots resolve unknown to listed or not_listed' });
   }
 });
+
+const claimV2 = claim.extend({
+  section: z.enum(['primary_observations', 'analysis', 'unknowns']),
+  importance: z.enum(['normal', 'high']),
+});
+
+const sectionV2 = z.strictObject({
+  heading: z.string().min(2).max(80),
+  claim_ids: z.array(claimId).max(50),
+  evidence_ids: z.array(evidenceId).min(1).max(200),
+});
+
+const reportV2 = z.strictObject({
+  slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,126}$/),
+  category: z.enum(['security', 'cve']),
+  published_at: z.string().datetime({ offset: true }),
+  url: z.string().regex(/^\/reports\/(?:security|cve)\/[a-z0-9][a-z0-9-]{0,126}\/$/),
+  schema_version: z.literal(2),
+  template_id: z.enum(['security-daily', 'cve-kev-deep-dive']),
+  language: z.literal('ja'),
+  title: z.string().min(8).max(120),
+  dek: z.string().min(10).max(240),
+  summary: z.array(z.string().min(10).max(240)).min(1).max(3),
+  sections: z.array(sectionV2).min(1).max(4),
+  claims: z.array(claimV2).min(1).max(50),
+  sources: z.array(source).min(1).max(50),
+  cve: cve.optional(),
+}).superRefine((value, context) => {
+  const sourceIds = new Set<string>();
+  for (const [index, item] of value.sources.entries()) {
+    if (sourceIds.has(item.evidence_id)) {
+      context.addIssue({ code: 'custom', path: ['sources', index, 'evidence_id'], message: 'Duplicate evidence ID' });
+    }
+    sourceIds.add(item.evidence_id);
+  }
+  const claimMap = new Map<string, (typeof value.claims)[number]>();
+  const safeText = (text: string) => !/(?:<\/?[a-z!]|https?:\/\/|javascript:|data:|\bon\w+\s*=)/i.test(text);
+  for (const [index, item] of value.claims.entries()) {
+    if (claimMap.has(item.claim_id)) {
+      context.addIssue({ code: 'custom', path: ['claims', index, 'claim_id'], message: 'Duplicate claim ID' });
+    }
+    claimMap.set(item.claim_id, item);
+    if (!safeText(item.text)) {
+      context.addIssue({ code: 'custom', path: ['claims', index, 'text'], message: 'Unsafe claim text' });
+    }
+    for (const id of item.evidence_ids) {
+      if (!sourceIds.has(id)) {
+        context.addIssue({ code: 'custom', path: ['claims', index, 'evidence_ids'], message: `Unknown evidence ID ${id}` });
+      }
+    }
+  }
+  const displayed = new Set<string>();
+  for (const [sectionIndex, section] of value.sections.entries()) {
+    const path = ['sections', sectionIndex] as (string | number)[];
+    if (!safeText(section.heading)) {
+      context.addIssue({ code: 'custom', path: [...path, 'heading'], message: 'Unsafe heading' });
+    }
+    for (const id of section.evidence_ids) {
+      if (!sourceIds.has(id)) {
+        context.addIssue({ code: 'custom', path: [...path, 'evidence_ids'], message: `Unknown evidence ID ${id}` });
+      }
+    }
+    const expectedEvidence = new Set<string>();
+    for (const [claimIndex, id] of section.claim_ids.entries()) {
+      const item = claimMap.get(id);
+      if (!item) {
+        context.addIssue({ code: 'custom', path: [...path, 'claim_ids', claimIndex], message: `Unknown claim ID ${id}` });
+        continue;
+      }
+      displayed.add(id);
+      for (const evidenceIdValue of item.evidence_ids) expectedEvidence.add(evidenceIdValue);
+      const expectedHeading = value.template_id === 'cve-kev-deep-dive'
+        ? item.section === 'primary_observations' ? 'CVEの確認情報' : '影響と未確認事項'
+        : item.section === 'primary_observations' ? '確認された事実'
+          : item.section === 'analysis' ? '分析' : '未確認事項';
+      if (section.heading !== expectedHeading) {
+        context.addIssue({ code: 'custom', path: [...path, 'heading'], message: 'Unreviewed claim grouping' });
+      }
+    }
+    if ([...expectedEvidence].some((id) => !section.evidence_ids.includes(id))) {
+      context.addIssue({ code: 'custom', path: [...path, 'evidence_ids'], message: 'Evidence IDs must cover claims' });
+    }
+  }
+  if (displayed.size !== claimMap.size || [...claimMap.keys()].some((id) => !displayed.has(id))) {
+    context.addIssue({ code: 'custom', path: ['claims'], message: 'Every approved claim must be displayed' });
+  }
+  const verifiedText = new Set([...claimMap.values()].map((item) => item.text));
+  if (!verifiedText.has(value.dek)) {
+    context.addIssue({ code: 'custom', path: ['dek'], message: 'Dek must reference an approved claim' });
+  }
+  for (const [index, summary] of value.summary.entries()) {
+    if (!verifiedText.has(summary)) {
+      context.addIssue({ code: 'custom', path: ['summary', index], message: 'Summary must reference an approved claim' });
+    }
+  }
+  if (!safeText(value.title) || !safeText(value.dek) || value.summary.some((line) => !safeText(line))) {
+    context.addIssue({ code: 'custom', path: ['title'], message: 'Unsafe article framing' });
+  }
+  if ((value.category === 'cve') !== (value.cve !== undefined)) {
+    context.addIssue({ code: 'custom', message: 'CVE category and CVE panel must agree' });
+  }
+  if (value.template_id !== (value.category === 'cve' ? 'cve-kev-deep-dive' : 'security-daily')) {
+    context.addIssue({ code: 'custom', message: 'Template/category mismatch' });
+  }
+  if (value.url !== `/reports/${value.category}/${value.slug}/`) {
+    context.addIssue({ code: 'custom', path: ['url'], message: 'Published URL does not match its allowlisted slug' });
+  }
+  if (value.cve?.kev_status === 'not_listed' && !value.cve.catalog_fresh) {
+    context.addIssue({ code: 'custom', path: ['cve', 'catalog_fresh'], message: 'not_listed requires a fresh catalog snapshot' });
+  }
+  if (value.cve?.kev_status === 'unknown' && value.cve.catalog_fresh) {
+    context.addIssue({ code: 'custom', path: ['cve', 'kev_status'], message: 'Fresh snapshots resolve unknown status' });
+  }
+});
+
+const report = z.union([reportV1, reportV2]);
 
 const reports = defineCollection({
   loader: glob({ base: './src/content/reports', pattern: '**/*.json' }),

@@ -55,10 +55,25 @@ const stateLabel = (state: ReportRunListItem['state']) => ({
 }[state] ?? state)
 const stageLabel = (stage: string) => ({
   queued: '待機中', claimed: 'ワーカー割当', evidence: '根拠スナップショット',
-  plan: '企画', fact_check: '事実検証', draft: '執筆', article: '推敲',
+  plan: '企画（旧履歴）', fact_check: '事実検証（旧履歴）', draft: '執筆（旧履歴）',
+  codex_preflight: '実行環境確認', claims: '企画・主張生成', claim_review: '独立レビュー',
+  claim_repair: '主張修正', claim_rereview: '再レビュー', assembly: '記事組立',
+  article_validation: '記事検証', article: '完成記事',
   article_validated: '決定論的検査', publishing: '静的公開', published: '公開済み',
   retry_wait: '再試行待ち', failed: '失敗', skipped: '対象外',
 }[stage] ?? stage)
+const eventLabel = (eventType: string) => ({
+  stage_started: '工程開始', stage_completed: '工程完了', stage_failed: '工程失敗',
+  codex_stage_started: 'Codex開始', codex_stage_completed: 'Codex完了',
+  codex_stage_failed: 'Codex失敗', artifact_persisted: '成果物保存',
+  stage_succeeded: '工程成果を保存', run_failed: '実行失敗',
+  retry_scheduled: '再試行予約', run_skipped: '対象外として終了',
+  report_published: '公開完了',
+}[eventType] ?? eventType)
+const durationLabel = (value: number | null) => {
+  if (value === null || !Number.isFinite(value) || value < 0) return '—'
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}秒` : `${value}ミリ秒`
+}
 const categoryLabel = (value: string | null) => ({
   security: '全カテゴリ', advisory: 'アドバイザリ', vulnerability: '脆弱性',
 }[value ?? 'security'] ?? '全カテゴリ')
@@ -100,10 +115,7 @@ async function loadData(initial = false) {
       nextScheduleCursor.value = schedulePage.next_cursor
     }
     if (selectedRun.value) {
-      const latest = runs.value.find(run => run.run_id === selectedRun.value?.run_id)
-      if (latest?.state !== selectedRun.value.state || latest?.stage !== selectedRun.value.stage) {
-        selectedRun.value = await api.adminReportRun(selectedRun.value.run_id)
-      }
+      selectedRun.value = await api.adminReportRun(selectedRun.value.run_id)
     }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'レポート管理情報を取得できません。'
@@ -330,13 +342,47 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
           <div class="detail-line"><span>状態</span><strong>{{ stateLabel(selectedRun.state) }} / {{ stageLabel(selectedRun.stage) }}</strong></div>
           <div class="detail-line"><span>実行ID</span><code>{{ selectedRun.run_id }}</code></div>
           <div class="detail-line"><span>開始</span><strong>{{ dateLabel(selectedRun.created_at) }}</strong></div>
+          <div class="detail-line"><span>試行</span><strong>{{ selectedRun.attempts }}回</strong></div>
           <div v-if="selectedRun.error_code" class="detail-line text-negative"><span>失敗コード</span><code>{{ selectedRun.error_code }}</code></div>
+          <div v-if="selectedRun.failed_stage" class="detail-line text-negative"><span>失敗工程</span><strong>{{ stageLabel(selectedRun.failed_stage) }}</strong></div>
+          <div v-if="selectedRun.retry_at" class="detail-line"><span>再試行予定</span><strong>{{ dateLabel(selectedRun.retry_at) }}</strong></div>
           <div v-if="Object.keys(selectedRun.stages ?? {}).length" class="q-mt-md">
             <div class="text-caption text-weight-bold q-mb-xs">保存済みの工程</div>
             <div v-for="[name, status] in Object.entries(selectedRun.stages)" :key="name" class="stage-line">
               <span>{{ stageLabel(name) }}</span><span>{{ status }}</span>
             </div>
           </div>
+          <div v-if="selectedRun.events?.length" class="q-mt-md">
+            <div class="text-caption text-weight-bold q-mb-xs">工程イベント（最新100件）</div>
+            <ol class="event-timeline" aria-label="工程イベント履歴">
+              <li v-for="event in selectedRun.events" :key="`${event.attempt}:${event.seq}`" class="event-row"
+                :class="{ 'event-failed': event.error_code }">
+                <div class="event-heading">
+                  <strong>{{ eventLabel(event.event_type) }} · {{ stageLabel(event.stage) }}</strong>
+                  <span>{{ dateLabel(event.created_at) }}</span>
+                </div>
+                <div class="event-meta">
+                  試行 {{ event.attempt }} · 所要 {{ durationLabel(event.elapsed_ms) }}
+                  <template v-if="event.exit_status !== null"> · exit {{ event.exit_status }}</template>
+                  <template v-if="event.retryable !== null"> · {{ event.retryable ? '再試行可能' : '再試行不可' }}</template>
+                </div>
+                <div v-if="event.error_code" class="event-code">{{ event.error_code }}</div>
+                <div v-if="event.jsonl_last_event || event.cli_version" class="event-meta">
+                  <template v-if="event.jsonl_last_event">JSONL: {{ event.jsonl_last_event }}</template>
+                  <template v-if="event.cli_version"> · Codex CLI {{ event.cli_version }}</template>
+                </div>
+                <div v-if="event.stdout_bytes !== null || event.stderr_bytes !== null" class="event-meta">
+                  ログ量: stdout {{ event.stdout_bytes ?? 0 }} B / stderr {{ event.stderr_bytes ?? 0 }} B
+                </div>
+                <div v-if="event.usage" class="event-meta">
+                  使用量: {{ event.usage.input_tokens ?? 0 }} input / {{ event.usage.output_tokens ?? 0 }} output token
+                </div>
+                <div v-if="event.diagnostic_ref" class="event-meta">診断参照: <code>{{ event.diagnostic_ref }}</code></div>
+                <div v-if="event.artifact_sha256" class="event-meta">成果物 SHA-256: <code>{{ event.artifact_sha256 }}</code></div>
+              </li>
+            </ol>
+          </div>
+          <div v-else class="admin-hint q-mt-md">工程イベントはまだありません。</div>
           <q-btn v-if="safeReportUrl(selectedRun.published_url)" class="q-mt-md full-width" color="primary" outline icon="article"
             label="公開記事を開く" :href="safeReportUrl(selectedRun.published_url) ?? undefined" />
         </aside>
@@ -427,6 +473,12 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 .detail-line { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--nous-line); font-size: 12px; overflow-wrap: anywhere; }
 .detail-line > span:first-child { color: var(--nous-muted); }
 .stage-line { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--nous-line); font-size: 11px; }
+.event-timeline { list-style: none; padding: 0; margin: 0; max-height: 420px; overflow: auto; }
+.event-row { padding: 9px 0; border-bottom: 1px solid var(--nous-line); font-size: 11px; overflow-wrap: anywhere; }
+.event-row.event-failed { color: var(--q-negative); }
+.event-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.event-heading > span, .event-meta { color: var(--nous-muted); font-size: 10px; line-height: 1.6; }
+.event-code { font-family: monospace; font-weight: 700; }
 .schedule-list { border-top: 1px solid var(--nous-line); }
 .schedule-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--nous-line); }
 .schedule-main { min-width: 0; overflow-wrap: anywhere; }

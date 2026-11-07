@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 SCOPES = ('python', 'frontend', 'backend_image', 'reports', 'report_image', 'terraform')
 REPORT_MODULES = {
     'src/nous/report_worker.py', 'src/nous/report_pipeline.py',
+    'src/nous/report_editorial.py', 'src/nous/report_diagnostics.py',
     'src/nous/report_templates.py', 'src/nous/cve_index.py',
     'src/nous/cve_queries.py', 'src/nous/db.py', 'src/nous/models.py',
     'src/nous/registry.py', 'src/nous/__init__.py',

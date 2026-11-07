@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "template_id", "language", "title", "dek", "summary", "sections", "claims", "sources"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "template_id": {"enum": ["security-daily", "cve-kev-deep-dive"]},
+    "language": {"const": "ja"},
+    "title": {"type": "string", "minLength": 8, "maxLength": 120},
+    "dek": {"type": "string", "minLength": 10, "maxLength": 240},
+    "summary": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"type": "string", "minLength": 10, "maxLength": 240}},
+    "sections": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/section"}},
+    "claims": {"type": "array", "minItems": 1, "maxItems": 50, "items": {"$ref": "#/$defs/claim"}},
+    "sources": {"type": "array", "minItems": 1, "maxItems": 50, "items": {"$ref": "#/$defs/source"}},
+    "cve": {"$ref": "#/$defs/cve"}
+  },
+  "$defs": {
+    "evidenceIds": {"type": "array", "minItems": 1, "maxItems": 200, "uniqueItems": true, "items": {"type": "string", "pattern": "^E[0-9]{3}$"}},
+    "claimIds": {"type": "array", "maxItems": 50, "uniqueItems": true, "items": {"type": "string", "pattern": "^C[0-9]{3}$"}},
+    "claim": {"type": "object", "additionalProperties": false, "required": ["claim_id", "text", "classification", "evidence_ids", "section", "importance"], "properties": {
+      "claim_id": {"type": "string", "pattern": "^C[0-9]{3}$"}, "text": {"type": "string", "minLength": 10, "maxLength": 240},
+      "classification": {"enum": ["observed", "inference", "unconfirmed"]}, "evidence_ids": {"$ref": "#/$defs/evidenceIds"},
+      "section": {"enum": ["primary_observations", "analysis", "unknowns"]}, "importance": {"enum": ["normal", "high"]}
+    }},
+    "section": {"type": "object", "additionalProperties": false, "required": ["heading", "claim_ids", "evidence_ids"], "properties": {
+      "heading": {"type": "string", "minLength": 2, "maxLength": 80}, "claim_ids": {"$ref": "#/$defs/claimIds"}, "evidence_ids": {"$ref": "#/$defs/evidenceIds"}
+    }},
+    "source": {"type": "object", "additionalProperties": false, "required": ["evidence_id", "source_key", "relation", "title", "publisher_url", "observed_at", "published_at", "license_id"], "properties": {
+      "evidence_id": {"type": "string", "pattern": "^E[0-9]{3}$"}, "source_key": {"type": "string", "maxLength": 100},
+      "relation": {"enum": ["record", "reference", "kev", "title_mention"]}, "title": {"type": "string", "maxLength": 300},
+      "publisher_url": {"type": "string", "format": "uri"}, "observed_at": {"type": "string", "format": "date-time"},
+      "published_at": {"type": ["string", "null"], "format": "date-time"}, "license_id": {"type": "string", "maxLength": 100}
+    }},
+    "cve": {"type": "object", "additionalProperties": false, "required": ["id", "kev_status", "catalog_as_of", "catalog_fresh", "canonical_url", "catalog_source_url", "evidence_ids"], "properties": {
+      "id": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"}, "kev_status": {"enum": ["listed", "not_listed", "unknown"]},
+      "catalog_as_of": {"type": ["string", "null"]}, "catalog_fresh": {"type": "boolean"}, "canonical_url": {"type": "string", "format": "uri"},
+      "catalog_source_url": {"type": ["string", "null"], "format": "uri"}, "evidence_ids": {"$ref": "#/$defs/evidenceIds"}
+    }}
+  }
+}

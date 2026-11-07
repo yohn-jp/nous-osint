@@ -177,6 +177,8 @@ class ReportRun(Base):
     request_sha256: Mapped[str | None] = mapped_column(String(64))
     state: Mapped[str] = mapped_column(String(24), default="queued")
     stage: Mapped[str] = mapped_column(String(32), default="queued")
+    failed_stage: Mapped[str | None] = mapped_column(String(32))
+    retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -190,6 +192,36 @@ class ReportRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ReportRunEvent(Base):
+    """Append-only, allowlisted telemetry for one fenced report-run attempt."""
+    __tablename__ = "report_run_events"
+    __table_args__ = (
+        UniqueConstraint("run_id", "attempt", "seq", name="uq_report_run_event_sequence"),
+        Index("ix_report_run_events_run", "run_id", "attempt", "seq"),
+    )
+    run_id: Mapped[str] = mapped_column(ForeignKey("report_runs.id"), primary_key=True)
+    attempt: Mapped[int] = mapped_column(Integer, primary_key=True)
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    stage: Mapped[str] = mapped_column(String(32))
+    event_type: Mapped[str] = mapped_column(String(48))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    exit_status: Mapped[int | None] = mapped_column(Integer)
+    elapsed_ms: Mapped[int | None] = mapped_column(Integer)
+    usage: Mapped[dict | None] = mapped_column(JSON)
+    artifact_sha256: Mapped[str | None] = mapped_column(String(64))
+    diagnostic_ref: Mapped[str | None] = mapped_column(String(512))
+    retryable: Mapped[bool | None] = mapped_column(Boolean)
+    input_sha256: Mapped[str | None] = mapped_column(String(64))
+    schema_revision: Mapped[str | None] = mapped_column(String(64))
+    prompt_revision: Mapped[str | None] = mapped_column(String(64))
+    model: Mapped[str | None] = mapped_column(String(128))
+    cli_version: Mapped[str | None] = mapped_column(String(64))
+    stdout_bytes: Mapped[int | None] = mapped_column(Integer)
+    stderr_bytes: Mapped[int | None] = mapped_column(Integer)
+    jsonl_last_event: Mapped[str | None] = mapped_column(String(48))
 
 
 class Report(Base):

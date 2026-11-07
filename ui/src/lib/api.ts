@@ -144,12 +144,34 @@ export interface ReportRunListItem {
   stage: string
   attempts: number
   error_code: string | null
+  failed_stage: string | null
+  retry_at: string | null
   published_url: string | null
+}
+
+export interface ReportRunEvent {
+  attempt: number
+  seq: number
+  created_at: string
+  stage: string
+  event_type: string
+  error_code: string | null
+  exit_status: number | null
+  elapsed_ms: number | null
+  usage: Record<string, number> | null
+  artifact_sha256: string | null
+  diagnostic_ref: string | null
+  retryable: boolean | null
+  cli_version: string | null
+  stdout_bytes: number | null
+  stderr_bytes: number | null
+  jsonl_last_event: string | null
 }
 
 export interface ReportRun extends ReportRunListItem {
   parameters: Record<string, unknown>
   stages: Record<string, string>
+  events: ReportRunEvent[]
 }
 
 export interface ReportRunsPage {

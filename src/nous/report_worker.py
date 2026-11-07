@@ -29,6 +29,7 @@ from .models import (
     Report,
     ReportEvidence,
     ReportRun,
+    ReportRunEvent,
     ReportSchedule,
     ReportSiteState,
     Source,
@@ -57,6 +58,11 @@ _DIGEST = re.compile(r"^[a-f0-9]{64}$")
 _SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _AT_FDCWD = -100
 _RENAME_EXCHANGE = 2
+_STAGE_NAME = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+_SAFE_CODE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_EVENT_TYPE = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
+_SHA256 = re.compile(r"^[a-f0-9]{64}$")
+_USAGE_KEYS = {"input_tokens", "output_tokens", "cached_input_tokens", "reasoning_tokens"}
 
 
 class LeaseLost(RuntimeError):
@@ -210,17 +216,25 @@ def _claim_run(factory) -> dict | None:
                 return None
             if row.attempts >= _MAX_ATTEMPTS:
                 row.state = "failed"
-                row.stage = "retry_exhausted"
+                row.failed_stage = row.failed_stage or row.stage
                 row.error_code = row.error_code or "attempt_limit"
+                row.retry_at = None
                 row.finished_at = current
                 row.lease_until = None
                 row.lease_token = None
+                _append_run_event(db, row, max(1, row.attempts), {
+                    "stage": row.failed_stage or "unknown",
+                    "event_type": "run_failed",
+                    "error_code": row.error_code,
+                    "retryable": False,
+                })
                 db.commit()
                 continue
             token = str(uuid.uuid4())
             row.state = "leased"
             row.stage = "claimed"
             row.attempts += 1
+            row.retry_at = None
             row.lease_until = current + timedelta(seconds=_LEASE_SECONDS)
             row.lease_token = token
             row.started_at = row.started_at or current
@@ -233,6 +247,7 @@ def _claim_run(factory) -> dict | None:
                 "template_snapshot": row.template_snapshot,
                 "parameters": row.parameters,
                 "attempts": row.attempts,
+                "attempt": row.attempts,
                 "observed_cutoff": row.observed_cutoff,
                 "bundle_sha256": row.bundle_sha256,
                 "bundle_path": row.bundle_path,
@@ -289,19 +304,217 @@ def _assert_lease(db, run_id: str, token: str) -> ReportRun:
     return row
 
 
-def _persist_stage(factory, run_id: str, token: str, name: str, value: dict):
-    with factory() as db:
-        row = _assert_lease(db, run_id, token)
-        artifacts = dict(row.stage_artifacts or {})
-        artifacts[name] = value
-        row.stage_artifacts = artifacts
-        row.stage = name
+def _safe_diagnostic_ref(value) -> str | None:
+    if not isinstance(value, str) or len(value) > 512:
+        return None
+    path = PurePosixPath(value)
+    if path.is_absolute() or any(part in {".", ".."} for part in path.parts):
+        return None
+    return value
+
+
+def _event_values(event: dict) -> dict:
+    """Reduce runner telemetry to the explicitly safe persisted contract."""
+    usage = event.get("usage")
+    if isinstance(usage, dict):
+        usage = {
+            key: int(value) for key, value in usage.items()
+            if key in _USAGE_KEYS and isinstance(value, int) and not isinstance(value, bool)
+            and 0 <= value <= 2**53
+        }
+    else:
+        usage = None
+    error_code = event.get("error_code")
+    error_code = (error_code[:64] if isinstance(error_code, str)
+                  and _SAFE_CODE.fullmatch(error_code) else None)
+    event_type = event.get("event_type", "stage_event")
+    event_type = (event_type[:48] if isinstance(event_type, str)
+                  and _EVENT_TYPE.fullmatch(event_type) else "stage_event")
+    return {
+        "stage": str(event.get("stage", "unknown"))[:32],
+        "event_type": event_type,
+        "error_code": error_code,
+        "exit_status": (event.get("exit_status") if isinstance(event.get("exit_status"), int)
+                        and not isinstance(event.get("exit_status"), bool) else None),
+        "elapsed_ms": (event.get("elapsed_ms") if isinstance(event.get("elapsed_ms"), int)
+                       and not isinstance(event.get("elapsed_ms"), bool)
+                       and event.get("elapsed_ms") >= 0 else None),
+        "usage": usage,
+        "artifact_sha256": (event.get("artifact_sha256")
+                            if isinstance(event.get("artifact_sha256"), str)
+                            and _SHA256.fullmatch(event["artifact_sha256"]) else None),
+        "diagnostic_ref": _safe_diagnostic_ref(event.get("diagnostic_ref")),
+        "retryable": event.get("retryable") if isinstance(event.get("retryable"), bool) else None,
+        "input_sha256": (event.get("input_sha256") if isinstance(event.get("input_sha256"), str)
+                         and _SHA256.fullmatch(event["input_sha256"]) else None),
+        "schema_revision": str(event.get("schema_revision", ""))[:64] or None,
+        "prompt_revision": str(event.get("prompt_revision", ""))[:64] or None,
+        "model": str(event.get("model", ""))[:128] or None,
+        "cli_version": str(event.get("cli_version", ""))[:64] or None,
+        "stdout_bytes": (event.get("stdout_bytes") if isinstance(event.get("stdout_bytes"), int)
+                         and not isinstance(event.get("stdout_bytes"), bool)
+                         and event.get("stdout_bytes") >= 0 else None),
+        "stderr_bytes": (event.get("stderr_bytes") if isinstance(event.get("stderr_bytes"), int)
+                         and not isinstance(event.get("stderr_bytes"), bool)
+                         and event.get("stderr_bytes") >= 0 else None),
+        "jsonl_last_event": str(event.get("jsonl_last_event", ""))[:48] or None,
+    }
+
+
+def _append_run_event(db, row: ReportRun, attempt: int, event: dict):
+    values = _event_values(event)
+    if not _STAGE_NAME.fullmatch(values["stage"]):
+        values["stage"] = "unknown"
+    latest = db.scalar(select(ReportRunEvent.seq).where(
+        ReportRunEvent.run_id == row.id,
+        ReportRunEvent.attempt == attempt,
+    ).order_by(ReportRunEvent.seq.desc()).limit(1))
+    db.add(ReportRunEvent(
+        run_id=row.id,
+        attempt=attempt,
+        seq=(latest or 0) + 1,
+        created_at=now(),
+        **values,
+    ))
+    if values["event_type"] in {
+        "codex_preflight_started", "codex_stage_started", "stage_started", "stage_reused",
+    }:
+        row.stage = values["stage"]
         row.state = "running"
-        row.lease_until = now() + timedelta(seconds=_LEASE_SECONDS)
-        db.commit()
-    root = private_root()
-    path = root / "runs" / _uuid(run_id) / "stages" / f"{name}.json"
-    _fsync_write(path, _json_bytes(value))
+    elif values["event_type"] == "codex_stage_failed":
+        row.failed_stage = values["stage"]
+
+
+class StagePersistence:
+    """Fenced, content-addressed private stage artifacts and append-only events."""
+
+    def __init__(self, factory, claim: dict, *, attempt: int, model: str | None):
+        self.factory = factory
+        self.run_id = _uuid(claim["id"])
+        self.token = claim["lease_token"]
+        self.attempt = attempt
+        self.model = model[:128] if isinstance(model, str) else None
+
+    def event(self, event: dict):
+        if not isinstance(event, dict):
+            return
+        event_run_id = event.get("run_id", self.run_id)
+        event_attempt = event.get("attempt", self.attempt)
+        if event_run_id != self.run_id or event_attempt != self.attempt:
+            return
+        with self.factory() as db:
+            row = _assert_lease(db, self.run_id, self.token)
+            _append_run_event(db, row, self.attempt, event)
+            db.commit()
+
+    def __call__(self, name: str, value: dict, *, input_digest: str | None = None,
+                 schema_revision: str = "article-v2", prompt_revision: str = "pipeline-v2",
+                 model: str | None = None):
+        if not isinstance(name, str) or not _STAGE_NAME.fullmatch(name):
+            raise ReportError("stage_name_invalid")
+        if not isinstance(value, dict):
+            raise ReportError("stage_artifact_invalid")
+        if input_digest is None:
+            input_digest = hashlib.sha256(_json_bytes({"stage": name})).hexdigest()
+        if not isinstance(input_digest, str) or not _SHA256.fullmatch(input_digest):
+            raise ReportError("stage_input_digest_invalid")
+        artifact_model = (model[:128] if isinstance(model, str) else self.model)
+        content = {
+            "input_sha256": input_digest,
+            "schema_revision": schema_revision[:64],
+            "prompt_revision": prompt_revision[:64],
+            "model": artifact_model,
+            "output": value,
+        }
+        digest = hashlib.sha256(_json_bytes(content)).hexdigest()
+        envelope = {**content, "artifact_sha256": digest}
+        encoded = _json_bytes(envelope)
+        if len(encoded) > 1_048_576:
+            raise ReportError("stage_artifact_too_large")
+        relative = (f"runs/{self.run_id}/attempts/{self.attempt}/{name}/artifact.json")
+        root = private_root()
+        path = _safe_private_path(root, relative)
+        _fsync_write(path, encoded, mode=0o600)
+        with self.factory() as db:
+            row = _assert_lease(db, self.run_id, self.token)
+            artifacts = dict(row.stage_artifacts or {})
+            entries = artifacts.get(name, [])
+            if not isinstance(entries, list):
+                entries = []
+            entries.append({
+                "attempt": self.attempt,
+                "path": relative,
+                "artifact_sha256": digest,
+                "input_sha256": input_digest,
+                "schema_revision": schema_revision[:64],
+                "prompt_revision": prompt_revision[:64],
+                "model": artifact_model,
+            })
+            artifacts[name] = entries[-8:]
+            row.stage_artifacts = artifacts
+            row.stage = name
+            row.state = "running"
+            row.lease_until = now() + timedelta(seconds=_LEASE_SECONDS)
+            _append_run_event(db, row, self.attempt, {
+                "stage": name,
+                "event_type": "stage_succeeded",
+                "artifact_sha256": digest,
+                "input_sha256": input_digest,
+                "schema_revision": schema_revision,
+                "prompt_revision": prompt_revision,
+                "model": artifact_model,
+            })
+            db.commit()
+        return digest
+
+    def load(self, name: str, *, input_digest: str, schema_revision: str = "article-v2",
+             prompt_revision: str = "pipeline-v2", model: str | None = None):
+        if not _STAGE_NAME.fullmatch(name) or not _SHA256.fullmatch(input_digest):
+            return None
+        expected_model = model[:128] if isinstance(model, str) else self.model
+        with self.factory() as db:
+            row = db.get(ReportRun, self.run_id)
+            if row is None:
+                return None
+            entries = (row.stage_artifacts or {}).get(name, [])
+        if not isinstance(entries, list):
+            return None
+        root = private_root()
+        for entry in reversed(entries):
+            if not isinstance(entry, dict) or any((
+                entry.get("input_sha256") != input_digest,
+                entry.get("schema_revision") != schema_revision,
+                entry.get("prompt_revision") != prompt_revision,
+                entry.get("model") != expected_model,
+            )):
+                continue
+            try:
+                path = _safe_private_path(root, entry["path"])
+                if path.stat().st_size > 1_048_576:
+                    continue
+                envelope = json.loads(path.read_text(encoding="utf-8"))
+                digest = envelope.pop("artifact_sha256")
+                if (digest != entry.get("artifact_sha256") or
+                        hashlib.sha256(_json_bytes(envelope)).hexdigest() != digest or
+                        envelope.get("input_sha256") != input_digest or
+                        envelope.get("schema_revision") != schema_revision or
+                        envelope.get("prompt_revision") != prompt_revision or
+                        envelope.get("model") != expected_model or
+                        not isinstance(envelope.get("output"), dict)):
+                    continue
+                self.event({
+                    "stage": name,
+                    "event_type": "stage_reused",
+                    "artifact_sha256": digest,
+                    "input_sha256": input_digest,
+                    "schema_revision": schema_revision,
+                    "prompt_revision": prompt_revision,
+                    "model": expected_model,
+                })
+                return envelope["output"]
+            except (OSError, ValueError, KeyError, TypeError, ReportError):
+                continue
+        return None
 
 
 def _set_failure(factory, claim: dict, *, state: str, code: str, retryable: bool):
@@ -312,17 +525,27 @@ def _set_failure(factory, claim: dict, *, state: str, code: str, retryable: bool
         if row is None:
             return
         row.error_code = code[:64]
+        if state == "skipped":
+            row.failed_stage = None
+        else:
+            row.failed_stage = row.failed_stage or row.stage
         row.lease_token = None
         row.lease_until = None
         if retryable and row.attempts < _MAX_ATTEMPTS:
             row.state = "queued"
-            row.stage = "retry_wait"
             row.available_at = now() + timedelta(seconds=min(300, 30 * (2 ** row.attempts)))
+            row.retry_at = row.available_at
             row.finished_at = None
         else:
             row.state = state
-            row.stage = state
+            row.retry_at = None
             row.finished_at = now()
+        _append_run_event(db, row, max(1, claim.get("attempt", claim.get("attempts", row.attempts))), {
+            "stage": row.failed_stage or row.stage,
+            "event_type": "run_failed" if state != "skipped" else "run_skipped",
+            "error_code": code[:64],
+            "retryable": retryable and row.state == "queued",
+        })
         db.commit()
 
 
@@ -756,7 +979,8 @@ def _publish_candidate(factory, claim: dict, token: str, bundle: dict, article: 
                     evidence_rows = _evidence_db_rows(db, report_id, article, bundle)
                     report = Report(
                         id=report_id, run_id=run.id, slug=slug, category=category,
-                        template_id=template["id"], article_schema_version=1,
+                        template_id=template["id"],
+                        article_schema_version=int(article.get("schema_version", 1)),
                         article=article, headline=article["title"], summary=article["summary"],
                         published_at=published_at, artifact_digest=digest,
                         artifact_path=f"releases/{digest}", supersedes_id=None,
@@ -777,6 +1001,8 @@ def _publish_candidate(factory, claim: dict, token: str, bundle: dict, article: 
                     run.report_id = report_id
                     run.state = "published"
                     run.stage = "published"
+                    run.failed_stage = None
+                    run.retry_at = None
                     run.error_code = None
                     run.finished_at = now()
                     run.lease_until = None
@@ -833,6 +1059,7 @@ def process_claim(factory, claim: dict):
     run_id, token = claim["id"], claim["lease_token"]
     heartbeat = _LeaseHeartbeat(factory, run_id, token)
     runner = None
+    persistence = None
     workdir = None
     heartbeat.start()
     try:
@@ -854,16 +1081,28 @@ def process_claim(factory, claim: dict):
         # can traverse its own stage directory but cannot enumerate siblings.
         workdir = work_root / ("job-" + uuid.uuid4().hex)
         workdir.mkdir(mode=0o710)
+        persistence = StagePersistence(
+            factory, claim, attempt=claim["attempts"], model=None,
+        )
+        persistence.event({
+            "stage": "codex_preflight", "event_type": "codex_preflight_started",
+            "retryable": None,
+        })
         runner = CodexRunner(workdir=workdir)
+        runner.attempt = claim["attempts"]
+        persistence.model = (runner.model[:128] if isinstance(getattr(runner, "model", None), str)
+                             else None)
+        runner.event_sink = persistence.event
         final, model = run_editorial_pipeline(
             bundle, template_id=claim["template_id"], run_id=run_id, runner=runner,
-            persist_stage=lambda name, value: _persist_stage(factory, run_id, token, name, value),
+            persist_stage=persistence,
         )
         heartbeat.assert_owned()
         with factory() as db:
             run = _assert_lease(db, run_id, token)
             run.state = "validating"
             run.stage = "article_validated"
+            run.failed_stage = None
             run.lease_until = now() + timedelta(seconds=_LEASE_SECONDS)
             db.commit()
         report_id, digest = _publish_candidate(factory, claim, token, bundle, final,
@@ -876,12 +1115,22 @@ def process_claim(factory, claim: dict):
     except LeaseLost:
         log.warning(json.dumps({"event": "report_lease_lost", "run_id": run_id}))
     except ReportError as exc:
+        if persistence is not None and runner is None:
+            persistence.event({
+                "stage": "codex_preflight", "event_type": "codex_stage_failed",
+                "error_code": exc.code, "retryable": exc.retryable,
+            })
         _set_failure(factory, claim, state="failed", code=exc.code,
                      retryable=exc.retryable)
         log.warning(json.dumps({"event": "report_failed", "run_id": run_id,
                                 "error_code": exc.code}))
     except Exception as exc:
-        _set_failure(factory, claim, state="failed", code="worker_internal_error", retryable=True)
+        if persistence is not None and runner is None:
+            persistence.event({
+                "stage": "codex_preflight", "event_type": "codex_stage_failed",
+                "error_code": "worker_internal_error", "retryable": False,
+            })
+        _set_failure(factory, claim, state="failed", code="worker_internal_error", retryable=False)
         log.warning(json.dumps({"event": "report_failed", "run_id": run_id,
                                "error_code": "worker_internal_error",
                                "error_type": type(exc).__name__}))

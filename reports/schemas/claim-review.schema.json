@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reviews"],
+  "properties": {
+    "reviews": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "decision", "evidence_ids", "reason_code"],
+        "properties": {
+          "claim_id": {"type": "string", "pattern": "^C[0-9]{3}$"},
+          "decision": {"enum": ["accepted", "rejected", "needs_revision"]},
+          "evidence_ids": {"type": "array", "maxItems": 50, "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^E[0-9]{3}$"}},
+          "reason_code": {"enum": ["supported", "unsupported_evidence", "contradiction", "overclaim", "unclear", "duplicate", "other"]}
+        }
+      }
+    }
+  }
+}
