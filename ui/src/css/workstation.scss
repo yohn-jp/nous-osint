@@ -110,7 +110,7 @@ body { background: var(--nous-paper); color: var(--nous-ink); }
 }
 .nous-skip-link { z-index: 10000; background: var(--nous-accent); color: #fff; }
 .mobile-footer { color: var(--nous-ink); background: var(--nous-panel); }
-.mobile-destinations { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); padding: 4px 0 env(safe-area-inset-bottom, 0px); }
+.mobile-destinations { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); padding: 4px 0 env(safe-area-inset-bottom, 0px); }
 .mobile-destination {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px; min-height: 56px; padding: 5px 2px;
