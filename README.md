@@ -4,7 +4,7 @@
 
 公開情報を継続的に収集し、出典と変更履歴を保持したうえで検索・分析できる、汎用OSINT基盤。
 
-**Status: Phase 1–3 implementation in progress; VM deployment under validation**
+**Current status (2026-11-07):** API/collection, Quasar SPA, and Astro report pipeline exist in main. Independent Cloudflare static-UI release has completed, but authenticated browser/MCP continuity and rollback have not been verified end-to-end. The report-pipeline v2 design is accepted; its implementation and owner-authenticated VM/Codex acceptance remain incomplete.
 
 ## Purpose
 
@@ -36,8 +36,10 @@ Nous ships an official Git-maintained source catalog and also supports **per-ins
 4. [Implementation plan](docs/IMPLEMENTATION_PLAN.md) — 順序、検証、受入条件
 5. [Quasar information portal UI](docs/UI_DESIGN.md) — ブラウザ描画、Feedly型の情報階層、実装範囲と受入条件
 6. [Frontend execution policy](docs/FRONTEND_EXECUTION_POLICY.md) — VMとブラウザの実行責務
-   - [Edge UI deployment plan](docs/EDGE_FRONTEND_DEPLOYMENT.md) — Cloudflare Static Assetsへの分離、CI/CD、Access保護、受入検証とロールバック（計画段階）
-7. [Remote MCP and Cloudflare Access](docs/REMOTE_MCP_ACCESS.md) — 今後のTunnel/Managed OAuth/MCP公開設計
+   - [Edge UI deployment and acceptance](docs/EDGE_FRONTEND_DEPLOYMENT.md) — 限定Workerルート、CI/CD、Access保護と未検証のE2E項目
+   - [Edge release pipeline](docs/EDGE_RELEASE_PIPELINE.md) — mainでの静的UI自動リリースとガード
+7. [Remote MCP and Cloudflare Access](docs/REMOTE_MCP_ACCESS.md) — 現行のTunnel/Managed OAuth/MCP認証境界
+8. [Automated reports](docs/AUTOMATED_INTELLIGENCE_REPORTS.md) — 現行実装、採用済みv2契約と未検証事項
 
 ## Design principles
 
@@ -47,11 +49,11 @@ Nous ships an official Git-maintained source catalog and also supports **per-ins
 - Gitは実装・設定の正本、PostgreSQLは実行時データの正本。
 - 開発・検証なしに運用可能とは主張しない。
 
-## Initial technology direction
+## Implementation stack
 
-Python、FastAPI、PostgreSQL、Podman Quadletを採用する。スケジューリングとジョブ実行はPostgreSQLを協調基盤として実装し、初期段階でRedis・Kafka・Kubernetes・Elasticsearch・n8nは導入しない。
+Python、FastAPI、PostgreSQL、Podman Quadletを採用しています。スケジューリングとジョブ実行はPostgreSQLで協調し、Redis・Kafka・Kubernetes・Elasticsearch・n8nは運用要件にありません。
 
-実装は `src/nous/`、読み取り専用SPAは `ui/`、ソース定義は `sources/`、Quadletは `deploy/quadlet/` にあります。VMでの導入と検証手順は [運用手順](docs/OPERATIONS.md) を参照してください。
+実装は `src/nous/`、Quasar SPAと管理UIは `ui/`、レポート静的出版物は `reports/site/`、ソース定義は `sources/`、Quadletは `deploy/quadlet/` にあります。VMでの導入と検証手順は [運用手順](docs/OPERATIONS.md) を参照してください。
 
 ## Community and licensing
 

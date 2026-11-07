@@ -26,6 +26,10 @@ const selectedId = computed(() => {
   const raw = typeof route.query.item === 'string' ? Number(route.query.item) : 0
   return Number.isSafeInteger(raw) && raw > 0 ? raw : null
 })
+// On wide screens the first fetched record is immediately inspectable.
+ // This is a visual default, not a mutation of browser history or search state.
+const activeRecordId = computed(() => selectedId.value ??
+  ($q.screen.width > 1250 ? rows.value[0]?.id ?? null : null))
 
 function queryValue(value: unknown): string { return typeof value === 'string' ? value : '' }
 function parseKind(value: string): ItemKind | null {
@@ -109,12 +113,12 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
 </script>
 
 <template>
-  <q-page class="nous-page">
-    <div class="row items-end justify-between q-mb-xl">
+  <q-page class="nous-page explore-page">
+    <div class="page-heading-row row items-end justify-between q-mb-lg">
       <div><h1 class="page-title q-ma-none">探索</h1><div class="page-subtitle">公開情報を検索し、出典と変更履歴を確認します。</div></div>
     </div>
 
-    <section aria-label="検索条件" class="content-panel search-panel q-pa-md q-mb-lg">
+    <section role="search" aria-label="収集情報を検索" class="content-panel search-panel q-pa-md q-mb-lg">
       <div class="row q-col-gutter-sm items-center search-fields">
         <div class="col-12 col-md">
           <q-input v-model="term" maxlength="200" outlined dense clearable placeholder="キーワードで検索" aria-label="キーワード検索" @keydown.enter="onSearchKeydown">
@@ -135,9 +139,9 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
     </section>
 
     <div class="explore-grid">
-      <section aria-label="検索結果" class="content-panel">
-        <div class="row items-center justify-between q-px-lg q-py-md">
-          <div class="results-heading"><strong>検索結果</strong><span v-if="!loading && !error" class="results-count" role="status" aria-live="polite">{{ rows.length }}件を表示{{ nextCursor !== null ? "（続きあり）" : "" }}</span></div>
+      <section aria-label="収集レコード" class="content-panel evidence-ledger">
+        <div class="ledger-heading row items-center justify-between q-px-lg q-py-md">
+          <div class="results-heading"><strong>収集レコード</strong><span v-if="!loading && !error" class="results-count" role="status" aria-live="polite">{{ rows.length }}件を表示{{ nextCursor !== null ? "（続きあり）" : "" }}</span></div>
           <q-btn v-if="hasAppliedFilters" flat no-caps size="sm" color="secondary" label="条件をクリア" @click="clearFilters" />
         </div>
         <q-separator />
@@ -153,16 +157,24 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
           <q-btn v-else flat no-caps color="primary" to="/sources" label="情報源を確認" />
         </div>
         <template v-else>
-          <button v-for="item in rows" :key="item.id" type="button" class="result-row"
-            :class="{ selected: selectedId === item.id }" :aria-pressed="selectedId === item.id" :aria-label="item.title + ' の詳細を開く'"
-            @click="openItem(item.id)">
-            <span class="result-title">{{ item.title }}</span>
-            <span class="result-meta">
-              <span class="kind-tag">{{ kindLabel(item.kind) }}</span>
-              <span class="record-organization">{{ item.organization || item.source }}</span>
-              <span class="meta-sep">{{ stateLabel[item.state] }}</span>
+          <button v-for="(item, index) in rows" :key="item.id" type="button" class="result-row ledger-record"
+            :class="{ selected: activeRecordId === item.id }" :aria-pressed="activeRecordId === item.id"
+            :aria-label="item.title + ' の出典と観測履歴を開く'" @click="openItem(item.id)">
+            <span class="ledger-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span>
+            <span class="ledger-primary">
+              <span class="ledger-classification">
+                <span class="kind-tag">{{ kindLabel(item.kind) }}</span>
+                <span class="ledger-status" :data-state="item.state">{{ stateLabel[item.state] }}</span>
+              </span>
+              <span class="result-title">{{ item.title }}</span>
+              <span class="ledger-source">{{ item.organization || item.source }}<span v-if="item.organization && item.organization !== item.source"> · {{ item.source }}</span></span>
             </span>
-            <span class="result-foot">{{ item.source }} · {{ dateLabel(item.published_at || item.last_seen_at) }} · v{{ item.current_version }}</span>
+            <span class="ledger-stamp">
+              <span class="ledger-stamp-caption">{{ item.published_at ? '公開' : '最終観測' }}</span>
+              <time :datetime="item.published_at || item.last_seen_at">{{ dateLabel(item.published_at || item.last_seen_at) }}</time>
+              <span class="ledger-version">版 {{ item.current_version }}</span>
+              <span class="ledger-detail-action" aria-hidden="true">根拠を確認 <q-icon name="arrow_forward" size="15px" /></span>
+            </span>
           </button>
           <div class="q-pa-md row items-center justify-center">
             <q-btn v-if="nextCursor !== null" outline color="primary" no-caps :loading="loadingMore" label="さらに読み込む" icon-right="expand_more" @click="loadPage(true)" />
@@ -171,9 +183,9 @@ onBeforeUnmount(() => { request?.abort(); sourceRequest?.abort() })
           <div v-if="error" class="q-px-md q-pb-md text-negative" role="alert">{{ error }} <q-btn flat dense label="再試行" @click="loadPage(true)" /></div>
         </template>
       </section>
-      <aside class="content-panel preview-pane" aria-label="情報のプレビュー">
-        <ItemPreview v-if="selectedId" :item-id="selectedId" compact />
-        <div v-else class="preview-empty"><q-icon name="article" size="27px" aria-hidden="true" /><p>一覧から情報を選択してください。</p><span>出典と観測履歴をここに表示します。</span></div>
+      <aside class="content-panel preview-pane evidence-inspector" aria-label="選択レコードの根拠">
+        <ItemPreview v-if="activeRecordId" :item-id="activeRecordId" compact />
+        <div v-else class="preview-empty"><q-icon name="subject" size="30px" aria-hidden="true" /><p>レコードを選択</p><span>出典、取得日時、変更履歴を参照できます。</span></div>
       </aside>
     </div>
   </q-page>

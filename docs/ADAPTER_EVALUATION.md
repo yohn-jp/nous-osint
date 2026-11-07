@@ -1,7 +1,6 @@
 # Adapter selection — first-party security intelligence and Japanese security hiring
 
-Research baseline: **2026-11-04**. This document tracks what is implemented
-in the stacked native-ATS PR versus candidate connectors not yet implemented.
+Research baseline: **2026-11-04**. This document distinguishes native adapters present in main from candidate connectors not yet implemented.
 
 ## What current adapters can do
 
@@ -14,8 +13,7 @@ in the stacked native-ATS PR versus candidate connectors not yet implemented.
 - `html_v1` uses `BeautifulSoup` and declarative selectors, without a
   browser or cross-page crawl. Site-specific scripts are discouraged.
 
-The catalog addition includes nine disabled candidates. On this native-ATS
-branch, `sie-japan-careers` now uses `greenhouse_jobs_v1`, filtering for
+The catalog addition includes nine disabled candidates. On main, `sie-japan-careers` now uses `greenhouse_jobs_v1`, filtering for
 explicitly Japan-based security roles. `lever_jobs_v1` and `ashby_jobs_v1`
 are available for per-instance Admin UI registration without shipping
 hypothetical company board URLs. The filtering is deterministic, conservative

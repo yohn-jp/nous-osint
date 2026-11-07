@@ -98,6 +98,7 @@ function templateName(template: string) {
         <h2 id="sources-heading">参照した出典</h2>
         <p class="sources-intro">レポートに使用した資料の公開元と観測日時です。根拠番号を選ぶと該当資料に移動できます。</p>
         <SourceList evidenceIds={report.sources.map((source) => source.evidence_id)} sources={report.sources} anchorIds />
+        <a class="source-register-back" href="#abstract-heading">記事の要点へ戻る <span aria-hidden="true">↑</span></a>
       </aside>
     </div>
 

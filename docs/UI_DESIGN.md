@@ -1,97 +1,62 @@
-# Nous OSINT — Quasar Information Portal UI
+# Nous OSINT — UI design contract
 
-Status: **implemented and deployed behind the existing Access-required Tunnel; browser acceptance remains in progress**
-Updated: 2026-11-03  
-Companion: [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [ARCHITECTURE.md](ARCHITECTURE.md)
+Updated: 2026-11-07  
+State: Quasar SPA / Astro publication implemented. Authenticated browser acceptance and rollback remain **NOT VERIFIED**.  
+Authority: [ARCHITECTURE.md](ARCHITECTURE.md), [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md), [AUTOMATED_INTELLIGENCE_REPORTS.md](AUTOMATED_INTELLIGENCE_REPORTS.md).
 
-## Decision
+## Purpose and visual system
 
-Build a **client-rendered static SPA** using **Quasar 2, Vue 3, TypeScript, and Quasar CLI with Vite**. Use stock Quasar components as the primary design system. Serve built assets from a static host (Cloudflare is the intended target), never from a persistent Node/UI application on the compute VM.
+Nous is an intelligence desk for reading observed records, assessing provenance and tracing changes, not a promotional dashboard. The dominant artifact is the collected title or the published report; source identity, timestamp, evidence and state come next. Use a continuous scan-friendly register, an evidence reading lane and an accessible operational layout.
 
-Visual direction: **research feed**, informed by the information hierarchy of feed readers such as Feedly, **not a visual or asset clone**. The product identity is provenance-first: source, timestamp, record type, and change state are immediately visible; the source-linked title is the dominant artifact. Avoid fake counters, decorative charts, and invented summaries.
+- Quasar 2 + Vue 3 + TypeScript `ui/` and Astro `reports/site/` share paper/panel, deep ink, teal action and restrained separators. Source text remains plain escaped content.
+- Use real API data only. Loading, empty, permission denied, failed, unknown, disabled and stale states must not collapse into the same visual state.
+- Color supports meaning but does not replace status labels. Focus is visible, targets are usable on touch, Japanese titles and identifiers wrap without horizontal clipping.
+- Motion is short action feedback, not delayed content appearance; honor `prefers-reduced-motion`. No invented counts, decorative charts, fake progress or pseudo-buttons.
 
-## Interaction model
+## Art direction — evidence ledger, not a generic dashboard
 
-### Desktop (≥ 1024 px)
-- Small left rail: product, **Explore**, **Changes**, **Sources**. Active navigation is clearly marked.
-- Main column: prominent global query input; compact kind/source filters; newest/current metadata-oriented results in an uninterrupted reading list; bounded page loading.
-- Optional right preview pane on large viewports: selected record title, source, original URL, timestamps, metadata, provenance and revisions. Never treat a preview as the publisher's full text.
-- Main list and preview are independently scrollable when space permits; keyboard focus remains visible.
-- Query and selected record appear in the URL, permitting deep links, back/forward, refresh and sharing.
+We evaluated two distinct compositions: (A) a provenance-first **ledger with a reading inspector**; (B) an editorial briefing that enlarges the newest item and pushes older evidence below. We selected A. Comparison across sources, versions and observation dates is Nous's frequent operation; newest-first hero storytelling would hide peers and make the first item look editorially recommended without evidence.
 
-### Mobile (< 1024 px)
-- Compact header and bottom navigation or drawer using Quasar primitives.
-- Search and filters form a vertical stack; list rows prioritize titles and publisher identity.
-- Detail is a full page (not a narrow right pane). Back preserves the search/filter state and position as reasonably possible.
-- No required horizontal scrolling; 320px-wide layout must remain usable. Allow Japanese IME composition.
+The ledger uses a compact sequence gutter (display order only, **not a rank**), a title column with category and explicit state, and an observation stamp with source identity and recorded time. On large screens, the first actual fetched item is available in the inspector immediately; users can select another item without losing query state. Mobile reflows these fields into a single readable record with an explicit detail route.
 
-### Information hierarchy and styling
-- Reading-focused neutral surfaces, a restrained moss/teal accent for actionable states, thin separators, and high-contrast typography. Do not imitate Feedly logos, colors, or proprietary assets.
-- Use built-in Quasar spacing/type/color utilities first. Keep custom styles to a small shared stylesheet for layout, readable line lengths and active-state emphasis; no custom control system.
-- Supports light/dark theme with Quasar; respect reduced motion. Status/state is conveyed through text, not just color.
-- No external tracking fonts/scripts or untrusted HTML injection.
+The report index uses a publication masthead and numbered article register rather than a promotional hero. The report content and citation trail own most of the canvas; provenance links remain perceivable and reachable. Source status is a register of **configuration / last success / last error**, not a health score.
 
-## Interaction-first design contract (2026-11-05)
+Design controls: real sources and actual dates only; no stock photography, invented graphs, generic KPI card wall, arbitrary shader, staggered animations, or promotional microcopy. UI copy is Japanese and task-specific; long identifiers and evidence links wrap. Semantically meaningful state is expressed in text as well as shape/color.
 
-The object of work is an observed record, its publisher, its timestamp, its change state, or an operational source. This UI is a **daily research instrument**, not a product-marketing landing page. The interface should communicate the result of a user action before adding ornament.
+References were interpreted **selectively**: [Taste Skill](https://github.com/Leonxlnx/taste-skill/blob/main/skills/taste-skill/SKILL.md) for product-specific content, aligned geometry and finished interactions; [DADS](https://design.digital.go.jp/dads/) for layout, typography, contrast, focus and navigation; [Impeccable](https://github.com/pbakaus/impeccable) for critique, distill and harden. Marketing-site rules such as one-screen hero, hover lift and photographs do **not** apply to this daily research instrument.
 
-### Antipatterns and replacements
+## Navigation and interaction contract
 
-| Reject | Do instead | Reason / check |
+| Surface | Primary user action | State and return path |
 | --- | --- | --- |
-| Large narrative headings (`情報を探索する。`) and repeated English micro-kickers | Short Japanese screen names and an explicit task description where needed | Make the first glance about the work |
-| KPI cards with no direct action; inferred counts on API failure | Contextual, compact, truthfully sourced operational overview; unresolved is not zero | Distinguish loading, unavailable, disabled, and empty |
-| All records as floating cards with shadows and oversized corners | A continuous scan-friendly result list with restrained separators | Density and source comparison serve the user |
-| Repeated delayed row-entry animations and hover translations | Instant selection/focus feedback (background/active indicator), reduced-motion parity | No item should shift away from the pointer |
-| Treating an information-only tag as a button | Separate static statuses from actionable controls | Shape and contrast must match affordance |
-| Showing `停止` for a source not yet installed | Explicit `未導入`, `停止`, or `有効` (do not equate enabled with a successful collection) | Prevent incorrect operational decisions |
-| Generic `アクセス権限を確認してください` with apparently empty datasets | Keep error state separate from true empty results and expose recovery action | Errors are not missing data |
-| Decorative dashboards with invented metrics | Surface only real API observations and their associated actions | No unverified telemetry |
+| Explore | Query/filter bounded records; select item; request next cursor page | URL retains `q`, `kind`, `source`, optional selected `item` |
+| Item detail | Verify publisher URL, timestamps, attributes, provenance and recent immutable versions | Allowlisted internal `returnTo` preserves Explore, Changes or CVE origin; other targets fall back to Explore |
+| Changes | Compare observed revisions over 7/30/90 days | Open underlying record; do not invent chronological diff details |
+| Sources | Find and filter registered sources, distinguish enabled config from successful fetch | Admin actions require independent origin authorization |
+| CVE / KEV | Differentiate listed, fresh not-listed and unknown; inspect related evidence | Return to the originating Explore/Item view; mentions are not KEV confirmation |
+| Source admin/onboarding | Maintain reviewed custom sources or generate Git review definitions | Disabled-by-default registration and explicit confirmation for destructive/enable actions |
+| Report admin | Enqueue template runs; inspect actual state/stage/events and schedules | Queued is not published; read published output in `/reports/` |
+| Report publication | Read article, follow claim/evidence references, navigate back to the library | Persistent shared navigation and contextual links to archive, evidence and Explore |
 
-### Motion policy
+Desktop uses a left navigation rail and, only above 1250px, an optional record preview. Below that breakpoint, selecting a record opens a readable detail route. Mobile uses bottom navigation and full-width actions. Report articles use a reading column and a reference register: sticky alongside on wide screens, placed after the body on narrow screens. The workspace nav remains available across the SPA and separate report pages.
 
-Motion is **feedback**, not an atmosphere. Use short reversible transitions for hover/selection and actual disclosure. No page-entry choreography, staggered list reveal, card lift, fake loading completion, or transforms that displace operational controls. Keep keyboard focus visible during interaction and honor `prefers-reduced-motion`.
+## Technical contracts
 
-### Review and evidence
+- Same-origin `/v1` GET for research; admin mutation endpoints are separately role-protected. Never expose a client token, SQL or untrusted HTML.
+- Bounded `/v1/items` cursor pagination; cancel stale requests when filters change. Independent errors do not imply zero sources or records.
+- Source state must distinguish **configured enabled**, **successful collection**, and **last error**; do not derive service health from enabled alone.
+- Static SPA routes on Cloudflare must remain narrow. `/v1/*`, `/mcp*`, OAuth and `/reports/*` remain behind the existing Access/Tunnel origin. No catch-all Worker forwarding.
+- Astro outputs are built one-shot by the report Worker, not rendered by a persistent VM frontend server. Publisher links use `noopener noreferrer`.
 
-At 320/390px and desktop widths verify: scan speed with long Japanese/Latin titles, preserved query/filter state, IME composition, touch targets, keyboard selection, 200% text zoom, truthful loading/empty/permission/error states, report-to-library navigation, light/dark modes, and reduced-motion. CI only verifies builds/tests, not rendered visual quality. Browser checks must be marked unverified until actually performed.
+## Verification gates
 
-Design references used for evaluation (principles, not copied assets): [NN/g usability heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/), [Linear's 2026 UI reasoning](https://linear.app/now/behind-the-latest-design-refresh), [Carbon filtering](https://www.carbondesignsystem.com/building-blocks/core/patterns/filtering), [GOV.UK error guidance](https://design-system.service.gov.uk/components/error-message/), [GOV.UK tag guidance](https://design-system.service.gov.uk/components/tag/), [MDN reduced motion](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
+1. `ui/` typecheck and production build; `reports/site/` build and report fixtures.
+2. 320px, 390px and 1280px: navigation, overflowing text, filtering, item return, source-status triage, report-to-library return, and long evidence registers.
+3. Keyboard and screen reader labels, visible focus, Japanese IME, dark mode, reduced motion, loading, empty, permission and error states.
+4. Actual API/JWT/role checks and live Cloudflare routing, including unknown paths and rollback, separately from CI.
 
-## Pages / feature contracts
+**A checked code path is not a verified live browser or deployment path.** Record runtime test evidence only when it is actually observed.
 
-1. **Explore** (primary): keyword query, kind and source filters, query submission and reset, stable incremental **cursor** pagination, loading/empty/error states. Render title, organization or source, kind/state, publication/observation time; opening the item shows source attribution and revisions. No entire-corpus fetch.
-2. **Detail**: real `GET /v1/items/{id}` data; publisher URL as an explicit external action; provenance shown as readable key-value metadata; `GET /v1/items/{id}/versions` displays immutable versions. Treat source attributes as untrusted plain text.
-3. **Changes**: request `GET /v1/changes?since=...`; default lookback is explicit in UI; render newly observed versions with timestamps, with drill-through to detail. Existing API currently accepts `since` and `kind`, not cursors.
-4. **Sources**: show real `GET /v1/sources` status, last success, next due, errors and enabled state. **Read only**; the existing API has no management writes.
-5. **RSS / Watches**: **not yet present in the API**. Do not fabricate RSS or saved-watch endpoints or enable nonfunctional controls. Add only after their backend contracts and authorization are implemented.
+## Design references
 
-## API boundaries
-
-Existing FastAPI contracts have been verified in `src/nous/api.py`:
-- `GET /v1/items?kind=&source=&q=&limit=&cursor=` returns `{items: ItemResponse[], next_cursor: number|null}`, max 100 per request.
-- `GET /v1/items/{id}` returns an item with `attributes` and `provenance`.
-- `GET /v1/items/{id}/versions` returns a version array.
-- `GET /v1/sources` returns source status array.
-- `GET /v1/changes?since=&kind=&limit=` returns `{changes: [...]}`.
-- `GET /v1/status` provides operational counters; use only when there is a real UI need.
-
-The UI uses the **same-origin `/v1` route** through the MCP origin's authenticated gateway, not an embedded API secret or direct SQL. The origin validates the Cloudflare Access JWT and proxies only the UI's GET allowlist to the loopback-only API. For local development use a Vite dev proxy to a loopback API. Cloudflare resources were not changed for the UI rollout. Endpoint failure, 401/403/404, empty data, and stale sources must remain truthful and actionable.
-
-## Security and operational constraints
-
-- No credentials in static assets or browser persistent storage. Browser query params contain only non-sensitive filters; don't place a private token in the URL.
-- No HTML rendering of publisher content; Vue interpolation escapes untrusted strings. External links use `rel="noopener noreferrer"`.
-- No unauthorized API/public exposure: VM API stays loopback-only; the origin exposes only the Access-JWT-protected read routes needed by this UI.
-- No client-side data fabrication in production. Demo fixtures, if any, are strictly isolated and labeled.
-- Frontend CI must compile/typecheck from committed dependency metadata; no UI runtime container.
-- Preserve the single-VM Podman/Quadlet/PostgreSQL design; do not introduce Appsmith, MongoDB, Redis, SSR, separate search database, or UI server.
-
-## Acceptance matrix
-
-- [ ] Static SPA compiles and typechecks without an always-running UI backend.
-- [ ] Real read-only API integration for Explore, Detail/versions, Changes, Sources.
-- [ ] Cursors advance without `COUNT(*)` or unbounded client fetching; filter change discards stale requests and cursor.
-- [ ] Mobile 320/390px and desktop 1280px rendering, keyboard focus, Japanese IME, errors, empty/loading states checked.
-- [ ] No untrusted HTML rendered, no credentials embedded, API calls remain same-origin.
-- [ ] CI build/check passes; on-device/API end-to-end and Cloudflare Access remain explicitly unverified until exercised.
+[Impeccable](https://github.com/pbakaus/impeccable) was used for the audit vocabulary (critique, distill, polish, harden, adapt), not installed as a runtime dependency. No external CSS, assets or automated install hooks are copied into this product.
