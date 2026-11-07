@@ -1,0 +1,17 @@
+id: google-gtig-research
+kind: rss
+url: https://feeds.feedburner.com/threatintelligence/pvexyqv7v0v
+adapter: rss_v1
+item_kind: news
+category: threat_research
+organization: 'Google Threat Intelligence Group'
+interval_minutes: 15
+max_requests_per_hour: 4
+max_concurrency: 1
+enabled: true
+policy:
+  reviewed_at: '2026-11-07'
+  license_id: 'NOASSERTION'
+  attribution: 'Google Threat Intelligence Group'
+  content_storage: metadata_only
+  note: 'Publisher-linked research RSS/Atom feed. Record source titles, publication timestamps and canonical outbound links only. Full article text, images and quotation rights are excluded.'

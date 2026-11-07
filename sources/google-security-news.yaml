@@ -1,0 +1,18 @@
+id: google-security-news
+kind: rss
+url: https://blog.google/security/rss/
+adapter: rss_v1
+item_kind: news
+category: security_news
+organization: Google
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-07'
+  license_id: NOASSERTION
+  attribution: Google
+  terms_url: https://policies.google.com/terms
+  content_storage: metadata_only
+  note: Google official security blog RSS; headlines and metadata only. Probe before operator enables collection.

@@ -7,10 +7,11 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from .models import Source
+from .source_taxonomy import SOURCE_CATEGORIES
 
 KINDS = {"job_posting", "news", "advisory", "vulnerability", "company_update"}
 ADAPTERS = {"rss": {"rss_v1"}, "json_api": {"json_v1", "greenhouse_jobs_v1",
-                                           "lever_jobs_v1", "ashby_jobs_v1", "cisa_kev_v1"},
+                                           "lever_jobs_v1", "ashby_jobs_v1", "cisa_kev_v1", "bluesky_author_v1"},
             "html": {"html_v1", "automattic_html_v1"}}
 
 class Policy(BaseModel):
@@ -56,6 +57,7 @@ class SourceConfig(BaseModel):
     adapter: str
     item_kind: str
     organization: str | None = Field(default=None, max_length=200)
+    category: str | None = None
     interval_minutes: int = Field(ge=15)
     max_requests_per_hour: int = Field(ge=1, le=60)
     max_concurrency: int = Field(ge=1, le=4)
@@ -69,6 +71,8 @@ class SourceConfig(BaseModel):
     @model_validator(mode="after")
     def valid(self):
         parsed = urlparse(self.url)
+        if self.category is not None and self.category not in SOURCE_CATEGORIES:
+            raise ValueError('unsupported source category')
         if self.kind not in ADAPTERS or self.adapter not in ADAPTERS[self.kind]:
             raise ValueError("unsupported adapter")
         if (self.item_kind not in KINDS or parsed.scheme != "https" or
@@ -92,6 +96,12 @@ class SourceConfig(BaseModel):
                     raise ValueError("Lever max_pages must fit the hourly request budget")
             elif self.max_pages != 1:
                 raise ValueError("nonpaginated ATS must use max_pages=1")
+        elif self.adapter == "bluesky_author_v1":
+            from .social_feeds import author_from_url
+            if (self.kind != "json_api" or self.item_kind != "news"
+                    or self.max_pages != 1 or self.json_path or self.field_map):
+                raise ValueError("Bluesky author sources require fixed news metadata mapping")
+            author_from_url(self.url)
         elif self.adapter == "cisa_kev_v1":
             if (self.kind != "json_api" or self.item_kind != "vulnerability" or
                     parsed.hostname != "raw.githubusercontent.com" or

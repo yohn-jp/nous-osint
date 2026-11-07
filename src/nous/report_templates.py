@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import yaml
 
 from .cve_index import valid_cve_id
+from .source_taxonomy import SOURCE_CATEGORIES
 
 _TEMPLATE_FIELDS = {
     "id", "revision", "title", "category", "parameters_schema", "source_selector",
@@ -138,6 +139,24 @@ def template_revision(template_id: str) -> str:
     return load_templates()[template_id]["revision_key"]
 
 
+def _normalize_source_scope(raw: dict, result: dict) -> dict:
+    """An omitted scope means all sources; an explicitly empty list is rejected."""
+    for field, allowed in (
+        ("source_categories", SOURCE_CATEGORIES),
+        ("source_ids", None),
+    ):
+        if field not in raw:
+            continue
+        selected = raw[field]
+        if (not isinstance(selected, list) or not 1 <= len(selected) <= 50 or
+                len(set(str(value) for value in selected)) != len(selected) or
+                any(not isinstance(value, str) or (value not in allowed if allowed else
+                    not re.fullmatch(r"[a-z][a-z0-9-]{2,99}", value)) for value in selected)):
+            raise ValueError("invalid report " + field)
+        result[field] = sorted(selected)
+    return result
+
+
 def normalize_parameters(template_id: str, raw: object, *, now: datetime | None = None) -> dict:
     if not isinstance(raw, dict):
         raise ValueError("parameters must be an object")
@@ -145,7 +164,7 @@ def normalize_parameters(template_id: str, raw: object, *, now: datetime | None 
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
     if template_id == "security-daily":
-        allowed = {"target_date", "timezone", "category"}
+        allowed = {"target_date", "timezone", "category", "source_categories", "source_ids"}
         if set(raw) - allowed:
             raise ValueError("unsupported security-daily parameter")
         zone_name = raw.get("timezone", "Asia/Tokyo")
@@ -174,10 +193,11 @@ def normalize_parameters(template_id: str, raw: object, *, now: datetime | None 
             raise ValueError("unsupported report category")
         start = datetime.combine(target, time.min, tzinfo=zone).astimezone(timezone.utc)
         end = datetime.combine(target + timedelta(days=1), time.min, tzinfo=zone).astimezone(timezone.utc)
-        return {"target_date": target.isoformat(), "timezone": zone_name, "category": category,
-                "window_start": start.isoformat(), "window_end": end.isoformat()}
+        result = {"target_date": target.isoformat(), "timezone": zone_name, "category": category,
+                  "window_start": start.isoformat(), "window_end": end.isoformat()}
+        return _normalize_source_scope(raw, result)
     if template_id == "cve-kev-deep-dive":
-        if set(raw) - {"cve_id", "period_days"}:
+        if set(raw) - {"cve_id", "period_days", "source_categories", "source_ids"}:
             raise ValueError("unsupported cve-kev-deep-dive parameter")
         cve_id = raw.get("cve_id")
         if not isinstance(cve_id, str) or not valid_cve_id(cve_id):
@@ -186,9 +206,10 @@ def normalize_parameters(template_id: str, raw: object, *, now: datetime | None 
         if type(period) is not int or not 1 <= period <= 90:
             raise ValueError("period_days must be between 1 and 90")
         cutoff = now.astimezone(timezone.utc)
-        return {"cve_id": cve_id, "period_days": period,
-                "window_start": (cutoff - timedelta(days=period)).isoformat(),
-                "window_end": cutoff.isoformat()}
+        result = {"cve_id": cve_id, "period_days": period,
+                  "window_start": (cutoff - timedelta(days=period)).isoformat(),
+                  "window_end": cutoff.isoformat()}
+        return _normalize_source_scope(raw, result)
     raise ValueError("unknown report template")
 
 

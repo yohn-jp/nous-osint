@@ -1,0 +1,18 @@
+id: google-threat-intelligence
+kind: rss
+url: https://feeds.feedburner.com/threatintelligence/pvexyqv7v0v
+adapter: rss_v1
+item_kind: news
+category: threat_research
+organization: Google Threat Intelligence Group
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-07'
+  license_id: NOASSERTION
+  attribution: Google Threat Intelligence Group
+  terms_url: https://policies.google.com/terms
+  content_storage: metadata_only
+  note: Official Google Cloud Threat Intelligence category RSS; title, link, date only. Feed availability and operator review required before enabling.

@@ -16,6 +16,26 @@ export interface Item {
   updated_at: string | null
   current_version: number
 }
+export interface StreamObservation {
+  observation_id: number
+  item_id: number
+  revision: number
+  change: 'new' | 'updated'
+  source: string
+  category: string
+  platform: 'bluesky' | 'rss' | 'json_api' | 'html'
+  organization: string | null
+  kind: ItemKind
+  title: string
+  url: string
+  published_at: string | null
+  observed_at: string
+  state: ItemState
+}
+export interface StreamPage {
+  observations: StreamObservation[]
+  next_cursor: number | null
+}
 export interface ItemDetail extends Item {
   attributes: Record<string, unknown>
   provenance: Record<string, unknown>
@@ -33,6 +53,7 @@ export interface ItemPage {
 }
 export interface Source {
   id: string
+  category: string
   kind: 'rss' | 'json_api' | 'html'
   item_kind: ItemKind
   enabled: boolean
@@ -103,6 +124,7 @@ export interface SourceDefinition {
   adapter: string
   item_kind: ItemKind
   organization?: string | null
+  category?: string | null
   interval_minutes: number
   max_requests_per_hour: number
   max_concurrency: number
@@ -208,7 +230,7 @@ export interface ReportSchedule {
   id: string
   template_id: 'security-daily'
   template_revision: string
-  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null }
+  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null; source_categories?: string[]; source_ids?: string[] }
   timezone: string
   cadence: 'daily' | 'weekly'
   local_time: string
@@ -224,13 +246,13 @@ export interface ReportSchedulesPage {
 
 export interface CreateReportRun {
   template_id: ReportTemplateId
-  parameters: Record<string, string | number | null>
+  parameters: Record<string, string | number | string[] | null>
   idempotency_key?: string
 }
 
 export interface CreateReportSchedule {
   template_id: 'security-daily'
-  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null }
+  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null; source_categories?: string[]; source_ids?: string[] }
   timezone: string
   cadence: 'daily' | 'weekly'
   local_time: string
@@ -288,7 +310,9 @@ async function mutation<T>(path: string, method: 'POST' | 'PUT' | 'PATCH', paylo
 }
 
 export const api = {
-  items: (params: { q?: string | undefined; kind?: ItemKind | undefined; source?: string | undefined; limit?: number | undefined; cursor?: number | undefined }, signal?: AbortSignal) =>
+  stream: (params: { category?: string | undefined; source?: string | undefined; limit?: number | undefined; cursor?: number | undefined } = {},
+           signal?: AbortSignal) => get<StreamPage>('/v1/stream' + qs(params), signal),
+  items: (params: { q?: string | undefined; kind?: ItemKind | undefined; source?: string | undefined; category?: string | undefined; limit?: number | undefined; cursor?: number | undefined }, signal?: AbortSignal) =>
     get<ItemPage>('/v1/items' + qs(params), signal),
   sources: (signal?: AbortSignal) => get<Source[]>('/v1/sources', signal),
   cve: (id: string, signal?: AbortSignal) => {
