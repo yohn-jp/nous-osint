@@ -44,7 +44,8 @@ _REPORT_ASSET_TYPES = {
     ".webp": "image/webp",
 }
 _API_QUERY_KEYS = {
-    "/v1/items": {"q", "kind", "source", "limit", "cursor"},
+    "/v1/items": {"q", "kind", "state", "organization", "source", "category", "since", "published_since", "limit", "cursor"},
+    "/v1/stream": {"category", "source", "include_careers", "limit", "cursor"},
     "/v1/sources": set(),
     "/v1/changes": {"since", "kind", "limit"},
 }

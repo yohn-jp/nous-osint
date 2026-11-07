@@ -118,3 +118,30 @@ Researcher Bluesky posts (public AppView)   Original-research RSS/Atom
    of jobs in default feed. Check desktop and mobile interactions.
 5. Verify frontend automatic deployment independently of VM runtime rollout;
    PR checks do not release new runtime images.
+
+## Reverse-proxy and Cloudflare route acceptance
+
+This feature requires matching allowlists at every hop. The first Live Feed
+merge introduced `/live` and `/v1/stream` but did not originally update the
+origin Access/RemoteGateway and Cloudflare UI-only Worker route contracts.
+Follow-up integration fixes add `/live` to:
+
+- `src/nous/access_auth.py` SPA route and Access route gate;
+- `edge/frontend/src/index.ts` static-only Worker router;
+- `deploy/cloudflare/terraform/main.tf` explicit `nous.yohn.jp/live*`
+  Worker zone route (never use catch-all);
+- frontend and gateway routing tests.
+
+The origin `/v1/stream` now belongs to GET-only authenticated API routes and
+accepts only `category`, `source`, `include_careers`, `limit`, `cursor`
+under the existing query length/duplicate-key restrictions. `/v1/items`
+also accepts the already documented filters `state`, `organization`,
+`category`, `since`, `published_since` as well as its prior keys.
+**All API/MCP/OAuth/report routes bypass the UI-only Worker.**
+
+Cloudflare routes are Terraform-managed; a successful CI validate is *not*
+a Terraform apply. The VM API/Gateway must be updated to a compatible image
+and database schema before Live Feed can return real observations. Frontend
+deployment alone is not feature availability. Verify `/live`,
+`/v1/stream`, category-based `/v1/items` through the Access hostname after
+the actual infrastructure rollout.
