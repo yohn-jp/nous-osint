@@ -80,7 +80,7 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
       </template>
     </q-drawer>
 
-    <q-page-container id="nous-main"><router-view /></q-page-container>
+    <q-page-container id="nous-main" tabindex="-1"><router-view /></q-page-container>
     <q-footer v-if="$q.screen.lt.md" class="mobile-footer">
       <q-tabs v-if="isAdminArea && canAdmin" no-caps dense indicator-color="primary" active-color="primary" class="mobile-tabs">
         <q-route-tab to="/admin/sources" :exact="false" icon="tune" label="情報源管理" />

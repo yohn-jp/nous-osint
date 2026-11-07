@@ -6,6 +6,14 @@ import { dateLabel, safeExternalUrl } from '../lib/presentation'
 
 const route = useRoute()
 const id = computed(() => String(route.params.id ?? ''))
+const backTarget = computed(() => {
+  const candidate = route.query.returnTo
+  return typeof candidate === 'string' &&
+    (/^\/explore(?:\?[^#]*)?$/.test(candidate) ||
+     /^\/items\/[1-9][0-9]*(?:\?[^#]*)?$/.test(candidate)) &&
+    !candidate.includes('\\') ? candidate : '/explore'
+})
+const backLabel = computed(() => backTarget.value.startsWith('/items/') ? '元のレコードへ戻る' : '探索へ戻る')
 const data = ref<CveDetail | null>(null)
 const loading = ref(false)
 const error = ref('')
@@ -44,7 +52,7 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
 <template>
   <q-page class="nous-page cve-page">
     <q-btn class="q-mb-md" flat no-caps icon="arrow_back" color="secondary"
-      label="情報検索へ戻る" to="/explore" />
+      :label="backLabel" :to="backTarget" />
     <h1 class="page-title q-ma-none">{{ id }}</h1>
     <p class="page-subtitle">CVE識別子を軸に、複数の一次情報とCISAの悪用確認情報を結び付けます。</p>
     <section class="content-panel q-mt-lg q-pa-lg" style="max-width: 980px">
@@ -100,7 +108,7 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
                 <q-item-label caption class="q-mt-xs cve-reference-source">{{ row.source_url }}</q-item-label>
               </q-item-section>
               <q-item-section side>
-                <q-btn flat dense color="primary" icon="chevron_right" :to="'/items/' + row.item_id"
+                <q-btn flat dense color="primary" icon="chevron_right" :to="{ name: 'item', params: { id: row.item_id }, query: { returnTo: route.fullPath } }"
                   :aria-label="row.title + 'の記録を開く'" />
               </q-item-section>
             </q-item>

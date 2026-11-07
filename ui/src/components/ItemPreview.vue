@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { api, type ItemDetail, type ItemVersion } from '../lib/api'
 import { dateLabel, kindLabel, safeExternalUrl, safeValue, stateLabel } from '../lib/presentation'
 
+const route = useRoute()
 const props = withDefaults(defineProps<{ itemId: number; compact?: boolean }>(), { compact: false })
 const item = ref<ItemDetail | null>(null)
 const versions = ref<ItemVersion[]>([])
@@ -66,7 +68,7 @@ onBeforeUnmount(() => controller?.abort())
         <div class="row q-gutter-sm">
           <q-btn v-for="cve in cveIds" :key="cve" outline dense no-caps
             color="primary" icon-right="open_in_new" :label="cve + ' / KEV'"
-            :to="'/cves/' + cve" />
+            :to="{ path: '/cves/' + cve, query: { returnTo: route.fullPath } }" />
         </div>
         <div class="text-caption text-grey-7 q-mt-sm">
           CVEへの言及だけでは悪用確認を意味しません。CISA KEVとの対応は別途確認します。

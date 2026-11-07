@@ -65,7 +65,7 @@ onBeforeUnmount(() => controller?.abort())
       <div v-else-if="error" class="empty-state" role="alert"><q-icon name="error_outline" color="negative" size="30px"/><p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="load" /></div>
       <div v-else-if="changes.length === 0" class="empty-state"><q-icon name="history" size="32px"/><p class="q-mt-md">この期間に記録された変更はありません。</p></div>
       <template v-else>
-        <router-link v-for="change in changes" :key="change.item_id + ':' + change.version" class="result-row" :to="{ name: 'item', params: { id: change.item_id } }">
+        <router-link v-for="change in changes" :key="change.item_id + ':' + change.version" class="result-row" :to="{ name: 'item', params: { id: change.item_id }, query: { returnTo: route.fullPath } }">
           <div class="result-meta"><span class="kind-tag">{{ kindLabel(change.kind) }}</span><span>{{ change.version === 1 ? '初回観測' : '改訂 v' + change.version }}</span></div>
           <div class="result-title">{{ change.title }}</div>
           <div class="result-foot">{{ dateLabel(change.observed_at) }}</div>

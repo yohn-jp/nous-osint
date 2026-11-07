@@ -18,10 +18,10 @@ Nous is an intelligence desk for reading observed records, assessing provenance 
 | Surface | Primary user action | State and return path |
 | --- | --- | --- |
 | Explore | Query/filter bounded records; select item; request next cursor page | URL retains `q`, `kind`, `source`, optional selected `item` |
-| Item detail | Verify publisher URL, timestamps, attributes, provenance and recent immutable versions | On narrow layouts, `returnTo` is accepted only for an internal `/explore` URL |
+| Item detail | Verify publisher URL, timestamps, attributes, provenance and recent immutable versions | Allowlisted internal `returnTo` preserves Explore, Changes or CVE origin; other targets fall back to Explore |
 | Changes | Compare observed revisions over 7/30/90 days | Open underlying record; do not invent chronological diff details |
 | Sources | Find and filter registered sources, distinguish enabled config from successful fetch | Admin actions require independent origin authorization |
-| CVE / KEV | Differentiate listed, fresh not-listed and unknown; inspect related evidence | Mentions of a CVE are not KEV confirmation |
+| CVE / KEV | Differentiate listed, fresh not-listed and unknown; inspect related evidence | Return to the originating Explore/Item view; mentions are not KEV confirmation |
 | Source admin/onboarding | Maintain reviewed custom sources or generate Git review definitions | Disabled-by-default registration and explicit confirmation for destructive/enable actions |
 | Report admin | Enqueue template runs; inspect actual state/stage/events and schedules | Queued is not published; read published output in `/reports/` |
 | Report publication | Read article, follow claim/evidence references, navigate back to the library | Persistent shared navigation and contextual links to archive, evidence and Explore |
