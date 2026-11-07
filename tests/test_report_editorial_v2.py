@@ -117,3 +117,22 @@ def test_claims_reject_unsupported_numbers_and_mismatched_cve_identifiers():
     cve_candidate["claims"][0]["evidence_ids"] = ["E001"]
     with pytest.raises(ReportError, match="cve_claim_id_mismatch"):
         validate_claims(cve_candidate, bundle("cve-kev-deep-dive"), "cve-kev-deep-dive")
+
+
+def test_exact_cve_claim_accepts_producer_keV_row_without_embedded_cve_id():
+    cve_bundle = bundle("cve-kev-deep-dive")
+    cve_bundle["cve_context"].update({"kev_status": "listed", "catalog_fresh": True})
+    kev_row = cve_bundle["evidence"][0]
+    kev_row.update({
+        "relation": "kev", "source_key": "cisa-kev",
+        "allowed_fields": ["title", "publisher_url", "observed_at", "published_at",
+                            "vulnerability.date_added", "vulnerability.vendor"],
+        "vulnerability": {"date_added": "2026-11-01", "vendor": "Example"},
+        "content_policy": {"storage": "metadata_only", "license_id": "CC0-1.0",
+                           "dataset_license": "CC0-1.0"},
+    })
+    candidate = proposal()
+    candidate["claims"][0]["text"] = (
+        "CVE-2026-12345についてCISAが悪用を確認した記録があります。"
+    )
+    assert validate_claims(candidate, cve_bundle, "cve-kev-deep-dive") == candidate

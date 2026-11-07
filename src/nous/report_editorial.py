@@ -121,17 +121,32 @@ def _validate_claim_rows(claims: list, evidence: dict[str, dict], *, template_id
         cited_rows = [evidence[eid] for eid in claim["evidence_ids"]]
         cve_ids = {item.upper() for item in _CVE_ID.findall(claim["text"])}
         if cve_ids:
-            expected_cve_id = ((bundle or {}).get("parameters") or {}).get("cve_id")
+            bundle_value = bundle or {}
+            expected_cve_id = (bundle_value.get("cve_context") or {}).get("cve_id")
+            parameter_cve_id = (bundle_value.get("parameters") or {}).get("cve_id")
+            if expected_cve_id != parameter_cve_id:
+                _raise("invalid_cve_context")
             if expected_cve_id and cve_ids != {expected_cve_id.upper()}:
                 _raise("cve_claim_id_mismatch")
             if not any(
                 any(cve_id in str(row.get("title", "")).upper() or
                     cve_id == str((row.get("vulnerability") or {}).get("cve_id", "")).upper()
                     for cve_id in cve_ids)
+                or (
+                    template_id == "cve-kev-deep-dive"
+                    and expected_cve_id
+                    and row.get("relation") == "kev"
+                    and row.get("source_key") == "cisa-kev"
+                    and row.get("content_policy", {}).get("dataset_license") == "CC0-1.0"
+                    and isinstance(row.get("vulnerability"), dict)
+                )
                 for row in cited_rows
             ):
                 _raise("cve_claim_evidence_mismatch")
-        claim_numbers = _numeric_tokens(claim["text"])
+        # The exact CVE identifier is checked above against the run snapshot
+        # and cited relation. Its year/sequence digits are part of the ID,
+        # not independent numerical claims requiring duplicate metadata.
+        claim_numbers = _numeric_tokens(_CVE_ID.sub("", claim["text"]))
         if claim_numbers:
             permitted_numbers: set[str] = set()
             for row in cited_rows:
