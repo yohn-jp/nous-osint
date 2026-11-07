@@ -565,7 +565,7 @@ html { scroll-padding-top: 136px; }
   background: var(--accent-soft);
   box-shadow: 0 0 0 8px var(--accent-soft);
 }
-.article-section:target h2 { border-bottom-color: var(--accent); }
+.article-section h2:target { border-bottom-color: var(--accent); }
 .article-outline a:focus-visible,
 .source-title:focus-visible,
 .source-register-back:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }

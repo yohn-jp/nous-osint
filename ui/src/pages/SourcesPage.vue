@@ -52,7 +52,7 @@ onBeforeUnmount(() => controller?.abort())
       <div class="row items-center q-pa-md q-gutter-sm">
         <q-input v-model="textFilter" dense outlined clearable label="情報源を絞り込む" class="col" style="max-width: 370px"><template #prepend><q-icon name="search" /></template></q-input>
         <q-select v-model="statusFilter" dense outlined emit-value map-options
-          :options="statusOptions" label="稼働状態" class="source-status-filter" />
+          :options="statusOptions" label="設定・取得状態" class="source-status-filter" />
         <q-space /><q-btn flat dense icon="refresh" color="primary" aria-label="再読み込み" @click="load" />
       </div>
       <q-separator />
