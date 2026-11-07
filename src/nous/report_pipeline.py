@@ -907,7 +907,11 @@ def run_editorial_pipeline(bundle: dict, *, template_id: str, run_id: str,
             "template_id": template_id, "proposal": proposal, "bundle": bundle,
         })
         validate_review(review, proposal, bundle)
+    if hasattr(persist_stage, "event"):
+        persist_stage.event({"stage": "assembly", "event_type": "stage_started"})
     article = assemble_article(proposal, review, bundle=bundle, template_id=template_id)
+    if hasattr(persist_stage, "event"):
+        persist_stage.event({"stage": "article_validation", "event_type": "stage_started"})
     final = validate_article_v2(article, bundle=bundle, template_id=template_id)
     if hasattr(persist_stage, "load"):
         persist_stage("article", final,
