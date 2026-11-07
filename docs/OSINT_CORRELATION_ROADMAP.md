@@ -77,8 +77,19 @@ commit, follows only hash-addressed, **nonrecursive** Git trees, validates
 It never requests file bodies. Filenames are matched to exact CVE identities,
 and URLs use the immutable commit SHA rather than a mutable main-branch link.
 
-Each successful provider/year scan stores a content-addressed mapping of
-CVE→public file paths and blob hashes, and appends one observation with Git
+GitHub's actual current public tree endpoints were inspected independently
+of the production runtime: as of 2026-11-07, Trickest's 2026 directory
+contained **18,767 CVE Markdown files** and Nuclei HTTP's 2026 directory
+contained **532 YAML templates**, both with `truncated=false`. A sample
+Trickest Markdown page explicitly stated "No PoCs found on GitHub currently,"
+which is why **Trickest file presence is not a PoC detection signal**.
+These were API contract probes; they do not establish that the VM has already
+collected any data.
+
+Each successful provider/year scan stores a content-addressed **PostgreSQL
+JSONB** mapping of CVE→public file paths and blob hashes. The read model uses
+JSONB key extraction for a single CVE; it must not transfer the 18k-entry
+year index on each page request. It appends one observation with Git
 commit SHA and **post-fetch** observation time. A missing entry means only
 "not indexed within that complete repository/year scope." Missing, failed,
 partial or older-than-72h observations are not reported as fresh absence.

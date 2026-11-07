@@ -191,7 +191,11 @@ def refresh_public_artifacts(factory, *, current: datetime | None = None) -> boo
         canonical = json.dumps(index, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
         digest = hashlib.sha256(canonical.encode()).hexdigest()
         with factory() as db:
-            if db.get(PublicArtifactContent, digest) is None:
+            # Do not deserialize the entire year catalog just to check deduplication.
+            exists = db.scalar(select(PublicArtifactContent.digest).where(
+                PublicArtifactContent.digest == digest,
+            ))
+            if exists is None:
                 db.add(PublicArtifactContent(digest=digest, entries=index))
                 db.flush()
             db.add(PublicArtifactObservation(
@@ -231,13 +235,17 @@ def repository_artifacts_as_of(db, cve_id: str, cutoff: datetime) -> list[dict]:
         ).order_by(PublicArtifactObservation.observed_at.desc(),
                    PublicArtifactObservation.id.desc()).limit(1))
         observed = _utc(row.observed_at) if row else None
-        content = db.get(PublicArtifactContent, row.digest) if row else None
-        catalog = content.entries if content is not None else None
-        files = catalog.get(cve_id, []) if isinstance(catalog, dict) else []
+        # A 2026 index can exceed 18,000 CVEs; retrieve only this key, not
+        # the entire JSONB catalog, on every CVE page view.
+        selected = db.execute(select(
+            PublicArtifactContent.digest,
+            PublicArtifactContent.entries[cve_id],
+        ).where(PublicArtifactContent.digest == row.digest)).one_or_none() if row else None
+        files = selected[1] if selected is not None and selected[1] is not None else []
         pattern = _TRICKEST_NAME if provider == "trickest" else _NUCLEI_NAME
         expected_prefix = f"{year}/" if provider == "trickest" else f"http/cves/{year}/"
         valid_files = (
-            isinstance(catalog, dict) and isinstance(files, list)
+            selected is not None and isinstance(files, list)
             and len(files) <= _MAX_FILES_PER_CVE and all(
                 isinstance(entry, dict)
                 and isinstance(entry.get("path"), str)

@@ -5,6 +5,7 @@ or URL derived from third-party content is requested or executed.
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "0013"
 down_revision = "0012"
@@ -16,7 +17,7 @@ def upgrade():
     op.create_table(
         "public_artifact_contents",
         sa.Column("digest", sa.String(64), primary_key=True),
-        sa.Column("entries", sa.JSON(), nullable=False),
+        sa.Column("entries", sa.JSON().with_variant(JSONB(), "postgresql"), nullable=False),
     )
     op.create_table(
         "public_artifact_observations",

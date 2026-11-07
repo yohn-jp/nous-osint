@@ -2,6 +2,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
 from .db import Base
 
 def now():
@@ -161,7 +162,7 @@ class PublicArtifactContent(Base):
     """Content-addressed year index of public repository paths, not exploit code."""
     __tablename__ = "public_artifact_contents"
     digest: Mapped[str] = mapped_column(String(64), primary_key=True)
-    entries: Mapped[dict] = mapped_column(JSON, nullable=False)
+    entries: Mapped[dict] = mapped_column(JSON().with_variant(JSONB(), 'postgresql'), nullable=False)
 
 
 class PublicArtifactObservation(Base):
