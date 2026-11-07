@@ -376,7 +376,9 @@ def _append_run_event(db, row: ReportRun, attempt: int, event: dict):
         created_at=now(),
         **values,
     ))
-    if values["event_type"] in {"codex_stage_started", "stage_started", "stage_reused"}:
+    if values["event_type"] in {
+        "codex_preflight_started", "codex_stage_started", "stage_started", "stage_reused",
+    }:
         row.stage = values["stage"]
         row.state = "running"
     elif values["event_type"] == "codex_stage_failed":

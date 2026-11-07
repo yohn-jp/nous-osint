@@ -11,7 +11,16 @@ from sqlalchemy.orm import sessionmaker
 
 import nous.report_worker as worker
 from nous.db import Base
-from nous.models import Item, ItemVersion, Report, ReportEvidence, ReportRun, Source, now
+from nous.models import (
+    Item,
+    ItemVersion,
+    Report,
+    ReportEvidence,
+    ReportRun,
+    ReportRunEvent,
+    Source,
+    now,
+)
 from nous.report_templates import normalize_parameters, resolve_template
 
 
@@ -69,7 +78,7 @@ def postgres_runtime(tmp_path, monkeypatch):
         admin_engine.dispose()
 
 
-def test_postgres_fixture_runs_db_to_astro_to_publication(postgres_runtime):
+def test_postgres_fixture_runs_db_to_astro_to_publication(postgres_runtime, monkeypatch):
     factory, site_root, private_root = postgres_runtime
     current = now()
     zone = ZoneInfo("Asia/Tokyo")
@@ -130,6 +139,7 @@ def test_postgres_fixture_runs_db_to_astro_to_publication(postgres_runtime):
         assert run.state == "published"
         assert run.report_id == report.id
         assert report.article["claims"][0]["classification"] == "observed"
+        assert report.article_schema_version == 2
         assert len(evidence) == 1
         assert evidence[0].item_id == item_id
         assert evidence[0].item_version_id == version_id
@@ -137,5 +147,46 @@ def test_postgres_fixture_runs_db_to_astro_to_publication(postgres_runtime):
         assert report.artifact_digest == worker._current_digest(site_root)
         assert (site_root / "current" / "index.html").is_file()
         assert (site_root / "current" / "security" / report.slug / "index.html").is_file()
+        html = (site_root / "current" / "security" / report.slug / "index.html").read_text()
+        assert "公表元による更新情報の掲載が観測されました。" in html
         assert run.stage_artifacts.keys() == {"claims", "claim_review", "article"}
+        events = db.scalars(select(ReportRunEvent).where(
+            ReportRunEvent.run_id == run_id).order_by(
+                ReportRunEvent.attempt, ReportRunEvent.seq)).all()
+        assert [(event.stage, event.event_type) for event in events if event.event_type == "stage_started"] == [
+            ("assembly", "stage_started"), ("article_validation", "stage_started"),
+        ]
+        assert {event.stage for event in events if event.event_type == "stage_succeeded"} >= {
+            "claims", "claim_review", "article",
+        }
+
+    prior_digest = worker._current_digest(site_root)
+    failed_run_id = str(uuid.uuid4())
+    with factory() as db:
+        db.add(ReportRun(
+            id=failed_run_id, trigger="manual", created_by="fixture-owner",
+            template_id=template["id"], template_revision=template["revision_key"],
+            template_snapshot=template, parameters=parameters, idempotency_key=failed_run_id,
+            state="queued", stage="queued", attempts=0, available_at=current,
+            stage_artifacts={}, created_at=current,
+        ))
+        db.commit()
+
+    class FailingRunner(FixtureRunner):
+        def run(self, stage, payload, *, run_id, timeout=240):
+            self.event_sink({"run_id": run_id, "attempt": self.attempt, "stage": stage,
+                             "event_type": "codex_stage_started"})
+            self.event_sink({"run_id": run_id, "attempt": self.attempt, "stage": stage,
+                             "event_type": "codex_stage_failed", "error_code": "codex_auth",
+                             "exit_status": 1, "retryable": False})
+            raise worker.ReportError("codex_auth")
+
+    monkeypatch.setattr(worker, "CodexRunner", FailingRunner)
+    assert worker.run_once(factory) is True
+    assert worker._current_digest(site_root) == prior_digest
+    with factory() as db:
+        assert db.get(ReportRun, failed_run_id).state == "failed"
+        assert db.get(ReportRun, failed_run_id).failed_stage == "claims"
+        assert db.scalar(select(Report).where(Report.run_id == failed_run_id)) is None
+        assert db.scalar(select(Report).where(Report.run_id == run_id)) is not None
     assert not list(private_root.glob("runs/*/workspace"))
