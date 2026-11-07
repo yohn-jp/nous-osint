@@ -25,6 +25,25 @@ Visual language: neutral paper/graphite, restrained institutional blue for inter
 
 References were interpreted selectively: [Taste Skill](https://github.com/Leonxlnx/taste-skill/blob/main/skills/taste-skill/SKILL.md) for content-specific identity, consistent alignment and restrained finishing; [DADS](https://design.digital.go.jp/dads/) for data tables, typography and accessibility; [Impeccable](https://github.com/pbakaus/impeccable) for critique/distill/harden; [Linear](https://linear.app/now) for navigation receding behind the work object; [OpenCTI](https://docs.opencti.io/latest/usage/filters/) for URL-persisted investigation filters. We did not incorporate external runtime code/assets or the marketing-site-specific rules. User-supplied UX audit identifies useful friction, but speculative real-time protocols, STIX export, severity signals and hardcoded 32px rows are **not approved API contracts**.
 
+## Published article — provenance dossier
+
+The **article reading view** is the primary result of this system. The previous PRs revised the report index and shell but left individual article pages structurally unchanged. The new dossier composition is intentionally unlike a card-based blog: it treats the publication as an auditable research document.
+
+1. **Cover:** compact publication strip, real category/template/date, report title and a concise deck. A provenance stamp exposes actual source and claim counts. The segmented strip represents observed/inferred/unconfirmed **claim counts, not confidence, incident severity or a CVSS estimate**. Legend text stays visible in every mode.
+2. **Editorial brief:** all saved summary points are presented as numbered reading anchors with substantive text; no fabricated abstract, score or additional model-generated information.
+3. **Reading tracks:** a sectional contents rail, restrained ~40-Japanese-character prose measure with 1.85–1.9 line-height, and a source register with anchored evidence IDs, publisher, observed/published times and relation type. Evidence tags link to the canonical source ID; `:target` highlights the destination without any JavaScript.
+4. **CVE:** preserve the three-valued KEV catalog status and freshness caveat. No visual red severity signal for `not_listed` or `unknown`.
+5. **Responsive:** at wide widths, display three parallel tracks; at intermediate widths, a visible contents strip above body + source rail; at narrow widths, title, provenance summary, executive brief, contents, full article and source list in that sequence. Print removes chrome but preserves article and source metadata.
+6. **Motion:** only modest cover/brief entrance and source-target acknowledgement, with `prefers-reduced-motion` removing it. Never infer processing or scoring from an animation.
+
+Both article schema v1 blocks and v2 claim-only sections remain supported. This document describes the **actual static Astro renderer**, not a client SPA: the release gate rejects scripts and unsafe URLs, so interactions rely on links, native document landmarks and CSS.
+
+### Why a report style change previously failed to appear
+
+A published report is a *content-addressed HTML+asset release* built by the private report Worker. Merging a Quasar Worker UI PR never updates this origin-side static release. The report image now records a deterministic fingerprint of its bundled Astro renderer in the private release manifest. On the next Worker tick after deployment of a changed report image, a revision mismatch triggers the existing serialized, validated rebuild from immutable DB article JSON and atomic promotion, without re-running Codex or creating new report rows. A failed build preserves the current public pointer; old releases and asset hashes remain for rollback.
+
+This propagation mechanism does **not** mean GitHub CI alone has deployed a report Worker image or switched the live site. The runtime verification must record the image digest, active before/after site digest, authenticated `/reports/` and a specific article URL, plus rollback evidence.
+
 ## Navigation and interaction contract
 
 | Surface | Primary user action | State and return path |

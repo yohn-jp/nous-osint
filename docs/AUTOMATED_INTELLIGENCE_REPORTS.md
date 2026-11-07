@@ -156,6 +156,8 @@ Bundle のレコードには最低限 `evidence_id`, `source_key`, `item_id`, `i
 3. 既存 `current` への参照を**同一ファイルシステム上で atomic rename** し、全記事一覧・詳細・ナビゲーションを一括切替。DB に昇格済み digest を記録し、DB/ファイルの不一致は起動/公開時に検出・リカバリーする。新規に記事がない場合も空一覧を用意する。
 4. 不具合時は直前の正常 release を指すよう rollback。既存のリリースファイルと記事履歴を削除しない。
 
+**表示テンプレートの更新:** Worker image の Astro `src/`・`public/`・設定・ロックファイルから renderer fingerprint を算出し、リリースの非公開 manifest に記録する。Worker の定期的な整合性確認では、active release が正しく存在していても renderer fingerprint が異なれば、保存済み記事 JSON 全件から静的サイトを再構築する。既存と同じ publication lock、HTML/アセット/リンク検査、content digest、atomic pointer、DB 状態更新を再利用する。記事自体の再生成、版・run・source 記録の変更、Access 経路追加は行わない。古い image へ戻す場合もその image の renderer に戻せる。HTML を差し替えるには新しい report Worker **image のVMへの適用**が必要であり、Quasar frontend deployment では変更されない。実行後は `report_site_state.active_digest`、`current` link、非公開 manifest の fingerprint、記事表示と旧リリース保全を検証する。
+
 `nous-mcp` の gateway は別途マウントしたこの volume を**read-only**で提供し、`/reports/`、`/reports/<category>/<slug>/`、`/reports/_astro/<hashed-file>` など**限定されたパスだけ**を処理する。既存 SPA への fallback に巻き込まない。path traversal、拡張子、隠しファイル、シンボリックリンクのルート外脱出を拒否。`access_auth.py` の検証済み JWT と正規 host チェックをそのまま適用し、匿名 ingress/外部配信ドメイン/Access Bypass を追加しない。既存 `/mcp`、`/v1`、`/` の動作を変えない。
 
 Quadlet は `nous-report-worker.container` と記事 volume マウント（Worker: 書込、MCP gateway: 読取）を追加。report worker image は CLI/Node/Astro を固定。`nous-api`、`nous-mcp`、収集 Worker のイメージは不要に肥大化させない。private DB role を用途ごとに分け、バックアップには report テーブル、テンプレート revision、article/asset volume の整合したスナップショットを含める。

@@ -42,6 +42,12 @@ const publisherNames: Record<string, string> = {
 function publisherName(source: Source) {
   return publisherNames[source.source_key] ?? new URL(source.publisher_url).hostname.replace(/^www\./, '');
 }
+const relationLabels: Record<Source['relation'], string> = {
+  record: '収集レコード',
+  reference: '構造化参照',
+  kev: 'KEV関連資料',
+  title_mention: 'タイトルで言及',
+};
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat('ja-JP', {
     dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Tokyo',
@@ -62,7 +68,7 @@ function dateLabel(value: string) {
             <span>{publisherName(source)}</span>
             <span>観測 {dateLabel(source.observed_at)}</span>
             {source.published_at && <span>公開 {dateLabel(source.published_at)}</span>}
-            <span>{source.relation === 'title_mention' ? 'タイトル中の言及' : '出典'}</span>
+            <span class="source-relation" data-relation={source.relation}>{relationLabels[source.relation]}</span>
           </div>
         </div>
       </li>

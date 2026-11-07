@@ -18,6 +18,12 @@ export async function getStaticPaths() {
 const { report } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const categoryName = report.category === 'cve' ? 'CVE / KEV' : 'セキュリティ動向';
+const claimCounts = {
+  observed: report.claims.filter((claim) => claim.classification === 'observed').length,
+  inference: report.claims.filter((claim) => claim.classification === 'inference').length,
+  unconfirmed: report.claims.filter((claim) => claim.classification === 'unconfirmed').length,
+};
+const claimsTotal = report.claims.length;
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat('ja-JP', {
     dateStyle: 'long', timeZone: 'Asia/Tokyo',
@@ -29,8 +35,8 @@ function templateName(template: string) {
 ---
 
 <BaseLayout title={report.title} description={report.dek}>
-  <article class="report-article">
-    <nav class="breadcrumbs" aria-label="パンくずリスト">
+  <article class="report-article report-dossier">
+    <nav class="breadcrumbs dossier-breadcrumbs" aria-label="パンくずリスト">
       <a href="/explore">探索</a>
       <span aria-hidden="true">/</span>
       <a href={base}>分析レポート</a>
@@ -38,49 +44,102 @@ function templateName(template: string) {
       <span aria-current="page">{categoryName}</span>
     </nav>
 
-    <header class="article-header">
-      <div class="article-kicker">
-        <span class={`category-pill category-${report.category}`}>{categoryName}</span>
-        <span>{templateName(report.template_id)}</span>
-        <span class="article-source-count">出典 {report.sources.length} 件</span>
+    <header class="dossier-frontmatter" aria-labelledby="dossier-title">
+      <div class="dossier-masthead">
+        <span class="dossier-series">NOUS / RESEARCH DOSSIER</span>
+        <span class="dossier-issued">公開 <time datetime={report.published_at}>{dateLabel(report.published_at)}</time></span>
       </div>
-      <time class="article-date" datetime={report.published_at}>公開日 · {dateLabel(report.published_at)}</time>
-      <h1>{report.title}</h1>
-      <p class="article-dek">{report.dek}</p>
-      <div class="article-abstract" aria-labelledby="abstract-heading">
-        <div class="abstract-heading-row">
-          <h2 id="abstract-heading">この記事の要点</h2>
-          <a href="#sources-heading">出典を確認 <span aria-hidden="true">↓</span></a>
+      <div class="dossier-cover-grid">
+        <div class="dossier-lead">
+          <div class="dossier-categories">
+            <span class="dossier-category">{categoryName}</span>
+            <span class="dossier-template">{templateName(report.template_id)}</span>
+            {report.cve && <span class="dossier-subject">{report.cve.id}</span>}
+          </div>
+          <h1 id="dossier-title">{report.title}</h1>
+          <p class="dossier-dek">{report.dek}</p>
+          <a class="dossier-reading-link" href="#abstract-heading">要点を読む <span aria-hidden="true">↓</span></a>
         </div>
-        <ul class="article-summary">
-          {report.summary.map((line) => <li>{line}</li>)}
-        </ul>
+
+        <aside class="dossier-evidence-stamp" aria-labelledby="evidence-stamp-heading">
+          <div class="dossier-stamp-heading">
+            <span>PROVENANCE REGISTER</span>
+            <h2 id="evidence-stamp-heading">この記事の根拠</h2>
+          </div>
+          <dl class="dossier-stamp-metrics">
+            <div><dt>出典</dt><dd>{report.sources.length}<span>件</span></dd></div>
+            <div><dt>主張</dt><dd>{claimsTotal}<span>件</span></dd></div>
+          </dl>
+          <p class="dossier-class-heading">記述分類の内訳</p>
+          <div class="dossier-claim-rail" aria-hidden="true">
+            {Array.from({ length: claimCounts.observed }).map(() => <span class="rail-observed"></span>)}
+            {Array.from({ length: claimCounts.inference }).map(() => <span class="rail-inference"></span>)}
+            {Array.from({ length: claimCounts.unconfirmed }).map(() => <span class="rail-unconfirmed"></span>)}
+          </div>
+          <dl class="dossier-claim-legend">
+            <div><dt><span class="legend-dot observed"></span>観測事実</dt><dd>{claimCounts.observed}</dd></div>
+            <div><dt><span class="legend-dot inference"></span>推論</dt><dd>{claimCounts.inference}</dd></div>
+            <div><dt><span class="legend-dot unconfirmed"></span>未確認</dt><dd>{claimCounts.unconfirmed}</dd></div>
+          </dl>
+          <p class="dossier-stamp-caveat">記述の区分を示します。信頼度・脆弱性の深刻度を表すスコアではありません。</p>
+          <a href="#sources-heading" class="dossier-source-jump">出典一覧を確認 <span aria-hidden="true">↘</span></a>
+        </aside>
       </div>
     </header>
 
-    {report.cve && <KevPanel cve={report.cve} sources={report.sources} />}
+    <section class="dossier-briefing" aria-labelledby="abstract-heading">
+      <div class="dossier-briefing-label">
+        <span class="dossier-briefing-index">A</span>
+        <span>EXECUTIVE BRIEF</span>
+      </div>
+      <div class="dossier-briefing-body">
+        <div class="dossier-briefing-title">
+          <h2 id="abstract-heading">先に押さえる要点</h2>
+          <span>{report.summary.length} 項目</span>
+        </div>
+        <ol class="dossier-summary">
+          {report.summary.map((line, index) => (
+            <li>
+              <span class="dossier-summary-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+              <p>{line}</p>
+            </li>
+          ))}
+        </ol>
+        <p class="dossier-briefing-footnote">
+          以下の本文では「観測事実」「推論」「未確認」を区別し、各記述から根拠へ移動できます。
+        </p>
+      </div>
+    </section>
 
-    <nav class="article-outline" aria-label="この記事の目次">
-      <span class="outline-label">この記事の構成</span>
-      <ol>
-        {report.sections.map((section, index) => (
-          <li><a href={`#section-${index}`}>{section.heading}</a></li>
-        ))}
-        <li><a href="#sources-heading">出典一覧</a></li>
-      </ol>
-    </nav>
+    {report.cve && <div class="dossier-kev-context"><KevPanel cve={report.cve} sources={report.sources} /></div>}
 
-    <div class="article-columns">
-      <div class="article-body">
+    <div class="dossier-reading-grid">
+      <nav class="article-outline dossier-chapter-nav" aria-label="記事の目次">
+        <span class="dossier-rail-eyebrow">CONTENTS</span>
+        <h2>本文の構成</h2>
+        <ol>
+          {report.sections.map((section, index) => (
+            <li>
+              <a href={`#section-${index}`}>
+                <span class="chapter-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                <span>{section.heading}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+        <a class="dossier-toc-sources" href="#sources-heading">出典一覧 <span aria-hidden="true">↗</span></a>
+      </nav>
+
+      <div class="article-body dossier-prose">
         {report.sections.map((section, index) => (
           report.schema_version === 1
-            ? <section class="article-section" aria-labelledby={`section-${index}`}>
-                <div class="article-section-topline"><span>{String(index + 1).padStart(2, '0')}</span><span>ANALYSIS</span></div>
+            ? <section class="article-section dossier-section" aria-labelledby={`section-${index}`}>
+                <div class="article-section-topline"><span>{String(index + 1).padStart(2, '0')}</span><span>RESEARCH NOTE</span></div>
                 <h2 id={`section-${index}`}>{section.heading}</h2>
                 {section.blocks.map((block) => <ArticleBlock block={block} sources={report.sources} claims={report.claims} cve={report.cve} />)}
               </section>
-            : section.claim_ids.length > 0 && <section class="article-section" aria-labelledby={`section-${index}`}>
-                <div class="article-section-topline"><span>{String(index + 1).padStart(2, '0')}</span><span>ANALYSIS</span></div>
+            : section.claim_ids.length > 0 && <section class="article-section dossier-section" aria-labelledby={`section-${index}`}>
+                <div class="article-section-topline"><span>{String(index + 1).padStart(2, '0')}</span><span>RESEARCH NOTE</span></div>
                 <h2 id={`section-${index}`}>{section.heading}</h2>
                 {section.claim_ids.map((claimId) => {
                   const claim = report.claims.find((item) => item.claim_id === claimId);
@@ -93,20 +152,24 @@ function templateName(template: string) {
               </section>
         ))}
       </div>
-      <aside class="article-sources" aria-labelledby="sources-heading">
-        <p class="eyebrow">SOURCE REGISTER</p>
-        <h2 id="sources-heading">参照した出典</h2>
-        <p class="sources-intro">レポートに使用した資料の公開元と観測日時です。根拠番号を選ぶと該当資料に移動できます。</p>
+
+      <aside class="article-sources dossier-source-register" aria-labelledby="sources-heading">
+        <div class="dossier-source-header">
+          <span class="dossier-rail-eyebrow">EVIDENCE / REFERENCES</span>
+          <h2 id="sources-heading">出典台帳</h2>
+          <p class="sources-intro">本文中の根拠番号を選ぶと対応する資料へ移動します。公開元のページと観測日時を確認できます。</p>
+          <p class="dossier-source-total">登録資料 <strong>{report.sources.length}</strong> 件</p>
+        </div>
         <SourceList evidenceIds={report.sources.map((source) => source.evidence_id)} sources={report.sources} anchorIds />
-        <a class="source-register-back" href="#abstract-heading">記事の要点へ戻る <span aria-hidden="true">↑</span></a>
+        <a class="source-register-back" href="#abstract-heading">要点に戻る <span aria-hidden="true">↑</span></a>
       </aside>
     </div>
 
-    <footer class="article-footer">
-      <div class="article-footer-note">このレポートは保存済みの出典メタデータと観測時点に基づいています。</div>
+    <footer class="article-footer dossier-footer">
+      <div class="article-footer-note">この文書は保存された出典の観測時点に基づきます。資料の掲載状況や事実関係は公開後に変わることがあります。</div>
       <nav class="article-footer-actions" aria-label="記事を読んだ後の移動">
-        <a href={base}>レポート一覧へ <span aria-hidden="true">→</span></a>
-        <a class="article-footer-primary" href="/explore">探索ダッシュボードへ戻る <span aria-hidden="true">↗</span></a>
+        <a href={base}>レポート一覧に戻る <span aria-hidden="true">←</span></a>
+        <a class="article-footer-primary" href="/explore">収集レコードを調べる <span aria-hidden="true">↗</span></a>
       </nav>
     </footer>
   </article>
