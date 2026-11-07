@@ -67,8 +67,8 @@ onBeforeUnmount(() => controller?.abort())
       <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 3" :key="n" type="rect" height="62px" class="q-mb-md" /></div>
       <div v-else-if="error" class="empty-state" role="alert"><q-icon name="error_outline" color="negative" size="30px"/><p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="load" /></div>
       <div v-else-if="filtered.length === 0" class="empty-state"><q-icon name="rss_feed" size="32px"/><p class="q-mt-md">{{ sources.length ? '条件に一致する情報源がありません。' : '登録済みの情報源がありません。' }}</p><q-btn v-if="sources.length" flat color="primary" no-caps label="絞り込みを解除" @click="textFilter = ''; statusFilter = 'all'" /></div>
-      <template v-else>
-        <div v-for="entry in filtered" :key="entry.id" class="source-register-entry">
+      <ul v-else class="source-register" aria-label="登録済みの情報源">
+        <li v-for="entry in filtered" :key="entry.id" class="source-register-entry">
           <div class="source-register-identity">
             <div class="source-register-name">{{ entry.id }}</div>
             <div class="source-register-kind">{{ kindLabel(entry.item_kind) }} · {{ entry.kind.toUpperCase() }}</div>
@@ -78,12 +78,14 @@ onBeforeUnmount(() => controller?.abort())
             <span class="source-state-caption">{{ entry.last_success_at ? '取得履歴あり' : '取得成功未確認' }}</span>
           </div>
           <div class="source-register-observation">
-            <div><span>最終成功</span><strong>{{ dateLabel(entry.last_success_at) }}</strong></div>
-            <div><span>次回予定</span><strong>{{ dateLabel(entry.next_due_at) }}</strong></div>
-            <p v-if="entry.last_error" class="source-register-error" role="status">取得エラー: {{ entry.last_error }}</p>
+            <dl class="source-register-facts">
+              <div><dt>最終成功</dt><dd>{{ dateLabel(entry.last_success_at) }}</dd></div>
+              <div><dt>次回予定</dt><dd>{{ dateLabel(entry.next_due_at) }}</dd></div>
+            </dl>
+            <p v-if="entry.last_error" class="source-register-error">取得エラー: {{ entry.last_error }}</p>
           </div>
-        </div>
-      </template>
+        </li>
+      </ul>
     </section>
   </q-page>
 </template>
