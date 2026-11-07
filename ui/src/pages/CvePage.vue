@@ -75,6 +75,22 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
           <span v-if="!data.kev.catalog_fresh">データが未取得または古い場合、掲載が見つからなくても未掲載とは断定しません。</span>
           <span v-else>未掲載判定は直近48時間以内に完全なKEVカタログを取得できた場合だけです。</span>
         </p>
+        <section class="detail-section" aria-labelledby="epss-heading">
+          <div class="eyebrow">FIRST EPSS — 今後30日間の予測</div>
+          <h2 id="epss-heading" class="text-subtitle1 q-mt-sm q-mb-sm">悪用観測確率</h2>
+          <div v-if="data.epss.score !== null" class="row items-baseline q-gutter-md">
+            <strong class="text-h5">{{ (data.epss.score * 100).toFixed(2) }}%</strong>
+            <span class="text-caption">相対順位：{{ data.epss.percentile === null ? '—' : (data.epss.percentile * 100).toFixed(1) + 'パーセンタイル' }}</span>
+            <q-badge outline :color="data.epss.status === 'current' ? 'primary' : 'grey-7'"
+              :label="data.epss.status === 'current' ? 'データ取得済み' : 'データが古い'" />
+          </div>
+          <p v-else class="text-grey-7 q-mt-sm">{{ data.epss.status === 'not_scored' ? 'FIRSTからこのCVEのスコアは返されていません。' : 'EPSS観測値はまだありません。' }}</p>
+          <p class="text-caption text-grey-7 q-mt-sm">
+            EPSS基準日：{{ data.epss.score_date || '—' }} ／ 最終取得：{{ dateLabel(data.epss.observed_at) }}。
+            EPSSは将来の悪用観測の予測であり、CVSS・CISA KEVや自組織への影響度とは別の指標です。
+          </p>
+          <a :href="data.epss.source_url" target="_blank" rel="noopener noreferrer" class="text-primary">FIRST EPSS公式データ</a>
+        </section>
         <section v-if="data.kev.status === 'listed'" class="detail-section">
           <div class="text-subtitle2 q-mb-sm">CISAの確認内容</div>
           <div class="kv-line"><div class="kv-key">提供元</div><div>{{ data.kev.vendor || '—' }}</div></div>

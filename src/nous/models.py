@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 
@@ -134,6 +135,26 @@ class KevCatalogObservation(Base):
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"))
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     digest: Mapped[str] = mapped_column(ForeignKey("kev_catalog_contents.digest"))
+
+
+class EpssObservation(Base):
+    """One immutable score/absence observation per tracked CVE and UTC fetch date."""
+    __tablename__ = "epss_observations"
+    __table_args__ = (Index("ix_epss_observations_observed", "cve_id", "fetched_at"),)
+    cve_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    checked_on: Mapped[date] = mapped_column(Date(), primary_key=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    score_date: Mapped[date | None] = mapped_column(Date())
+    score: Mapped[Decimal | None] = mapped_column(Numeric(10, 9))
+    percentile: Mapped[Decimal | None] = mapped_column(Numeric(10, 9))
+
+
+class EpssPollState(Base):
+    __tablename__ = "epss_poll_state"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    next_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(60))
 
 
 class ReportSchedule(Base):

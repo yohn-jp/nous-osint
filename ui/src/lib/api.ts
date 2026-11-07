@@ -64,7 +64,16 @@ export interface KevStatus {
   known_ransomware_campaign_use: string | null
   source_url: string | null
 }
+export interface EpssObservation {
+  status: 'unknown' | 'not_scored' | 'stale' | 'current'
+  score: number | null
+  percentile: number | null
+  score_date: string | null
+  observed_at: string | null
+  source_url: string
+}
 export interface CveDetail {
+  epss: EpssObservation
   cve_id: string
   canonical_url: string
   kev: KevStatus

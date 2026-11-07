@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from functools import lru_cache
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -109,10 +109,20 @@ class KevStatusResponse(APIModel):
     source_url: str | None
 
 
+class EpssResponse(APIModel):
+    status: Literal["unknown", "not_scored", "stale", "current"]
+    score: float | None
+    percentile: float | None
+    score_date: date | None
+    observed_at: datetime | None
+    source_url: str
+
+
 class CveResponse(APIModel):
     cve_id: str = Field(pattern=r"^CVE-[0-9]{4}-[0-9]{4,}$")
     canonical_url: str
     kev: KevStatusResponse
+    epss: EpssResponse
     references: list[CveReferenceResponse]
     references_truncated: bool
 
