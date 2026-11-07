@@ -7,63 +7,117 @@ const reports = entries.map(({ data }) => data).sort(
   (left, right) => new Date(right.published_at).getTime() - new Date(left.published_at).getTime(),
 );
 const categoryName = (category: string) => category === 'cve' ? 'CVE / KEV' : 'セキュリティ動向';
+const kevLabel = (status: string) => ({
+  listed: 'KEV掲載あり',
+  not_listed: 'KEV掲載なし',
+  unknown: 'KEV未確認',
+}[status] ?? 'KEV未確認');
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat('ja-JP', {
-    dateStyle: 'long', timeZone: 'Asia/Tokyo',
+    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Tokyo',
   }).format(new Date(value));
 }
 ---
 
 <BaseLayout title="インテリジェンスレポート">
-  <section class="index-hero" aria-labelledby="page-title">
-    <div class="hero-topline">
-      <p class="eyebrow">NOUS / REPORT REGISTER</p>
-      <span class="report-count">公開 {reports.length} 件</span>
-    </div>
-    <h1 id="page-title">分析レポート</h1>
-    <p class="hero-copy">観測した事実と分析を区別し、根拠へ戻れる形式で記録します。</p>
-    <div class="hero-actions">
-      <a class="hero-primary-action" href={reports.length ? '#report-archive' : '/explore'}>
-        {reports.length ? '一覧へ移動' : '収集情報を見る'} <span aria-hidden="true">↗</span>
-      </a>
-      <a class="hero-secondary-action" href="/explore">収集情報を探索 <span aria-hidden="true">→</span></a>
-    </div>
-  </section>
-
-  <section class="report-archive" id="report-archive" aria-labelledby="archive-heading">
-    <div class="archive-heading">
+  <header class="publication-header">
+    <div class="publication-identity"><span>NOUS</span><span aria-hidden="true">/</span><span>PUBLICATIONS</span></div>
+    <div class="publication-title-row">
       <div>
-        <h2 id="archive-heading">記事一覧</h2>
+        <h1>分析レポート</h1>
+        <p>観測情報を検証し、事実と分析を分けて記録した資料です。</p>
       </div>
-      <span class="archive-count">{reports.length} 件</span>
+      <div class="publication-metric" aria-label={'公開記事 ' + reports.length + ' 件'}>
+        <strong>{String(reports.length).padStart(2, '0')}</strong><span>公開記事</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="publication-register" aria-labelledby="register-heading">
+    <div class="publication-register-bar">
+      <div>
+        <span class="publication-register-label">DOCUMENT REGISTER</span>
+        <h2 id="register-heading">記事一覧</h2>
+      </div>
+      <div class="publication-controls" role="group" aria-label="記事の分類">
+        <button type="button" class="publication-filter is-active" data-report-filter="all" aria-pressed="true">すべて</button>
+        <button type="button" class="publication-filter" data-report-filter="cve" aria-pressed="false">CVE / KEV</button>
+        <button type="button" class="publication-filter" data-report-filter="security" aria-pressed="false">セキュリティ動向</button>
+      </div>
     </div>
     {reports.length > 0 ? (
-      <div class="report-grid">
-        {reports.map((report, index) => (
-          <article class:list={['report-card', index === 0 && 'report-card-lead']}>
-            <span class="report-card-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-            <div class="report-card-content">
-              <div class="card-meta">
-                <span class={`category-pill category-${report.category}`}>{categoryName(report.category)}</span>
-                <time datetime={report.published_at}>{dateLabel(report.published_at)}</time>
-              </div>
-              <h3><a href={report.url}>{report.title}</a></h3>
-              <p class="card-dek">{report.dek}</p>
-              {report.summary.length > 0 && <ul class="card-summary">
-                {report.summary.slice(0, 2).map((line) => <li>{line}</li>)}
-              </ul>}
-              <a class="card-read-link" href={report.url}>記事を読む <span aria-hidden="true">→</span></a>
-            </div>
-          </article>
-        ))}
-      </div>
+      <>
+        <div class="publication-count" role="status" aria-live="polite">
+          <span id="visible-report-count">{reports.length} 件を表示</span>
+          <span>公開日の新しい順</span>
+        </div>
+        <div class="publication-list">
+          {reports.map((report, index) => {
+            const facts = report.claims.filter(claim => claim.classification === 'observed').length;
+            const assessments = report.claims.filter(claim => claim.classification === 'inference').length;
+            const unconfirmed = report.claims.filter(claim => claim.classification === 'unconfirmed').length;
+            return (
+              <article class="publication-entry" data-report-category={report.category}>
+                <div class="publication-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</div>
+                <div class="publication-document">
+                  <div class="publication-entry-meta">
+                    <span class="publication-type">{categoryName(report.category)}</span>
+                    <time datetime={report.published_at}>{dateLabel(report.published_at)}</time>
+                    {report.cve && <span class="publication-cve-id">{report.cve.id}</span>}
+                  </div>
+                  <h3><a href={report.url}>{report.title}</a></h3>
+                  <p class="publication-dek">{report.dek}</p>
+                  {report.cve && (
+                    <div class="publication-kev" data-kev={report.cve.kev_status}>
+                      {kevLabel(report.cve.kev_status)}
+                      {!report.cve.catalog_fresh && <span>（カタログ鮮度未確認）</span>}
+                    </div>
+                  )}
+                </div>
+                <div class="publication-evidence" aria-label="掲載内容の内訳">
+                  <span>根拠 <strong>{report.sources.length}</strong> 件</span>
+                  <span>観測事実 <strong>{facts}</strong></span>
+                  {assessments > 0 && <span>分析 <strong>{assessments}</strong></span>}
+                  {unconfirmed > 0 && <span>未確認 <strong>{unconfirmed}</strong></span>}
+                  <a href={report.url} class="publication-open">記事を読む <span aria-hidden="true">↗</span></a>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        <p class="publication-filter-empty" id="report-filter-empty" hidden>この分類の記事はまだありません。</p>
+      </>
     ) : (
-      <div class="empty-state">
-        <p class="eyebrow">NO REPORTS YET</p>
-        <h3>まだレポートは公開されていません</h3>
-        <p>現在、公開中のレポートはありません。対象期間に確認できる根拠がそろったときに掲載されます。収集済みの観測情報は探索画面で確認できます。</p>
-        <a class="empty-return" href="/explore">探索画面で情報を見る <span aria-hidden="true">→</span></a>
+      <div class="publication-empty">
+        <h3>公開された記事はありません</h3>
+        <p>この時点で公開済みの資料はありません。収集されたレコードは探索画面から確認できます。</p>
+        <a href="/explore">収集情報を探索する <span aria-hidden="true">↗</span></a>
       </div>
     )}
   </section>
 </BaseLayout>
+
+<script>
+  const filters = document.querySelectorAll<HTMLButtonElement>('[data-report-filter]');
+  const articles = document.querySelectorAll<HTMLElement>('[data-report-category]');
+  const count = document.getElementById('visible-report-count');
+  const empty = document.getElementById('report-filter-empty');
+  for (const button of filters) {
+    button.addEventListener('click', () => {
+      const category = button.dataset.reportFilter;
+      let visible = 0;
+      for (const article of articles) {
+        const show = category === 'all' || article.dataset.reportCategory === category;
+        article.hidden = !show;
+        if (show) visible += 1;
+      }
+      for (const other of filters) {
+        const pressed = other === button;
+        other.setAttribute('aria-pressed', String(pressed));
+        other.classList.toggle('is-active', pressed);
+      }
+      if (count) count.textContent = visible + ' 件を表示';
+      if (empty) empty.hidden = visible > 0;
+    });
+  }
+</script>
