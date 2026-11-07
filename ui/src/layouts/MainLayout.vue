@@ -42,6 +42,7 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
         </router-link>
         <q-space />
 
+        <q-btn v-if="$q.screen.gt.sm" flat no-caps class="header-reports-action q-mr-sm" href="/reports/" icon="article" label="分析レポート" />
         <q-btn v-if="canAdmin" flat no-caps class="header-admin-action q-mr-sm" :to="adminDestination"
           :icon="isAdminArea ? 'arrow_back' : 'admin_panel_settings'"
           :label="$q.screen.gt.xs ? adminLabel : undefined" :aria-label="adminLabel" />
@@ -59,10 +60,10 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
       </q-list>
       <div class="q-px-md q-pt-lg q-pb-sm sidebar-caption">レポート</div>
       <q-list padding class="q-px-sm">
-        <q-item clickable v-ripple href="/reports/" target="_blank" rel="noopener noreferrer" class="nav-entry report-external-link" @click="closeDrawerOnMobile">
+        <q-item clickable v-ripple href="/reports/" class="nav-entry report-external-link" @click="closeDrawerOnMobile">
           <q-item-section avatar><q-icon name="article" size="20px" /></q-item-section>
-          <q-item-section><q-item-label>分析レポートを読む</q-item-label><q-item-label caption>新しいタブで開く</q-item-label></q-item-section>
-          <q-item-section side><q-icon name="open_in_new" size="17px" aria-label="新しいタブで開く" /></q-item-section>
+          <q-item-section><q-item-label>分析レポート</q-item-label><q-item-label caption>記事と根拠を確認</q-item-label></q-item-section>
+          <q-item-section side><q-icon name="arrow_forward" size="17px" aria-hidden="true" /></q-item-section>
         </q-item>
       </q-list>
       <template v-if="canAdmin && isAdminArea">
@@ -86,6 +87,7 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
       <q-tabs v-else no-caps dense indicator-color="primary" active-color="primary" class="mobile-tabs">
         <q-route-tab v-for="entry in nav" :key="entry.name" :to="entry.to" exact :icon="entry.icon" :label="entry.title" />
       </q-tabs>
+      <a class="mobile-report-link" href="/reports/" aria-label="分析レポート"><q-icon name="article" size="22px" /><span>レポート</span></a>
     </q-footer>
   </q-layout>
 </template>

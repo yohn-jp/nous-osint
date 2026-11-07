@@ -13,9 +13,10 @@ interface Source {
 interface Props {
   evidenceIds: string[];
   sources: Source[];
+  anchorIds?: boolean;
 }
 
-const { evidenceIds, sources } = Astro.props;
+const { evidenceIds, sources, anchorIds = false } = Astro.props;
 const selected = evidenceIds.map((id) => sources.find((source) => source.evidence_id === id))
   .filter((source): source is Source => source !== undefined);
 const publisherNames: Record<string, string> = {
@@ -51,11 +52,11 @@ function dateLabel(value: string) {
 {selected.length > 0 && (
   <ol class="source-list">
     {selected.map((source) => (
-      <li id={`source-${source.evidence_id}`} class="source-entry">
+      <li id={anchorIds ? `source-${source.evidence_id}` : undefined} class="source-entry">
         <span class="source-id">{source.evidence_id}</span>
         <div class="source-copy">
-          <a class="source-title" href={source.publisher_url} rel="noopener noreferrer">
-            {source.title}
+          <a class="source-title" href={source.publisher_url} rel="noopener noreferrer" target="_blank">
+            {source.title}<span class="source-outbound" aria-hidden="true"> ↗</span><span class="visually-hidden">（新しいタブで開きます）</span>
           </a>
           <div class="source-meta">
             <span>{publisherName(source)}</span>
