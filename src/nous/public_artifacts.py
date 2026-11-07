@@ -260,7 +260,7 @@ def repository_artifacts_as_of(db, cve_id: str, cutoff: datetime) -> list[dict]:
         else:
             status = "indexed" if refs else "not_indexed"
         results.append({
-            "provider": provider, "scope": ("Public PoC reference index"
+            "provider": provider, "scope": ("Trickest CVE index pages; PoC links not inspected"
                                            if provider == "trickest" else "Nuclei HTTP CVE templates"),
             "status": status,
             "observed_at": row.observed_at if row else None,

@@ -62,8 +62,9 @@ its daily CSV archive: https://www.first.org/epss/data .
 This phase adds **repository index observations**, not downloaded or executed
 proof-of-concept code. The two configured public sources are:
 
-- `trickest/cve`: a generated CVE-year Markdown reference index. A file name
-  establishes that Trickest has an entry, **not** that any included PoC works,
+- `trickest/cve`: a generated CVE-year Markdown reference index. Many indexed pages explicitly
+  say that no GitHub PoCs were found. A file name establishes only that Trickest
+  has a CVE page, **not even that a PoC link exists**, let alone that one works,
   is safe, or represents exploitation in the wild.
 - `projectdiscovery/nuclei-templates`: specifically `http/cves/<year>/`
   YAML template *path and Git blob hash* metadata. Other Nuclei protocols are

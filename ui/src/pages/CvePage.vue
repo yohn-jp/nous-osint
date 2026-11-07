@@ -95,13 +95,13 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
           <div class="eyebrow">公開インデックス — 独立した参照情報</div>
           <h2 id="artifact-heading" class="text-subtitle1 q-mt-sm">PoC参照と検査テンプレート</h2>
           <p class="text-caption text-grey-7 q-mt-sm">
-            公開リポジトリのファイル名を根拠に照合した結果です。Trickestへの掲載はPoCの有効性を証明せず、
+            公開リポジトリのファイル名を根拠に照合した結果です。TrickestにはPoCがないCVEのページも存在するため、掲載だけではPoCの有無を判断できず、
             Nuclei HTTPテンプレートの掲載は実環境での悪用を意味しません。未掲載は対象リポジトリだけの結果です。
           </p>
           <div v-for="artifact in data.public_artifacts" :key="artifact.provider"
             class="cve-artifact-entry">
             <div class="row items-center q-gutter-sm">
-              <strong>{{ artifact.provider === 'trickest' ? 'Trickest — PoC参照インデックス' : 'Nuclei — HTTP CVEテンプレート' }}</strong>
+              <strong>{{ artifact.provider === 'trickest' ? 'Trickest — CVE参照ページ' : 'Nuclei — HTTP CVEテンプレート' }}</strong>
               <q-badge outline
                 :color="artifact.status === 'indexed' ? 'primary' : 'grey-7'"
                 :label="artifact.status === 'indexed' ? '参照あり' :
