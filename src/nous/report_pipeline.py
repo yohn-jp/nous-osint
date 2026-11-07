@@ -22,6 +22,7 @@ from sqlalchemy import select, text
 
 from .cve_index import authoritative_kev_version, valid_cve_id
 from .cve_queries import query_cve
+from .source_taxonomy import source_category
 from .models import Item, ItemVersion, Source
 from .report_templates import resolve_template
 from .report_diagnostics import (
@@ -222,6 +223,14 @@ def build_evidence_bundle(factory, template_id: str, parameters: dict,
     source_counts: dict[str, int] = {}
     seen: set[tuple[int, int]] = set()
 
+    selected_ids = set(parameters.get("source_ids", []))
+    selected_categories = set(parameters.get("source_categories", []))
+
+    def included(source: Source) -> bool:
+        return ((not selected_ids or source.source_key in selected_ids) and
+                (not selected_categories or
+                 source_category(source.config or {}, source.item_kind) in selected_categories))
+
     with factory() as db:
         db.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
         cve_id = parameters.get("cve_id")
@@ -242,8 +251,10 @@ def build_evidence_bundle(factory, template_id: str, parameters: dict,
                         ItemVersion.observed_at.desc(), ItemVersion.id.desc()).limit(1)) if kev_item else None
                 if not kev_item or not kev_source or not kev_version:
                     raise ReportError("cve_snapshot_inconsistent")
-                _append_evidence(bundle, kev_version, kev_item, kev_source, "kev", limits,
-                                 source_counts, seen)
+                # KEV membership stays authoritative regardless of editorial source scope.
+                if included(kev_source):
+                    _append_evidence(bundle, kev_version, kev_item, kev_source, "kev", limits,
+                                     source_counts, seen)
             bundle["cve_context"] = {
                 "cve_id": cve_id,
                 "kev_status": kev_status,
@@ -261,7 +272,7 @@ def build_evidence_bundle(factory, template_id: str, parameters: dict,
                 if item is None:
                     continue
                 source = db.get(Source, item.source_id)
-                if source is None:
+                if source is None or not included(source):
                     continue
                 version = db.scalar(select(ItemVersion).where(
                     ItemVersion.item_id == item.id,
@@ -302,6 +313,8 @@ def build_evidence_bundle(factory, template_id: str, parameters: dict,
                     if scanned > scan_budget:
                         bundle["truncated"] = True
                         break
+                    if not included(source):
+                        continue
                     _append_evidence(bundle, version, item, source, "record",
                                      limits, source_counts, seen)
                     if len(source_counts) > limits["max_sources"]:

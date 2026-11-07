@@ -272,3 +272,48 @@ def test_schedule_list_paginates_more_than_one_hundred_active_entries(managed):
     assert len(seen) == len(set(seen)) == 103
     assert client.get("/v1/admin/report-schedules?limit=101").status_code == 422
     assert client.get("/v1/admin/report-schedules?cursor=not-a-uuid").status_code == 422
+
+
+def test_report_source_selection_requires_registered_enabled_source(managed):
+    from nous.models import Source
+    client, factory = managed
+    target = datetime.now(timezone.utc).astimezone().date().isoformat()
+    request = {
+        "template_id": "security-daily",
+        "parameters": {"target_date": target, "timezone": "Asia/Tokyo",
+                       "source_categories": ["threat_research"],
+                       "source_ids": ["fixture-research"]},
+    }
+    assert write(client, "POST", "/v1/admin/report-runs", request).status_code == 422
+    with factory() as db:
+        source = Source(
+            source_key="fixture-research", kind="rss",
+            url="https://publisher.example/feed", adapter="rss_v1",
+            item_kind="news", config_revision="a" * 64,
+            config={"category": "threat_research", "policy": {"note": "metadata"}},
+            origin="custom", overrides={}, enabled=True,
+            interval_minutes=60, max_requests_per_hour=2,
+            next_due_at=datetime.now(timezone.utc),
+        )
+        db.add(source)
+        db.commit()
+    created = write(client, "POST", "/v1/admin/report-runs", request)
+    assert created.status_code == 202, created.text
+    with factory() as db:
+        params = db.get(ReportRun, created.json()["run_id"]).parameters
+        assert params["source_categories"] == ["threat_research"]
+        assert params["source_ids"] == ["fixture-research"]
+
+    schedule = write(client, "POST", "/v1/admin/report-schedules", {
+        "template_id": "security-daily",
+        "parameters": {"source_categories": ["threat_research"],
+                       "source_ids": ["fixture-research"]},
+        "timezone": "Asia/Tokyo", "cadence": "daily", "local_time": "08:30",
+    })
+    assert schedule.status_code == 201, schedule.text
+    assert schedule.json()["parameters"]["source_ids"] == ["fixture-research"]
+    changed = write(client, "PATCH", "/v1/admin/report-schedules/" + schedule.json()["id"],
+                    {"parameters": {"source_categories": ["advisory"]}})
+    assert changed.status_code == 200
+    assert changed.json()["parameters"]["source_categories"] == ["advisory"]
+    assert "source_ids" not in changed.json()["parameters"]

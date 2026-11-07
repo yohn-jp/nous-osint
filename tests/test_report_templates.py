@@ -62,3 +62,46 @@ def test_source_quote_rights_must_be_explicit():
                                     "report_quote_allowed": True,
                                     "report_quote_fields": ["title"]})
     assert policy.report_quote_fields == ["title"]
+
+
+def test_category_scope_is_canonical_and_bounded_for_manual_and_scheduled_runs():
+    now = datetime(2026, 11, 4, 2, tzinfo=timezone.utc)
+    result = normalize_parameters(
+        "security-daily", {
+            "target_date": "2026-11-03",
+            "source_categories": ["threat_research", "advisory"],
+            "source_ids": ["cisco-talos-research", "jpcert-alerts"],
+        }, now=now,
+    )
+    assert result["source_categories"] == ["advisory", "threat_research"]
+    assert result["source_ids"] == ["cisco-talos-research", "jpcert-alerts"]
+    default = normalize_parameters("security-daily", {
+        "target_date": "2026-11-03",
+    }, now=now)
+    assert "source_categories" not in default
+    assert "source_ids" not in default
+
+
+@pytest.mark.parametrize("scope", [
+    {"source_categories": []},
+    {"source_categories": ["arbitrary"]},
+    {"source_categories": ["advisory", "advisory"]},
+    {"source_ids": ["../../credentials"]},
+    {"source_ids": ["cisa-kev", "cisa-kev"]},
+    {"source_ids": []},
+    {"source_ids": "cisa-kev"},
+])
+def test_source_selection_rejects_invalid_parameters(scope):
+    with pytest.raises(ValueError):
+        normalize_parameters("security-daily", {
+            "target_date": "2026-11-03", **scope,
+        }, now=datetime(2026, 11, 4, 2, tzinfo=timezone.utc))
+
+
+def test_source_taxonomy_preserves_legacy_record_types_and_explicit_override():
+    from nous.source_taxonomy import source_category
+    assert source_category({}, "job_posting") == "careers"
+    assert source_category({}, "advisory") == "advisory"
+    assert source_category({"category": "threat_research"}, "news") == "threat_research"
+    assert source_category({"category": "invalid"}, "news") == "security_news"
+
