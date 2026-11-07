@@ -4,7 +4,8 @@ const routes: RouteRecordRaw[] = [{
   path: '/',
   component: () => import('../layouts/MainLayout.vue'),
   children: [
-    { path: '', redirect: '/explore' },
+    { path: '', redirect: '/live' },
+    { path: 'live', name: 'live', component: () => import('../pages/LivePage.vue') },
     { path: 'explore', name: 'explore', component: () => import('../pages/ExplorePage.vue') },
     { path: 'items/:id', name: 'item', component: () => import('../pages/ItemPage.vue') },
     { path: 'cves/:id', name: 'cve', component: () => import('../pages/CvePage.vue') },

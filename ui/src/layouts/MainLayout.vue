@@ -8,10 +8,11 @@ const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
 const drawerOpen = ref(false)
-const active = computed(() => String(route.name ?? 'explore'))
+const active = computed(() => String(route.name ?? 'live'))
 const canAdmin = ref(false)
 void api.adminSession().then(session => { canAdmin.value = session.allowed }).catch(() => { canAdmin.value = false })
 const researchNav = [
+  { to: '/live', name: 'live', icon: 'sensors', title: 'Live Feed' },
   { to: '/explore', name: 'explore', icon: 'manage_search', title: '探索' },
   { to: '/changes', name: 'changes', icon: 'history', title: '変更履歴' },
   { to: '/sources', name: 'sources', icon: 'rss_feed', title: '情報源' },
@@ -42,7 +43,7 @@ async function openSearch() {
     <q-header class="nous-header">
       <q-toolbar class="nous-global-bar">
         <q-btn v-if="$q.screen.lt.md" flat round dense icon="menu" aria-label="メニューを開閉" @click="drawerOpen = !drawerOpen" />
-        <router-link to="/explore" class="brand-link" aria-label="Nous OSINT 探索へ移動">
+        <router-link to="/live" class="brand-link" aria-label="Nous OSINT Live Feedへ移動">
           <span class="nous-mark" aria-hidden="true">N</span>
           <span class="brand-name">nous<span class="brand-soft"> / osint</span></span>
         </router-link>

@@ -11,7 +11,7 @@ from .source_taxonomy import SOURCE_CATEGORIES
 
 KINDS = {"job_posting", "news", "advisory", "vulnerability", "company_update"}
 ADAPTERS = {"rss": {"rss_v1"}, "json_api": {"json_v1", "greenhouse_jobs_v1",
-                                           "lever_jobs_v1", "ashby_jobs_v1", "cisa_kev_v1"},
+                                           "lever_jobs_v1", "ashby_jobs_v1", "cisa_kev_v1", "bluesky_author_v1"},
             "html": {"html_v1", "automattic_html_v1"}}
 
 class Policy(BaseModel):
@@ -96,6 +96,12 @@ class SourceConfig(BaseModel):
                     raise ValueError("Lever max_pages must fit the hourly request budget")
             elif self.max_pages != 1:
                 raise ValueError("nonpaginated ATS must use max_pages=1")
+        elif self.adapter == "bluesky_author_v1":
+            from .social_feeds import author_from_url
+            if (self.kind != "json_api" or self.item_kind != "news"
+                    or self.max_pages != 1 or self.json_path or self.field_map):
+                raise ValueError("Bluesky author sources require fixed news metadata mapping")
+            author_from_url(self.url)
         elif self.adapter == "cisa_kev_v1":
             if (self.kind != "json_api" or self.item_kind != "vulnerability" or
                     parsed.hostname != "raw.githubusercontent.com" or

@@ -16,6 +16,26 @@ export interface Item {
   updated_at: string | null
   current_version: number
 }
+export interface StreamObservation {
+  observation_id: number
+  item_id: number
+  revision: number
+  change: 'new' | 'updated'
+  source: string
+  category: string
+  platform: 'bluesky' | 'rss' | 'json_api' | 'html'
+  organization: string | null
+  kind: ItemKind
+  title: string
+  url: string
+  published_at: string | null
+  observed_at: string
+  state: ItemState
+}
+export interface StreamPage {
+  observations: StreamObservation[]
+  next_cursor: number | null
+}
 export interface ItemDetail extends Item {
   attributes: Record<string, unknown>
   provenance: Record<string, unknown>
@@ -265,6 +285,8 @@ async function mutation<T>(path: string, method: 'POST' | 'PUT' | 'PATCH', paylo
 }
 
 export const api = {
+  stream: (params: { category?: string; source?: string; limit?: number; cursor?: number } = {},
+           signal?: AbortSignal) => get<StreamPage>('/v1/stream' + qs(params), signal),
   items: (params: { q?: string | undefined; kind?: ItemKind | undefined; source?: string | undefined; category?: string | undefined; limit?: number | undefined; cursor?: number | undefined }, signal?: AbortSignal) =>
     get<ItemPage>('/v1/items' + qs(params), signal),
   sources: (signal?: AbortSignal) => get<Source[]>('/v1/sources', signal),

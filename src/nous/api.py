@@ -9,6 +9,7 @@ from sqlalchemy import func, select, text
 from .db import session_factory
 from .cve_queries import query_cve
 from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source
+from .runtime import parse_timestamp
 from .source_taxonomy import SOURCE_CATEGORIES, source_category
 
 app = FastAPI(title="Nous OSINT", version="0.1.0")
@@ -57,6 +58,28 @@ class ItemResponse(APIModel):
 
 class ItemPageResponse(APIModel):
     items: list[ItemResponse]
+    next_cursor: int | None
+
+
+class StreamObservationResponse(APIModel):
+    observation_id: int
+    item_id: int
+    revision: int
+    change: Literal["new", "updated"]
+    source: str
+    category: str
+    platform: Literal["bluesky", "rss", "json_api", "html"]
+    organization: str | None
+    kind: ItemKind
+    title: str
+    url: str
+    published_at: datetime | None
+    observed_at: datetime
+    state: ItemState
+
+
+class StreamPageResponse(APIModel):
+    observations: list[StreamObservationResponse]
     next_cursor: int | None
 
 
@@ -207,6 +230,65 @@ def items(kind: ItemKind | None = None, state: ItemState | None = None,
         rows = db.execute(query.order_by(Item.id).limit(limit + 1)).all()
         return {"items": [item_dict(i, s) for i, s in rows[:limit]],
                 "next_cursor": rows[limit - 1][0].id if len(rows) > limit else None}
+
+@app.get("/v1/stream", response_model=StreamPageResponse)
+def stream(category: str | None = None,
+           source: str | None = Query(None, min_length=3, max_length=100,
+                                      pattern=r"^[a-z][a-z0-9-]*$"),
+           include_careers: bool = False,
+           limit: int = Query(40, ge=1, le=100),
+           cursor: int | None = Query(None, ge=1)):
+    """Changes to primary metadata, newest first; unlike /items this is an event feed.
+
+    Cursor is the immutable item_versions.id, not mutable published_at/last_seen_at.
+    A re-fetch with unchanged metadata never generates an extra feed event.
+    No scoring, body extraction or synthetic editorial text is performed.
+    """
+    if category is not None and category not in SOURCE_CATEGORIES:
+        raise HTTPException(422, "unsupported source category")
+    with session_factory()() as db:
+        query = (select(ItemVersion, Item, Source)
+                 .join(Item, ItemVersion.item_id == Item.id)
+                 .join(Source, Item.source_id == Source.id))
+        if not include_careers:
+            query = query.where(Item.kind != "job_posting")
+        if source:
+            query = query.where(Source.source_key == source)
+        if category is not None:
+            keys = [row.id for row in db.scalars(select(Source))
+                    if source_category(row.config or {}, row.item_kind) == category]
+            query = query.where(Source.id.in_(keys))
+        if cursor is not None:
+            query = query.where(ItemVersion.id < cursor)
+        rows = db.execute(query.order_by(ItemVersion.id.desc()).limit(limit + 1)).all()
+        observations = []
+        for version, item, origin in rows[:limit]:
+            attrs = version.attributes or {}
+            title = attrs.get("title")
+            url = attrs.get("url")
+            if not isinstance(title, str) or not isinstance(url, str):
+                # All canonical ItemVersion writers set both; a legacy
+                # malformed version cannot become a fabricated original URL.
+                raise HTTPException(503, "record metadata is incomplete")
+            observations.append({
+                "observation_id": version.id,
+                "item_id": item.id,
+                "revision": version.version,
+                "change": "new" if version.version == 1 else "updated",
+                "source": origin.source_key,
+                "category": source_category(origin.config or {}, origin.item_kind),
+                "platform": "bluesky" if origin.adapter == "bluesky_author_v1" else origin.kind,
+                "organization": origin.config.get("organization"),
+                "kind": item.kind,
+                "title": title,
+                "url": url,
+                "published_at": parse_timestamp(attrs.get("published")),
+                "observed_at": version.observed_at,
+                "state": item.state,
+            })
+        return {"observations": observations,
+                "next_cursor": rows[limit - 1][0].id if len(rows) > limit else None}
+
 
 @app.get("/v1/items/{item_id}", response_model=ItemDetailResponse)
 def item(item_id: int):

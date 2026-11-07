@@ -4,8 +4,11 @@ import feedparser
 from bs4 import BeautifulSoup
 from .job_postings import extract_jobs
 from .vulnerability_feeds import extract_kev
+from .social_feeds import extract_bluesky_author
 
 def extract(source, content, base_url):
+    if getattr(source, "adapter", None) == "bluesky_author_v1":
+        return extract_bluesky_author(content, source.url, base_url)
     if getattr(source, "adapter", None) == "cisa_kev_v1":
         return extract_kev(content)
     if getattr(source, "adapter", None) in (
