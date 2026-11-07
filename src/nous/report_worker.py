@@ -60,6 +60,7 @@ _AT_FDCWD = -100
 _RENAME_EXCHANGE = 2
 _STAGE_NAME = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 _SAFE_CODE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_EVENT_TYPE = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
 _SHA256 = re.compile(r"^[a-f0-9]{64}$")
 _USAGE_KEYS = {"input_tokens", "output_tokens", "cached_input_tokens", "reasoning_tokens"}
 
@@ -233,6 +234,7 @@ def _claim_run(factory) -> dict | None:
             row.state = "leased"
             row.stage = "claimed"
             row.attempts += 1
+            row.retry_at = None
             row.lease_until = current + timedelta(seconds=_LEASE_SECONDS)
             row.lease_token = token
             row.started_at = row.started_at or current
@@ -325,9 +327,12 @@ def _event_values(event: dict) -> dict:
     error_code = event.get("error_code")
     error_code = (error_code[:64] if isinstance(error_code, str)
                   and _SAFE_CODE.fullmatch(error_code) else None)
+    event_type = event.get("event_type", "stage_event")
+    event_type = (event_type[:48] if isinstance(event_type, str)
+                  and _EVENT_TYPE.fullmatch(event_type) else "stage_event")
     return {
         "stage": str(event.get("stage", "unknown"))[:32],
-        "event_type": str(event.get("event_type", "stage_event"))[:48],
+        "event_type": event_type,
         "error_code": error_code,
         "exit_status": (event.get("exit_status") if isinstance(event.get("exit_status"), int)
                         and not isinstance(event.get("exit_status"), bool) else None),
@@ -509,7 +514,9 @@ def _set_failure(factory, claim: dict, *, state: str, code: str, retryable: bool
         if row is None:
             return
         row.error_code = code[:64]
-        if state != "skipped":
+        if state == "skipped":
+            row.failed_stage = None
+        else:
             row.failed_stage = row.failed_stage or row.stage
         row.lease_token = None
         row.lease_until = None
@@ -1041,6 +1048,7 @@ def process_claim(factory, claim: dict):
     run_id, token = claim["id"], claim["lease_token"]
     heartbeat = _LeaseHeartbeat(factory, run_id, token)
     runner = None
+    persistence = None
     workdir = None
     heartbeat.start()
     try:
@@ -1062,11 +1070,17 @@ def process_claim(factory, claim: dict):
         # can traverse its own stage directory but cannot enumerate siblings.
         workdir = work_root / ("job-" + uuid.uuid4().hex)
         workdir.mkdir(mode=0o710)
+        persistence = StagePersistence(
+            factory, claim, attempt=claim["attempts"], model=None,
+        )
+        persistence.event({
+            "stage": "codex_preflight", "event_type": "codex_preflight_started",
+            "retryable": None,
+        })
         runner = CodexRunner(workdir=workdir)
         runner.attempt = claim["attempts"]
-        persistence = StagePersistence(
-            factory, claim, attempt=claim["attempts"], model=getattr(runner, "model", None),
-        )
+        persistence.model = (runner.model[:128] if isinstance(getattr(runner, "model", None), str)
+                             else None)
         runner.event_sink = persistence.event
         final, model = run_editorial_pipeline(
             bundle, template_id=claim["template_id"], run_id=run_id, runner=runner,
@@ -1090,12 +1104,22 @@ def process_claim(factory, claim: dict):
     except LeaseLost:
         log.warning(json.dumps({"event": "report_lease_lost", "run_id": run_id}))
     except ReportError as exc:
+        if persistence is not None and runner is None:
+            persistence.event({
+                "stage": "codex_preflight", "event_type": "codex_stage_failed",
+                "error_code": exc.code, "retryable": exc.retryable,
+            })
         _set_failure(factory, claim, state="failed", code=exc.code,
                      retryable=exc.retryable)
         log.warning(json.dumps({"event": "report_failed", "run_id": run_id,
                                 "error_code": exc.code}))
     except Exception as exc:
-        _set_failure(factory, claim, state="failed", code="worker_internal_error", retryable=True)
+        if persistence is not None and runner is None:
+            persistence.event({
+                "stage": "codex_preflight", "event_type": "codex_stage_failed",
+                "error_code": "worker_internal_error", "retryable": False,
+            })
+        _set_failure(factory, claim, state="failed", code="worker_internal_error", retryable=False)
         log.warning(json.dumps({"event": "report_failed", "run_id": run_id,
                                "error_code": "worker_internal_error",
                                "error_type": type(exc).__name__}))

@@ -23,39 +23,20 @@ class FixtureRunner:
         self.workdir = workdir
 
     def run(self, stage, payload, *, run_id, timeout=240):
-        if stage == "plan":
+        if stage == "claims":
             evidence_id = payload["bundle"]["evidence"][0]["evidence_id"]
-            return {"decision": "publish", "thesis": "公開記録を確認します。",
-                    "audience": "運用担当者", "outline": ["観測された情報", "出典"],
-                    "evidence_ids": [evidence_id], "reason": "試験用の公開記録です。"}
-        if stage == "fact_check":
+            return {"decision": "publish", "theme": "当日に掲載された更新情報",
+                    "claims": [{
+                        "claim_id": "C001",
+                        "text": "公表元による更新情報の掲載が観測されました。",
+                        "classification": "observed", "evidence_ids": [evidence_id],
+                        "section": "primary_observations", "importance": "normal",
+                    }]}
+        if stage == "claim_review":
             evidence_id = payload["bundle"]["evidence"][0]["evidence_id"]
-            return {"claims": [{
-                "claim_id": "C001",
-                "text": "公式アドバイザリには影響対象の更新が記載されています。",
-                "classification": "observed", "evidence_ids": [evidence_id],
-                "assessment": "supported",
-            }], "revision_request": [], "summary": "fixture verified"}
-        if stage in {"draft", "edit"}:
-            evidence_id = payload["bundle"]["evidence"][0]["evidence_id"]
-            claim_text = "公式アドバイザリには影響対象の更新が記載されています。"
-            return {
-                "schema_version": 1, "template_id": "security-daily", "language": "ja",
-                "title": claim_text, "dek": claim_text, "summary": [claim_text],
-                "sections": [
-                    {"heading": "確認された事実", "blocks": [{
-                        "type": "paragraph", "text": claim_text,
-                        "evidence_ids": [evidence_id], "claim_ids": ["C001"],
-                    }]},
-                    {"heading": "出典", "blocks": [{
-                        "type": "source_list", "evidence_ids": [evidence_id],
-                    }]},
-                ],
-                "claims": [{
-                    "claim_id": "C001", "text": claim_text, "classification": "observed",
-                    "evidence_ids": [evidence_id],
-                }],
-            }
+            return {"reviews": [{"claim_id": "C001", "decision": "accepted",
+                                 "evidence_ids": [evidence_id],
+                                 "reason_code": "supported"}]}
         raise AssertionError(f"unexpected stage {stage}")
 
 
@@ -156,5 +137,5 @@ def test_postgres_fixture_runs_db_to_astro_to_publication(postgres_runtime):
         assert report.artifact_digest == worker._current_digest(site_root)
         assert (site_root / "current" / "index.html").is_file()
         assert (site_root / "current" / "security" / report.slug / "index.html").is_file()
-        assert run.stage_artifacts.keys() == {"plan", "fact_check", "draft", "article"}
+        assert run.stage_artifacts.keys() == {"claims", "claim_review", "article"}
     assert not list(private_root.glob("runs/*/workspace"))
