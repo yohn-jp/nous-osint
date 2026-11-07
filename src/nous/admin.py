@@ -294,6 +294,20 @@ def audits():
         ]
 
 
+def _validate_report_source_scope(db, params: dict) -> None:
+    """Reject unknown/disabled sources before scheduling work for a report.
+
+    A category-only selection is valid without registered matches yet; the
+    worker still applies its bounded cutoff and publication quality gates.
+    """
+    selected = params.get("source_ids", [])
+    if not selected:
+        return
+    sources = db.scalars(select(Source).where(Source.source_key.in_(selected))).all()
+    if {row.source_key for row in sources if row.enabled} != set(selected):
+        raise HTTPException(422, "selected report source is missing or disabled")
+
+
 def _published_url(db, report_id):
     if not report_id:
         return None
@@ -363,7 +377,8 @@ def _schedule_row(row):
         "id": row.id,
         "template_id": row.template_id,
         "template_revision": row.template_revision,
-        "parameters": {"category": row.parameters.get("category")},
+        "parameters": {key: row.parameters[key] for key in ("category", "source_categories", "source_ids")
+                       if key in row.parameters},
         "timezone": row.timezone,
         "cadence": row.cadence,
         "local_time": row.local_time,
@@ -403,6 +418,7 @@ def create_report_run(body: ReportRunCreate, request: Request):
         raise HTTPException(422, "invalid report template parameters") from exc
     current = now()
     with factory() as db:
+        _validate_report_source_scope(db, parameters)
         row = ReportRun(
             id=str(uuid.uuid4()), trigger="manual", created_by=request.state.access_identity.subject,
             template_id=body.template_id, template_revision=template["revision_key"],
@@ -507,13 +523,15 @@ def report_schedules(limit: int = Query(100, ge=1, le=100), cursor: str | None =
 
 @app.post("/v1/admin/report-schedules", status_code=201)
 def create_report_schedule(body: ReportScheduleCreate, request: Request):
-    if set(body.parameters) - {"category"}:
+    if set(body.parameters) - {"category", "source_categories", "source_ids"}:
         raise HTTPException(422, "unsupported schedule parameters")
     try:
         zone = ZoneInfo(body.timezone)
         template = resolve_template("security-daily")
         normalized = normalize_parameters("security-daily", {
             "timezone": body.timezone, "category": body.parameters.get("category"),
+            **{key: body.parameters[key] for key in ("source_categories", "source_ids")
+               if key in body.parameters},
         }, now=now())
     except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError) as exc:
         raise HTTPException(422, "invalid report schedule") from exc
@@ -533,13 +551,16 @@ def create_report_schedule(body: ReportScheduleCreate, request: Request):
     row = ReportSchedule(
         id=str(uuid.uuid4()), template_id="security-daily",
         template_revision=template["revision_key"], template_snapshot=template,
-        parameters={"category": normalized["category"]}, timezone=body.timezone,
+        parameters={key: value for key, value in normalized.items()
+                    if key in {"category", "source_categories", "source_ids"}},
+        timezone=body.timezone,
         cadence=body.cadence, local_time=body.local_time, next_slot_at=slot,
         enabled=True, created_by=request.state.access_identity.subject,
         created_at=current, updated_at=current,
     )
     factory = _factory()
     with factory() as db:
+        _validate_report_source_scope(db, normalized)
         db.add(row)
         db.commit()
         return _schedule_row(row)
@@ -568,13 +589,15 @@ def update_report_schedule(schedule_id: str, changes: ReportScheduleUpdate):
         timezone_name = changes.timezone if "timezone" in supplied else row.timezone
         local_time = changes.local_time if "local_time" in supplied else row.local_time
         parameters = changes.parameters if "parameters" in supplied else row.parameters
-        if parameters is None or set(parameters) - {"category"}:
+        if parameters is None or set(parameters) - {"category", "source_categories", "source_ids"}:
             raise HTTPException(422, "unsupported schedule parameters")
         try:
             zone = ZoneInfo(timezone_name)
             resolve_template(row.template_id, row.template_snapshot)
             normalized = normalize_parameters(row.template_id, {
                 "timezone": timezone_name, "category": parameters.get("category"),
+                **{key: parameters[key] for key in ("source_categories", "source_ids")
+                   if key in parameters},
             }, now=now())
         except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError) as exc:
             raise HTTPException(422, "invalid report schedule") from exc
@@ -584,7 +607,9 @@ def update_report_schedule(schedule_id: str, changes: ReportScheduleUpdate):
         row.cadence = cadence
         row.timezone = timezone_name
         row.local_time = local_time
-        row.parameters = {"category": normalized["category"]}
+        _validate_report_source_scope(db, normalized)
+        row.parameters = {key: value for key, value in normalized.items()
+                          if key in {"category", "source_categories", "source_ids"}}
         if config_changed or (enabled and row.next_slot_at <= now()):
             current = now()
             wall_time = time.fromisoformat(local_time)

@@ -12,6 +12,7 @@ const $q = useQuasar()
 const term = ref('')
 const kind = ref<ItemKind | null>(null)
 const source = ref<string | null>(null)
+const category = ref<string | null>(null)
 const sources = ref<Source[]>([])
 const sourceError = ref('')
 const rows = ref<Item[]>([])
@@ -23,6 +24,21 @@ const density = ref<'compact' | 'standard'>('compact')
 const inspectorOpen = ref(true)
 const inspectorWidth = ref(396)
 const kindOptions = [{ label: 'すべての種別', value: null }, ...kinds]
+const categoryLabels = [
+  { label: '脆弱性データベース', value: 'vulnerability' },
+  { label: '公式アドバイザリ', value: 'advisory' },
+  { label: '脅威・攻撃調査', value: 'threat_research' },
+  { label: 'セキュリティ動向', value: 'security_news' },
+  { label: '企業・業界動向', value: 'industry' },
+  { label: '求人情報', value: 'careers' },
+]
+const categoryOptions = computed(() => [
+  { label: 'すべてのカテゴリ', value: null },
+  ...categoryLabels.map(entry => ({
+    ...entry,
+    label: entry.label + '（' + sources.value.filter(row => row.category === entry.value).length + '情報源）',
+  })),
+])
 const sourceOptions = computed(() => [
   { label: 'すべての情報源', value: null },
   ...sources.value.map(s => ({ label: s.id, value: s.id })),
@@ -32,7 +48,7 @@ function queryValue(value: unknown): string { return typeof value === 'string' ?
 function parseKind(value: string): ItemKind | null {
   return kinds.find(k => k.value === value)?.value ?? null
 }
-const hasAppliedFilters = computed(() => ['q', 'kind', 'source'].some(key => !!queryValue(route.query[key])))
+const hasAppliedFilters = computed(() => ['q', 'kind', 'source', 'category'].some(key => !!queryValue(route.query[key])))
 const selectedId = computed(() => {
   const raw = typeof route.query.item === 'string' ? Number(route.query.item) : 0
   return Number.isSafeInteger(raw) && raw > 0 ? raw : null
@@ -44,6 +60,7 @@ const activeFilters = computed(() => [
   ...(queryValue(route.query.q) ? [{ key: 'q', label: '検索: ' + queryValue(route.query.q) }] : []),
   ...(queryValue(route.query.kind) ? [{ key: 'kind', label: '種別: ' + (kinds.find(k => k.value === queryValue(route.query.kind))?.label ?? queryValue(route.query.kind)) }] : []),
   ...(queryValue(route.query.source) ? [{ key: 'source', label: '情報源: ' + queryValue(route.query.source) }] : []),
+  ...(queryValue(route.query.category) ? [{ key: 'category', label: 'カテゴリ: ' + (categoryLabels.find(item => item.value === queryValue(route.query.category))?.label ?? queryValue(route.query.category)) }] : []),
 ])
 let request: AbortController | null = null
 const sourceRequest = new AbortController()
@@ -77,6 +94,7 @@ async function loadPage(append = false) {
       q: queryValue(route.query.q).trim().slice(0, 200) || undefined,
       kind: parseKind(queryValue(route.query.kind)) ?? undefined,
       source: queryValue(route.query.source) || undefined,
+      category: queryValue(route.query.category) || undefined,
       limit: 40,
       cursor: append ? nextCursor.value ?? undefined : undefined,
     }, controller.signal)
@@ -91,10 +109,11 @@ async function loadPage(append = false) {
     if (token === generation) { loading.value = false; loadingMore.value = false }
   }
 }
-watch(() => [route.query.q, route.query.kind, route.query.source], () => {
+watch(() => [route.query.q, route.query.kind, route.query.source, route.query.category], () => {
   term.value = queryValue(route.query.q).slice(0, 200)
   kind.value = parseKind(queryValue(route.query.kind))
   source.value = queryValue(route.query.source) || null
+  category.value = queryValue(route.query.category) || null
   void loadPage()
 }, { immediate: true })
 watch(() => route.query.item, () => { if (selectedId.value !== null) inspectorOpen.value = true })
@@ -106,6 +125,7 @@ function applyFilters() {
       ...(term.value.trim() ? { q: term.value.trim().slice(0, 200) } : {}),
       ...(kind.value ? { kind: kind.value } : {}),
       ...(source.value ? { source: source.value } : {}),
+      ...(category.value ? { category: category.value } : {}),
     },
   })
 }
@@ -114,11 +134,12 @@ function onSearchKeydown(event: KeyboardEvent) {
   event.preventDefault()
   applyFilters()
 }
-function clearFilters() { term.value = ''; kind.value = null; source.value = null; applyFilters() }
+function clearFilters() { term.value = ''; kind.value = null; source.value = null; category.value = null; applyFilters() }
 function removeFilter(key: string) {
   if (key === 'q') term.value = ''
   else if (key === 'kind') kind.value = null
   else if (key === 'source') source.value = null
+  else if (key === 'category') category.value = null
   applyFilters()
 }
 function openItem(id: number) {
@@ -223,6 +244,8 @@ onBeforeUnmount(() => {
           class="workstation-query-input" @keydown.enter="onSearchKeydown" />
       </div>
       <q-select v-model="kind" dense outlined emit-value map-options :options="kindOptions" label="種別"
+        class="workstation-select" @update:model-value="applyFilters" />
+      <q-select v-model="category" dense outlined emit-value map-options :options="categoryOptions" label="カテゴリ"
         class="workstation-select" @update:model-value="applyFilters" />
       <q-select v-model="source" dense outlined emit-value map-options :options="sourceOptions" label="情報源"
         class="workstation-select workstation-source-select" @update:model-value="applyFilters" />

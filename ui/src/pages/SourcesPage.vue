@@ -8,6 +8,20 @@ const loading = ref(false)
 const error = ref('')
 const textFilter = ref('')
 const statusFilter = ref<'all' | 'enabled' | 'disabled' | 'error'>('all')
+const categoryFilter = ref('all')
+const categoryOptions = [
+  { label: 'すべてのカテゴリ', value: 'all' },
+  { label: '脆弱性データベース', value: 'vulnerability' },
+  { label: '公式アドバイザリ', value: 'advisory' },
+  { label: '脅威・攻撃調査', value: 'threat_research' },
+  { label: 'セキュリティ動向', value: 'security_news' },
+  { label: '企業・業界動向', value: 'industry' },
+  { label: '求人情報', value: 'careers' },
+]
+const categoryName = (value: string) => categoryOptions.find(c => c.value === value)?.label ?? value
+const categoryCounts = computed(() => categoryOptions.slice(1)
+  .map(c => ({ ...c, count: sources.value.filter(s => s.category === c.value).length }))
+  .filter(c => c.count > 0))
 const statusOptions = [
   { label: 'すべての状態', value: 'all' },
   { label: '設定: 有効', value: 'enabled' },
@@ -20,6 +34,7 @@ const canAdmin = ref(false)
 void api.adminSession().then(session => { canAdmin.value = session.allowed }).catch(() => { canAdmin.value = false })
 const filtered = computed(() => sources.value
   .filter(s => s.id.toLowerCase().includes(textFilter.value.trim().toLowerCase()))
+  .filter(s => categoryFilter.value === "all" || s.category === categoryFilter.value)
   .filter(s => statusFilter.value === 'all' ||
     (statusFilter.value === 'enabled' && s.enabled) ||
     (statusFilter.value === 'disabled' && !s.enabled) ||
@@ -57,6 +72,15 @@ onBeforeUnmount(() => controller?.abort())
       <div><span>取得エラー</span><strong :class="{ 'text-negative': errorCount > 0 }">{{ errorCount }}</strong></div>
     </div>
     <section class="content-panel">
+      <div class="source-category-toolbar" role="group" aria-label="情報源カテゴリ">
+        <button type="button" class="source-category-tab" :class="{ active: categoryFilter === 'all' }"
+          :aria-pressed="categoryFilter === 'all'" @click="categoryFilter = 'all'">
+          すべて <span>{{ sources.length }}</span>
+        </button>
+        <button v-for="entry in categoryCounts" :key="entry.value" type="button" class="source-category-tab"
+          :class="{ active: categoryFilter === entry.value }" :aria-pressed="categoryFilter === entry.value"
+          @click="categoryFilter = entry.value">{{ entry.label }} <span>{{ entry.count }}</span></button>
+      </div>
       <div class="row items-center q-pa-md q-gutter-sm">
         <q-input v-model="textFilter" dense outlined clearable label="情報源を絞り込む" class="col" style="max-width: 370px"><template #prepend><q-icon name="search" /></template></q-input>
         <q-select v-model="statusFilter" dense outlined emit-value map-options
@@ -66,11 +90,12 @@ onBeforeUnmount(() => controller?.abort())
       <q-separator />
       <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 3" :key="n" type="rect" height="62px" class="q-mb-md" /></div>
       <div v-else-if="error" class="empty-state" role="alert"><q-icon name="error_outline" color="negative" size="30px"/><p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="load" /></div>
-      <div v-else-if="filtered.length === 0" class="empty-state"><q-icon name="rss_feed" size="32px"/><p class="q-mt-md">{{ sources.length ? '条件に一致する情報源がありません。' : '登録済みの情報源がありません。' }}</p><q-btn v-if="sources.length" flat color="primary" no-caps label="絞り込みを解除" @click="textFilter = ''; statusFilter = 'all'" /></div>
+      <div v-else-if="filtered.length === 0" class="empty-state"><q-icon name="rss_feed" size="32px"/><p class="q-mt-md">{{ sources.length ? '条件に一致する情報源がありません。' : '登録済みの情報源がありません。' }}</p><q-btn v-if="sources.length" flat color="primary" no-caps label="絞り込みを解除" @click="textFilter = ''; statusFilter = 'all'; categoryFilter = 'all'" /></div>
       <ul v-else class="source-register" aria-label="登録済みの情報源">
         <li v-for="entry in filtered" :key="entry.id" class="source-register-entry">
           <div class="source-register-identity">
             <div class="source-register-name">{{ entry.id }}</div>
+            <div class="source-register-category">{{ categoryName(entry.category) }}</div>
             <div class="source-register-kind">{{ kindLabel(entry.item_kind) }} · {{ entry.kind.toUpperCase() }}</div>
           </div>
           <div class="source-register-state">

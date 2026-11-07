@@ -1,0 +1,17 @@
+id: sans-isc-diary
+kind: rss
+url: https://isc.sans.edu/rssfeed.xml
+adapter: rss_v1
+item_kind: news
+category: threat_research
+organization: SANS Internet Storm Center
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-07'
+  license_id: NOASSERTION
+  attribution: SANS ISC
+  content_storage: metadata_only
+  note: SANS ISC official title-only Handler's Diary RSS. Capture only headlines, source URL and date; probe and review before enabling.

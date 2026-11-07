@@ -1,0 +1,17 @@
+id: krebs-on-security
+kind: rss
+url: https://krebsonsecurity.com/feed/
+adapter: rss_v1
+item_kind: news
+category: security_news
+organization: KrebsOnSecurity
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-07'
+  license_id: NOASSERTION
+  attribution: KrebsOnSecurity
+  content_storage: metadata_only
+  note: Publisher's public RSS; store only short title, canonical URL and date. No syndicated article body. Probe and review before enabling.

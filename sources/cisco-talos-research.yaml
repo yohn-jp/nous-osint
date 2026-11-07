@@ -1,0 +1,17 @@
+id: cisco-talos-research
+kind: rss
+url: https://blog.talosintelligence.com/rss/
+adapter: rss_v1
+item_kind: news
+category: threat_research
+organization: Cisco Talos
+interval_minutes: 360
+max_requests_per_hour: 2
+max_concurrency: 1
+enabled: false
+policy:
+  reviewed_at: '2026-11-07'
+  license_id: NOASSERTION
+  attribution: Cisco Talos
+  content_storage: metadata_only
+  note: Cisco Talos threat-research RSS; title, link, date only. Probe, review source terms and enable explicitly.

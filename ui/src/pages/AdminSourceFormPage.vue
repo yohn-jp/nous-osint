@@ -15,6 +15,16 @@ const maxPages = ref(1)
 const url = ref('')
 const itemKind = ref<SourceDefinition['item_kind']>('advisory')
 const organization = ref('')
+const sourceCategory = ref<string | null>(null)
+const categoryOptions = [
+  { label: 'データ種別に応じて自動分類', value: null },
+  { label: '脆弱性データベース', value: 'vulnerability' },
+  { label: '公式アドバイザリ', value: 'advisory' },
+  { label: '脅威・攻撃調査', value: 'threat_research' },
+  { label: 'セキュリティ動向', value: 'security_news' },
+  { label: '企業・業界動向', value: 'industry' },
+  { label: '求人情報', value: 'careers' },
+]
 const interval = ref(360)
 const hourly = ref(4)
 const concurrent = ref(1)
@@ -64,6 +74,7 @@ onMounted(async () => {
     url.value = c.url
     itemKind.value = c.item_kind
     organization.value = c.organization || ''
+    sourceCategory.value = c.category || null
     interval.value = c.interval_minutes
     hourly.value = c.max_requests_per_hour
     concurrent.value = c.max_concurrency
@@ -100,6 +111,7 @@ async function submit() {
       },
     }
     if (organization.value.trim()) config.organization = organization.value.trim()
+    if (sourceCategory.value) config.category = sourceCategory.value
     if (kind.value === 'json_api' && !nativeJobAdapter.value) {
       config.json_path = jsonPath.value.trim() || null
       config.field_map = linesToMap(fieldMap.value)
@@ -131,6 +143,8 @@ async function submit() {
         <div class="col-12"><q-input v-model.trim="url" outlined dense type="url" label="公開HTTPS URL *" :rules="[v => /^https:\/\/[^\s/]+/.test(v) || 'HTTPS URLを入力してください']" /></div>
         <div class="col-12 col-sm-6"><q-select v-model="itemKind" outlined dense label="種別" emit-value map-options :options="[{label:'求人',value:'job_posting'},{label:'ニュース',value:'news'},{label:'注意喚起',value:'advisory'},{label:'脆弱性',value:'vulnerability'},{label:'企業動向',value:'company_update'}]" /></div>
         <div class="col-12 col-sm-6"><q-input v-model.trim="organization" outlined dense label="提供組織（任意）" maxlength="200" /></div>
+        <div class="col-12"><q-select v-model="sourceCategory" outlined dense label="情報源カテゴリ" clearable
+          emit-value map-options :options="categoryOptions" hint="記事のデータ種別とは独立したテーマ分類です。" /></div>
       </div>
       <template v-if="kind === 'json_api'">
         <div class="text-weight-bold q-mt-lg q-mb-md">JSONの抽出方式</div>

@@ -1,0 +1,17 @@
+id: google-project-zero
+kind: rss
+url: https://www.blogger.com/feeds/4838136820032157985/posts/default
+adapter: rss_v1
+item_kind: news
+category: threat_research
+organization: 'Google Project Zero'
+interval_minutes: 15
+max_requests_per_hour: 4
+max_concurrency: 1
+enabled: true
+policy:
+  reviewed_at: '2026-11-07'
+  license_id: 'NOASSERTION'
+  attribution: 'Google Project Zero'
+  content_storage: metadata_only
+  note: 'Publisher-linked research RSS/Atom feed. Record source titles, publication timestamps and canonical outbound links only. Full article text, images and quotation rights are excluded.'
