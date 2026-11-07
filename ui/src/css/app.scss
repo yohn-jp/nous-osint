@@ -420,3 +420,67 @@ button.result-row {
     transition: none !important;
   }
 }
+
+
+/* Shared reading / exploration identity across Quasar and the Astro publication. */
+:root {
+  --nous-paper: #f2f5f2;
+  --nous-panel: #ffffff;
+  --nous-ink: #1d3233;
+  --nous-muted: #506866;
+  --nous-line: #d3e0db;
+  --nous-hover: #ecf3ef;
+  --nous-accent: #0a6a61;
+  --nous-accent-wash: #e1f1ed;
+}
+.body--dark {
+  --nous-paper: #111c1b;
+  --nous-panel: #192724;
+  --nous-ink: #ecf4ef;
+  --nous-muted: #b4c7c1;
+  --nous-line: #365149;
+  --nous-hover: #223a34;
+  --nous-accent: #8ed9c7;
+  --nous-accent-wash: #254740;
+}
+.nous-header { border-top: 3px solid var(--nous-accent); box-shadow: 0 5px 19px rgb(19 61 57 / 4%); }
+.nous-mark { border-radius: 8px !important; color: #fff; background: #0e5953; border-color: #0e5953; }
+.body--dark .nous-mark { color: #d3f2e9; background: #245b51; border-color: #245b51; }
+.header-reports-action {
+  min-height: 40px;
+  padding-inline: 15px;
+  border-radius: 7px;
+  color: var(--nous-accent);
+  background: var(--nous-accent-wash);
+  font-weight: 720;
+  transition: background 160ms ease-out, color 160ms ease-out;
+}
+.header-reports-action:hover { background: var(--nous-hover); }
+.header-reports-action:focus-visible, .mobile-report-link:focus-visible {
+  outline: 2px solid var(--nous-accent); outline-offset: 2px;
+}
+.nous-drawer .sidebar-caption { letter-spacing: .095em; text-transform: uppercase; }
+.nous-drawer .nav-entry { border-radius: 7px; }
+.report-external-link { min-height: 61px; background: var(--nous-accent-wash); border-color: var(--nous-line); }
+.report-external-link .q-item__section--avatar, .report-external-link .q-item__section--side { color: var(--nous-accent); }
+.report-external-link .q-item__label:not(.q-item__label--caption) { font-weight: 720; }
+.report-external-link:hover { border-color: var(--nous-accent); }
+.content-panel { border-radius: 9px; }
+.nous-page .page-title { letter-spacing: -.042em; }
+.mobile-footer { display: flex; align-items: stretch; }
+.mobile-footer .mobile-tabs { flex: 1 1 auto; min-width: 0; }
+.mobile-footer .mobile-tabs .q-tab { flex: 1 1 0; min-width: 0; }
+.mobile-report-link { display: flex; flex: 0 0 24%; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; min-height: 56px; border-left: 1px solid var(--nous-line); color: var(--nous-accent); text-decoration: none; font-size: 11px; font-weight: 690; }
+.mobile-report-link:hover { background: var(--nous-hover); color: var(--nous-accent); }
+.mobile-footer .mobile-tabs .q-tab, .mobile-report-link { min-height: 60px; }
+.report-admin .run-row { border-left: 3px solid transparent; }
+.report-admin .run-row.selected { border-left-color: var(--nous-accent); background: var(--nous-accent-wash); }
+.report-admin .content-panel { box-shadow: 0 6px 22px rgb(15 45 43 / 3%); }
+@media (max-width: 700px) {
+  .mobile-footer .mobile-tabs .q-tab { padding-inline: 2px; }
+  .mobile-footer .mobile-tabs .q-tab__label { font-size: 10px; }
+  .mobile-report-link { font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-reports-action { transition: none !important; }
+}
