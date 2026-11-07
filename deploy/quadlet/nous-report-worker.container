@@ -11,7 +11,8 @@ Secret=nous-report-worker-database-url,type=mount,target=/run/secrets/database_u
 Environment=DATABASE_URL_FILE=/run/secrets/database_url
 Environment=NOUS_CODEX_HOME=/var/lib/nous-codex
 Environment=NOUS_CODEX_EXPECTED_VERSION=0.166.0
-Environment=NOUS_CODEX_MODEL=gpt-6.1-sol
+Environment=NOUS_CODEX_MODEL=gpt-6-luna
+Environment=NOUS_CODEX_REASONING_EFFORT=max
 Environment=NOUS_CODEX_UID=10002
 Environment=NOUS_CODEX_GID=10002
 Environment=NOUS_REPORT_PRIVATE_DIR=/var/lib/nous-reports/private

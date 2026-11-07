@@ -1038,7 +1038,8 @@ def run_editorial_pipeline(bundle: dict, *, template_id: str, run_id: str,
 
     def invoke(stage, payload):
         digest = hashlib.sha256(_json_bytes(payload)).hexdigest()
-        revisions = {"input_digest": digest, "schema_revision": "2", "prompt_revision": "2"}
+        revisions = {"input_digest": digest, "schema_revision": "2",
+                     "prompt_revision": "2-" + getattr(runner, "reasoning_effort", "unspecified")}
         cached = (persist_stage.load(stage, **revisions)
                   if hasattr(persist_stage, "load") else None)
         if cached is not None:
