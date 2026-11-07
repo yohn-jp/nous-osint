@@ -416,6 +416,8 @@ jobs:
           # The real production entry point must run its version probe under
           # UID 10002, not leave root-owned launcher files for codex exec.
           os.environ["NOUS_CODEX_HOME"] = str(codex_home)
+          os.environ["NOUS_CODEX_MODEL"] = "gpt-6-luna"
+          os.environ["NOUS_CODEX_REASONING_EFFORT"] = "max"
           probe = CodexRunner(workdir=Path("/tmp/codex-smoke"))
           assert probe.version == "0.166.0"
           assert (codex_home / "tmp" / "arg0-linux").is_dir()
