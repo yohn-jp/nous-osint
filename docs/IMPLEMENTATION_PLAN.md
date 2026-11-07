@@ -1,9 +1,9 @@
 # Nous OSINT — Implementation Plan and Acceptance Criteria
 
-Status: **Phases 1–3 implemented in main in part; VM/real Codex acceptance still incomplete**  
-Updated: 2026-11-05
+Status: **Implementation milestone ledger; not a substitute for live acceptance evidence**  
+Updated: 2026-11-07
 
-Implementation authority: [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [QUADLET_DEPLOYMENT.md](QUADLET_DEPLOYMENT.md).
+Implementation authority: [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [QUADLET_DEPLOYMENT.md](QUADLET_DEPLOYMENT.md). Deployment and report-specific acceptance is maintained in [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md) and [AUTOMATED_INTELLIGENCE_REPORTS.md](AUTOMATED_INTELLIGENCE_REPORTS.md), rather than duplicated here.
 
 ## Phase 0 — Architecture
 

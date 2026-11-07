@@ -9,7 +9,7 @@ The application image includes the Python API/MCP/collection Worker/scheduler an
 ### VM deployment (not automated by CI)
 
 1. Review **all green** checks for the specific `main` SHA and copy **both** immutable image references from that workflow run.
-2. Run the reviewed database migration `alembic upgrade head` (currently `0010`) with the migration role **before** new containers start. Ensure the conditional KEV journal grants exist for runtime/API/MCP/report Worker roles; migration failure blocks rollout.
+2. Run the reviewed database migration `alembic upgrade head` (the current repository migration head) with the migration role **before** new containers start. Ensure the conditional KEV journal grants exist for runtime/API/MCP/report Worker roles; migration failure blocks rollout.
 3. Pull both exact digests with rootless Podman; keep registry pull credentials local to the VM.
 4. Pin the **same application digest** in the four application Quadlets (`nous-api`, `nous-mcp`, `nous-worker`, `nous-scheduler`) and the **separate report digest** in `nous-report-worker`. Do not change PostgreSQL or Tunnel image references.
 5. Reload the user systemd manager, restart in dependency order, then confirm API readiness, MCP `initialize`/`tools/list`, source collection, browser access and report Worker recovery. Preserve both previous digests and the existing report-site release for rollback.

@@ -1,39 +1,39 @@
-# Nous OSINT frontend
+# Nous OSINT — browser UI
 
-Browser-rendered read-only information portal built with Quasar 2 / Vue 3 / TypeScript and Quasar CLI with Vite. Visual direction: source-first research feed; not a clone of Feedly.
+Quasar 2 / Vue 3 / TypeScript の静的 SPA。履歴モードのルーティングを使用し、公開情報の観測レコード、変更履歴、情報源、CVE / KEV、管理機能を同じワークスペースで操作します。レポートの閲覧は別の Astro 静的出版物（`reports/site/`）です。
 
 ## Local development
 
-Requires Node.js 24 (or 22.22+), npm and a **separately running loopback-only** Nous FastAPI service at `127.0.0.1:8000`.
+Node.js 24（または 22.22+）と、`127.0.0.1:8000` で動作する独立した Nous API が必要です。
 
-```bash
+```sh
 cd ui
 npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:9000`. In development Quasar proxies `/v1` to the loopback API. **Do not publish the dev server or use this proxy as an authentication boundary.**
+開発サーバーは `http://127.0.0.1:9000`。Vite の `/v1` プロキシはローカル開発専用で、認証境界ではありません。
 
-## Verification
+## Validation
 
-```bash
+```sh
 npm run typecheck
 npm run build
 ```
 
-The static files are emitted to `ui/dist/spa`. Serve these from a static host; **no Node/Quasar server runs on the Nous VM**. The UI uses hash-based routes, so it needs no SPA URL rewrite.
+成果物は `ui/dist/spa` に生成されます。コードのビルド成功とブラウザの表示・操作・認証検証は別の受入条件です。
 
-### Production ingress
+## Production paths and ownership
 
-The static build is baked into the MCP origin image and served at `/` behind the existing Access-required Tunnel. The origin validates the Access JWT for static assets and proxies only GET requests for the UI's allowlisted `/v1` routes to the private API. It does not publish `/api/v1`, diagnostics, administration or PostgreSQL. The Tunnel and Cloudflare Access configuration are managed separately and were not changed for this UI deployment.
+- `/explore` / `/items/:id`：検索、カーソルでの追加読込、出典、観測履歴。
+- `/changes`：7/30/90日の変更一覧。
+- `/sources` / `/sources/new`：収集状態の閲覧、Gitレビュー用の公式定義生成。
+- `/cves/:id`：CISA KEVの確認状態と根拠レコードの対応。
+- `/admin/sources` / `/admin/reports`：Access と origin のロールで保護された書込・ジョブ管理。
+- `/reports/`：同一ホストの別系統で配信する記事・根拠閲覧（SPA ルートではありません）。
 
-## Pages
+本番の SPA 静的ファイルは Cloudflare Workers Static Assets の限定ルートから独立リリースされます。VMホストのMCPイメージに含まれる UI はフォールバックとして残します。`/v1/*`、MCP / OAuth、`/reports/*` の動的・出版ルートは既存の Access/Tunnel 経路が正本です。静的アセット以外のURLをWorkerへ包括転送しません。
 
-- Explore: keyword, kind/source filters and cursor-based incremental results (max 40 per request).
-- Item detail: current metadata, source hyperlink, provenance and immutable revisions.
-- Changes: 7/30/90 day window and server-bounded change reports.
-- Sources: enabled state, error, last successful collection and next poll.
+実データだけを表示し、認証トークンや私的な収集結果を静的アセット・共有キャッシュに含めません。RSS/watch の未実装機能を UI 上で動作済みと示しません。
 
-**Not implemented by the backend**: user-defined watches, RSS exports and write/manage endpoints. The UI intentionally has no placeholder action for them. No production fixtures, embedded credentials or HTML rendering of retrieved content.
-
-See [UI design contract](../docs/UI_DESIGN.md).
+仕様と受入条件は [UI design contract](../docs/UI_DESIGN.md)、配信・認証の制約は [Edge frontend deployment](../docs/EDGE_FRONTEND_DEPLOYMENT.md) と [Frontend execution policy](../docs/FRONTEND_EXECUTION_POLICY.md) を参照してください。
