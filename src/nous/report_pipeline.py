@@ -39,7 +39,6 @@ _METADATA_LIMIT = 300
 # Codex exec writes runtime state in addition to the bounded response and logs.
 # Keep an individual-file ceiling for its working state; response and captured
 # stdout/stderr are still checked against their smaller limits in run().
-_CODEX_RUNTIME_FILE_SIZE_LIMIT = 16 * 1024 * 1024
 _ALLOWED_BLOCKS = {"paragraph", "bullet_list", "fact_table", "source_list", "cve_fact", "quote"}
 # These are editorial labels, not statements. Generated headings and table
 # columns must not introduce a new, unreviewed claim outside fact_check.
@@ -725,13 +724,13 @@ class CodexRunner:
         return args
 
     def _exec_command(self, stage_dir: Path, schema_path: Path, output: Path) -> list[str]:
-        return [self.prlimit, f"--fsize={_CODEX_RUNTIME_FILE_SIZE_LIMIT}", "--core=0", "--",
+        return [self.prlimit, "--core=0", "--",
                 *self._identity_args(), *self._codex_args(stage_dir, schema_path, output)]
 
     def _version(self) -> str:
         try:
             with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
-                command = [self.prlimit, "--fsize=65536", "--core=0", "--",
+                command = [self.prlimit, "--core=0", "--",
                            *self._identity_args(), self.binary, "--version"]
                 process = subprocess.Popen(command, cwd=self.workdir,
                                            stdin=subprocess.DEVNULL, stdout=stdout,
@@ -781,7 +780,7 @@ class CodexRunner:
         """Verify fixed CLI contract and owner authentication before spending a call."""
         if time.monotonic() - getattr(self, "_preflight_at", 0.0) < 300:
             return
-        command_prefix = [self.prlimit, "--fsize=65536", "--core=0", "--",
+        command_prefix = [self.prlimit, "--core=0", "--",
                           *self._identity_args()]
         status, stdout, stderr = self._bounded_command(
             [*command_prefix, self.binary, "exec", "--help"]

@@ -231,7 +231,8 @@ def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
     assert args[-1] == "-"  # Bounded input arrives explicitly on stdin.
     command = runner._exec_command(Path("/tmp/job/plan"), Path("/tmp/plan.json"),
                                    Path("/tmp/job/plan/output.json"))
-    assert command[:4] == ["prlimit", "--fsize=16777216", "--core=0", "--"]
+    assert command[:3] == ["prlimit", "--core=0", "--"]
+    assert not any(arg.startswith("--fsize") for arg in command)
 
 
 @pytest.mark.parametrize(
@@ -277,7 +278,7 @@ def test_codex_runtime_file_limit_keeps_response_and_log_caps(
     with pytest.raises(ReportError, match=expected_error):
         runner.run("claims", {"bundle": {}}, run_id="safe-fixture")
 
-    assert observed["command"][1] == "--fsize=16777216"
+    assert not any(arg.startswith("--fsize") for arg in observed["command"])
 
 
 @pytest.mark.parametrize("message,code", [
