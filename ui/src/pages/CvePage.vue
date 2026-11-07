@@ -91,6 +91,38 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
           </p>
           <a :href="data.epss.source_url" target="_blank" rel="noopener noreferrer" class="text-primary">FIRST EPSS公式データ</a>
         </section>
+        <section class="detail-section" aria-labelledby="artifact-heading">
+          <div class="eyebrow">公開インデックス — 独立した参照情報</div>
+          <h2 id="artifact-heading" class="text-subtitle1 q-mt-sm">PoC参照と検査テンプレート</h2>
+          <p class="text-caption text-grey-7 q-mt-sm">
+            公開リポジトリのファイル名を根拠に照合した結果です。TrickestにはPoCがないCVEのページも存在するため、掲載だけではPoCの有無を判断できず、
+            Nuclei HTTPテンプレートの掲載は実環境での悪用を意味しません。未掲載は対象リポジトリだけの結果です。
+          </p>
+          <div v-for="artifact in data.public_artifacts" :key="artifact.provider"
+            class="cve-artifact-entry">
+            <div class="row items-center q-gutter-sm">
+              <strong>{{ artifact.provider === 'trickest' ? 'Trickest — CVE参照ページ' : 'Nuclei — HTTP CVEテンプレート' }}</strong>
+              <q-badge outline
+                :color="artifact.status === 'indexed' ? 'primary' : 'grey-7'"
+                :label="artifact.status === 'indexed' ? '参照あり' :
+                  artifact.status === 'not_indexed' ? '対象リポジトリ内に該当なし' :
+                  artifact.status === 'stale' ? '古い観測' : '未取得'" />
+            </div>
+            <div class="text-caption text-grey-7 q-mt-xs">
+              最終確認: {{ dateLabel(artifact.observed_at) }}
+              <span v-if="artifact.status === 'stale'"> — 現在の登録状況は未確認です。</span>
+            </div>
+            <div v-if="artifact.references.length" class="q-mt-sm">
+              <a v-for="reference in artifact.references" :key="reference.path"
+                :href="safeExternalUrl(reference.url)" target="_blank" rel="noopener noreferrer"
+                class="cve-artifact-link">{{ reference.path }}</a>
+            </div>
+            <div class="q-mt-sm"><a :href="safeExternalUrl(artifact.repository_url)"
+              target="_blank" rel="noopener noreferrer" class="text-primary text-caption">
+              インデックス提供元を確認
+            </a></div>
+          </div>
+        </section>
         <section v-if="data.kev.status === 'listed'" class="detail-section">
           <div class="text-subtitle2 q-mb-sm">CISAの確認内容</div>
           <div class="kv-line"><div class="kv-key">提供元</div><div>{{ data.kev.vendor || '—' }}</div></div>

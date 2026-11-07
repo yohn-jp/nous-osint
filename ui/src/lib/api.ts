@@ -93,8 +93,24 @@ export interface EpssObservation {
   observed_at: string | null
   source_url: string
 }
+export interface PublicArtifactReference {
+  url: string
+  path: string
+  blob_sha: string
+}
+export interface PublicArtifactStatus {
+  provider: 'trickest' | 'nuclei_http'
+  scope: string
+  status: 'unknown' | 'stale' | 'not_indexed' | 'indexed'
+  observed_at: string | null
+  commit_sha: string | null
+  repository_url: string
+  references: PublicArtifactReference[]
+  references_truncated: boolean
+}
 export interface CveDetail {
   epss: EpssObservation
+  public_artifacts: PublicArtifactStatus[]
   cve_id: string
   canonical_url: string
   kev: KevStatus
