@@ -1,0 +1,17 @@
+id: bsky-jake-williams
+kind: json_api
+url: https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=did:plc:imfamhliw5q2fwk6x36hjfj4&filter=posts_no_replies&limit=100
+adapter: bluesky_author_v1
+item_kind: news
+category: threat_research
+organization: 'Jake Williams'
+interval_minutes: 15
+max_requests_per_hour: 4
+max_concurrency: 1
+enabled: true
+policy:
+  reviewed_at: '2026-11-07'
+  license_id: 'NOASSERTION'
+  attribution: 'Jake Williams'
+  content_storage: metadata_only
+  note: 'Public Bluesky AppView author feed pinned to the researcher DID. Collect post URI, AppView indexing time, direct link and bounded text excerpt only; no media, replies, reposts or private profile data. No source quotation rights asserted.'
