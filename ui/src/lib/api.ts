@@ -33,6 +33,7 @@ export interface ItemPage {
 }
 export interface Source {
   id: string
+  category: string
   kind: 'rss' | 'json_api' | 'html'
   item_kind: ItemKind
   enabled: boolean
@@ -78,6 +79,7 @@ export interface SourceDefinition {
   adapter: string
   item_kind: ItemKind
   organization?: string | null
+  category?: string | null
   interval_minutes: number
   max_requests_per_hour: number
   max_concurrency: number
@@ -183,7 +185,7 @@ export interface ReportSchedule {
   id: string
   template_id: 'security-daily'
   template_revision: string
-  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null }
+  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null; source_categories?: string[]; source_ids?: string[] }
   timezone: string
   cadence: 'daily' | 'weekly'
   local_time: string
@@ -199,13 +201,13 @@ export interface ReportSchedulesPage {
 
 export interface CreateReportRun {
   template_id: ReportTemplateId
-  parameters: Record<string, string | number | null>
+  parameters: Record<string, string | number | string[] | null>
   idempotency_key?: string
 }
 
 export interface CreateReportSchedule {
   template_id: 'security-daily'
-  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null }
+  parameters: { category?: 'security' | 'advisory' | 'vulnerability' | null; source_categories?: string[]; source_ids?: string[] }
   timezone: string
   cadence: 'daily' | 'weekly'
   local_time: string

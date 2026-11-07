@@ -507,13 +507,15 @@ def report_schedules(limit: int = Query(100, ge=1, le=100), cursor: str | None =
 
 @app.post("/v1/admin/report-schedules", status_code=201)
 def create_report_schedule(body: ReportScheduleCreate, request: Request):
-    if set(body.parameters) - {"category"}:
+    if set(body.parameters) - {"category", "source_categories", "source_ids"}:
         raise HTTPException(422, "unsupported schedule parameters")
     try:
         zone = ZoneInfo(body.timezone)
         template = resolve_template("security-daily")
         normalized = normalize_parameters("security-daily", {
             "timezone": body.timezone, "category": body.parameters.get("category"),
+            **{key: body.parameters[key] for key in ("source_categories", "source_ids")
+               if key in body.parameters},
         }, now=now())
     except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError) as exc:
         raise HTTPException(422, "invalid report schedule") from exc
@@ -533,7 +535,9 @@ def create_report_schedule(body: ReportScheduleCreate, request: Request):
     row = ReportSchedule(
         id=str(uuid.uuid4()), template_id="security-daily",
         template_revision=template["revision_key"], template_snapshot=template,
-        parameters={"category": normalized["category"]}, timezone=body.timezone,
+        parameters={key: value for key, value in normalized.items()
+                    if key in {"category", "source_categories", "source_ids"}},
+        timezone=body.timezone,
         cadence=body.cadence, local_time=body.local_time, next_slot_at=slot,
         enabled=True, created_by=request.state.access_identity.subject,
         created_at=current, updated_at=current,

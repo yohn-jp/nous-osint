@@ -9,6 +9,7 @@ from sqlalchemy import func, select, text
 from .db import session_factory
 from .cve_queries import query_cve
 from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source
+from .source_taxonomy import source_category
 
 app = FastAPI(title="Nous OSINT", version="0.1.0")
 
@@ -30,6 +31,7 @@ class ReadyResponse(LiveResponse):
 
 class SourceResponse(APIModel):
     id: str
+    category: str
     kind: Literal["rss", "json_api", "html"]
     item_kind: ItemKind
     enabled: bool
@@ -151,6 +153,7 @@ def ready():
 def sources():
     with session_factory()() as db:
         return [{"id": s.source_key, "kind": s.kind, "item_kind": s.item_kind,
+                 "category": source_category(s.config or {}, s.item_kind),
                  "enabled": s.enabled, "last_success_at": s.last_success_at,
                  "next_due_at": s.next_due_at, "last_error": s.last_error}
                 for s in db.scalars(select(Source).order_by(Source.source_key))]

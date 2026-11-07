@@ -39,6 +39,29 @@ const targetTimezone = ref('Asia/Tokyo')
 const reportCategory = ref<'security' | 'advisory' | 'vulnerability' | null>(null)
 const cveId = ref('')
 const periodDays = ref(30)
+const availableSources = ref<import('../lib/api').Source[]>([])
+const sourceCategoryOptions = [
+  { label: '脆弱性データベース', value: 'vulnerability' },
+  { label: '公式アドバイザリ', value: 'advisory' },
+  { label: '脅威・攻撃調査', value: 'threat_research' },
+  { label: 'セキュリティ動向', value: 'security_news' },
+  { label: '企業・業界動向', value: 'industry' },
+  { label: '求人情報', value: 'careers' },
+]
+const selectedCategories = ref<string[]>([])
+const selectedSourceIds = ref<string[]>([])
+const scheduleCategories = ref<string[]>([])
+const scheduleSourceIds = ref<string[]>([])
+const sourceOptions = computed(() => availableSources.value
+  .filter(s => s.enabled && (!selectedCategories.value.length || selectedCategories.value.includes(s.category)))
+  .map(s => ({ value: s.id, label: s.id })))
+const scheduleSourceOptions = computed(() => availableSources.value
+  .filter(s => s.enabled && (!scheduleCategories.value.length || scheduleCategories.value.includes(s.category)))
+  .map(s => ({ value: s.id, label: s.id })))
+const scopeParameters = (categories: string[], ids: string[]) => ({
+  ...(categories.length ? { source_categories: [...categories] } : {}),
+  ...(ids.length ? { source_ids: [...ids] } : {}),
+})
 
 const scheduleTimezone = ref('Asia/Tokyo')
 const scheduleCadence = ref<'daily' | 'weekly'>('daily')
@@ -107,10 +130,11 @@ async function loadData(initial = false) {
   else refreshing.value = true
   error.value = ''
   try {
-    const [templateRows, runPage, schedulePage] = await Promise.all([
+    const [templateRows, runPage, schedulePage, sourceRows] = await Promise.all([
       api.adminReportTemplates(), api.adminReportRuns({ limit: 50 }),
-      api.adminReportSchedules({ limit: 100 }),
+      api.adminReportSchedules({ limit: 100 }), api.sources(),
     ])
+    availableSources.value = sourceRows
     templates.value = templateRows
     dataReady.value = true
     lastSyncedAt.value = new Date().toISOString()
@@ -185,12 +209,14 @@ async function enqueueRun() {
             target_date: targetDate.value,
             timezone: targetTimezone.value,
             category: reportCategory.value,
+            ...scopeParameters(selectedCategories.value, selectedSourceIds.value),
           },
           idempotency_key: crypto.randomUUID(),
         }
       : {
           template_id: selectedTemplate.value,
-          parameters: { cve_id: cveId.value.trim(), period_days: periodDays.value },
+          parameters: { cve_id: cveId.value.trim(), period_days: periodDays.value,
+            ...scopeParameters(selectedCategories.value, selectedSourceIds.value) },
           idempotency_key: crypto.randomUUID(),
         }
     const result = await api.adminCreateReportRun(request)
@@ -218,7 +244,8 @@ async function createSchedule() {
   try {
     await api.adminCreateReportSchedule({
       template_id: 'security-daily',
-      parameters: { category: scheduleCategory.value },
+      parameters: { category: scheduleCategory.value,
+        ...scopeParameters(scheduleCategories.value, scheduleSourceIds.value) },
       timezone: scheduleTimezone.value,
       cadence: scheduleCadence.value,
       local_time: scheduleTime.value,
@@ -285,6 +312,18 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
       <div v-if="loading" class="empty-state" role="status">テンプレートを読み込んでいます。</div>
       <div v-else-if="!dataReady" class="empty-state" role="status">管理情報を取得できません。再取得してください。</div>
       <div v-else class="report-form-wrap">
+        <div class="report-source-scope">
+          <div class="report-source-scope-heading"><strong>根拠に利用する情報源</strong>
+            <span>指定しなければテンプレートの既定対象を使用します。カテゴリと情報源の指定は絞り込み条件です。</span></div>
+          <div class="row q-col-gutter-sm">
+            <div class="col-12 col-md-6"><q-select v-model="selectedCategories" multiple use-chips dense outlined clearable
+              emit-value map-options :options="sourceCategoryOptions" label="カテゴリを選択"
+              @update:model-value="selectedSourceIds = selectedSourceIds.filter(id => sourceOptions.some(s => s.value === id))" /></div>
+            <div class="col-12 col-md-6"><q-select v-model="selectedSourceIds" multiple use-chips dense outlined clearable
+              emit-value map-options :options="sourceOptions" label="情報源を指定（任意）" /></div>
+          </div>
+          <p class="report-source-scope-note">有効な情報源 {{ sourceOptions.length }} 件。CVEに関するKEV判定はCISAの記録を独立して参照します。</p>
+        </div>
         <q-tabs v-model="selectedTemplate" dense no-caps align="left" active-color="primary" indicator-color="primary" class="report-template-tabs">
           <q-tab name="security-daily" icon="shield" label="日次セキュリティ" />
           <q-tab name="cve-kev-deep-dive" icon="bug_report" label="CVE / KEV 詳細" />
@@ -431,6 +470,17 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
         </div>
       </div>
       <div class="admin-hint">スケジュールは `security-daily` テンプレートだけを登録できます。CVE 詳細は随時実行してください。</div>
+      <div v-if="dataReady" class="report-source-scope report-schedule-scope">
+        <strong>定期レポートの収集対象</strong>
+        <p>新しい実行ごとに、このカテゴリと情報源を条件に根拠を収集します。</p>
+        <div class="row q-col-gutter-sm">
+          <div class="col-12 col-md-6"><q-select v-model="scheduleCategories" multiple use-chips dense outlined clearable
+            emit-value map-options :options="sourceCategoryOptions" label="対象カテゴリ"
+            @update:model-value="scheduleSourceIds = scheduleSourceIds.filter(id => scheduleSourceOptions.some(s => s.value === id))" /></div>
+          <div class="col-12 col-md-6"><q-select v-model="scheduleSourceIds" multiple use-chips dense outlined clearable
+            emit-value map-options :options="scheduleSourceOptions" label="対象情報源（任意）" /></div>
+        </div>
+      </div>
       <q-form v-if="dataReady" class="schedule-form row q-col-gutter-md" @submit.prevent="createSchedule">
         <div class="col-12 col-sm-6 col-lg-3">
           <q-select v-model="scheduleCadence" outlined dense emit-value map-options label="間隔"

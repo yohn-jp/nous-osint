@@ -432,3 +432,30 @@ body { background: var(--nous-paper); color: var(--nous-ink); }
  .changes-table td.changes-date { white-space: normal; overflow-wrap: normal; }
  .changes-table .changes-title a { font-size: 13px; }
 }
+
+/* Topic facets are scoped to real source metadata, never inferred from health. */
+.source-category-toolbar {
+  display: flex; gap: 5px; flex-wrap: wrap; align-items: center;
+  padding: 12px 16px 9px; border-bottom: 1px solid var(--nous-line);
+  background: var(--nous-quiet);
+}
+.source-category-tab {
+  display: inline-flex; align-items: baseline; gap: 8px; min-height: 36px;
+  padding: 8px 10px; border: 1px solid transparent; border-radius: 3px;
+  color: var(--nous-muted); background: transparent;
+  font-size: 12px; font-weight: 650; cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.source-category-tab span { font-variant-numeric: tabular-nums; font-weight: 710; }
+.source-category-tab.active { border-color: var(--nous-line); color: var(--nous-ink); background: var(--nous-panel); box-shadow: inset 0 -2px 0 var(--nous-accent); }
+.source-category-tab:hover { border-color: var(--nous-line); }
+.source-register-category { margin-top: 4px; font-size: 11px; font-weight: 650; color: var(--nous-accent); }
+.report-source-scope { border-bottom: 1px solid var(--nous-line); padding: 16px 22px 13px; background: var(--nous-quiet); }
+.report-source-scope-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px 14px; margin-bottom: 12px; }
+.report-source-scope-heading strong, .report-source-scope > strong { font-size: 13px; color: var(--nous-ink); }
+.report-source-scope-heading span, .report-source-scope p { font-size: 12px; color: var(--nous-muted); line-height: 1.7; }
+.report-source-scope-note { margin: 8px 0 0; }
+.report-schedule-scope { margin-top: 14px; border-top: 1px solid var(--nous-line); }
+.report-schedule-scope > p { margin: 6px 0 12px; }
+@media (max-width: 600px) { .source-category-toolbar { gap: 4px; padding: 9px; } .source-category-tab { padding: 7px 9px; } .report-source-scope { padding: 14px; } }
+@media (prefers-reduced-motion: reduce) { .source-category-tab { transition: none; } }
