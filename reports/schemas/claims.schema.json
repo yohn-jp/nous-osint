@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "theme", "claims"],
+  "properties": {
+    "decision": {"enum": ["publish", "skip"]},
+    "theme": {"type": "string", "minLength": 1, "maxLength": 240},
+    "claims": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {"$ref": "#/$defs/claim"}
+    }
+  },
+  "$defs": {
+    "evidenceIds": {"type": "array", "minItems": 1, "maxItems": 50, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^E[0-9]{3}$"}},
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "text", "classification", "evidence_ids", "section", "importance"],
+      "properties": {
+        "claim_id": {"type": "string", "pattern": "^C[0-9]{3}$"},
+        "text": {"type": "string", "minLength": 10, "maxLength": 240},
+        "classification": {"enum": ["observed", "inference", "unconfirmed"]},
+        "evidence_ids": {"$ref": "#/$defs/evidenceIds"},
+        "section": {"enum": ["primary_observations", "analysis", "unknowns"]},
+        "importance": {"enum": ["normal", "high"]}
+      }
+    }
+  }
+}

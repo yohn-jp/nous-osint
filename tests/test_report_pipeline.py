@@ -214,7 +214,8 @@ def test_codex_stage_schemas_drop_unique_items_but_canonical_validation_rejects_
 
 def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
     runner = object.__new__(CodexRunner)
-    runner.binary, runner.model = "codex", None
+    runner.binary, runner.model = "codex", "gpt-6-luna"
+    runner.reasoning_effort = "max"
     runner.uid, runner.gid = 10002, 10002
     runner.setpriv, runner.prlimit = "setpriv", "prlimit"
     identity = runner._identity_args()
@@ -224,11 +225,14 @@ def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
                               Path("/tmp/job/plan/output.json"))
     assert args[:2] == ["codex", "exec"]
     assert "--skip-git-repo-check" in args
+    assert "--json" in args
+    assert args[args.index("--model") + 1] == "gpt-6-luna"
     assert "--output-schema" in args and "--output-last-message" in args
     assert args[-1] == "-"  # Bounded input arrives explicitly on stdin.
     command = runner._exec_command(Path("/tmp/job/plan"), Path("/tmp/plan.json"),
                                    Path("/tmp/job/plan/output.json"))
-    assert command[:4] == ["prlimit", "--fsize=16777216", "--core=0", "--"]
+    assert command[:3] == ["prlimit", "--core=0", "--"]
+    assert not any(arg.startswith("--fsize") for arg in command)
 
 
 @pytest.mark.parametrize(
@@ -238,11 +242,14 @@ def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
 def test_codex_runtime_file_limit_keeps_response_and_log_caps(
         tmp_path, monkeypatch, write_kind, expected_error):
     runner = object.__new__(CodexRunner)
-    runner.binary, runner.model = "codex", None
+    runner.binary, runner.model = "codex", "gpt-6-luna"
+    runner.reasoning_effort = "max"
     runner.uid, runner.gid = 10002, 10002
     runner.setpriv, runner.prlimit = "setpriv", "prlimit"
     runner.workdir = tmp_path
     runner._set_group_mode = lambda *_args: None
+    runner._preflight = lambda: None
+    runner._diagnostic_root = tmp_path / "diagnostics"
     observed = {}
 
     class FakeProcess:
@@ -259,6 +266,7 @@ def test_codex_runtime_file_limit_keeps_response_and_log_caps(
                 output = Path(observed["command"][
                     observed["command"].index("--output-last-message") + 1
                 ])
+                self.stdout.write(b'{"type":"turn.completed"}\n')
                 output.write_bytes(b"x" * 200_001)
 
     def fake_popen(command, **kwargs):
@@ -268,9 +276,9 @@ def test_codex_runtime_file_limit_keeps_response_and_log_caps(
     monkeypatch.setattr("nous.report_pipeline.subprocess.Popen", fake_popen)
 
     with pytest.raises(ReportError, match=expected_error):
-        runner.run("plan", {"bundle": {}}, run_id="safe-fixture")
+        runner.run("claims", {"bundle": {}}, run_id="safe-fixture")
 
-    assert observed["command"][1] == "--fsize=16777216"
+    assert not any(arg.startswith("--fsize") for arg in observed["command"])
 
 
 @pytest.mark.parametrize("message,code", [
@@ -392,24 +400,27 @@ class FixtureRunner:
         self.calls.append(stage)
         if stage in self.outputs:
             return self.outputs[stage]
-        if stage == "plan":
-            return {"decision": "publish", "thesis": "確認された更新を整理します。",
-                    "audience": "運用担当者", "outline": ["事実", "出典"],
-                    "evidence_ids": ["E001"], "reason": "公開日に観測されています。"}
-        if stage == "fact_check":
-            return fact_check_for()
-        return article_for(payload["bundle"] if "bundle" in payload else evidence_bundle())
+        if stage in {"claims", "claim_repair"}:
+            return {"decision": "publish", "theme": "公開情報の観測", "claims": [{
+                "claim_id": "C001", "text": "公表元による更新情報の掲載が観測されました。",
+                "classification": "observed", "evidence_ids": ["E001"],
+                "section": "primary_observations", "importance": "normal",
+            }]}
+        if stage in {"claim_review", "claim_rereview"}:
+            return {"reviews": [{"claim_id": "C001", "decision": "accepted",
+                                 "evidence_ids": ["E001"], "reason_code": "supported"}]}
+        raise AssertionError(stage)
 
 
-def test_fixture_editorial_pipeline_records_four_distinct_stages():
+def test_fixture_editorial_pipeline_uses_two_independent_model_calls():
     bundle = evidence_bundle()
     runner = FixtureRunner()
     persisted = {}
     final, model = run_editorial_pipeline(bundle, template_id="security-daily", run_id="run-1",
                                            runner=runner,
                                            persist_stage=lambda name, value: persisted.update({name: value}))
-    assert runner.calls == ["plan", "fact_check", "draft", "edit"]
-    assert set(persisted) == {"plan", "fact_check", "draft", "article"}
+    assert runner.calls == ["claims", "claim_review"]
+    assert set(persisted) == {"claims", "claim_review", "article"}
     assert final["sources"][0]["evidence_id"] == "E001"
     assert model == "fixture-only"
 
@@ -531,23 +542,17 @@ def test_exploitation_claim_requires_a_fresh_cisa_catalog():
 
 def test_cve_fact_passes_full_fixture_editorial_pipeline():
     bundle, article, fact_check = cve_fact_fixture()
-    plan = {
-        "decision": "publish", "thesis": "公式記録の参照情報を整理します。",
-        "audience": "脆弱性対応担当者", "outline": ["CVEの確認情報", "出典"],
-        "evidence_ids": ["E001"], "reason": "対象CVEに紐づく一次情報があります。",
-    }
-    runner = FixtureRunner({
-        "plan": plan, "fact_check": fact_check, "draft": article, "edit": article,
-    })
+    runner = FixtureRunner()
 
     final, model = run_editorial_pipeline(
         bundle, template_id="cve-kev-deep-dive", run_id="cve-fact-fixture",
         runner=runner, persist_stage=lambda *_args: None,
     )
 
-    assert runner.calls == ["plan", "fact_check", "draft", "edit"]
+    assert runner.calls == ["claims", "claim_review"]
     assert model == "fixture-only"
-    assert final["sections"][0]["blocks"][0] == article["sections"][0]["blocks"][0]
+    assert final["schema_version"] == 2
+    assert final["sections"][0]["claim_ids"] == ["C001"]
     assert final["cve"]["id"] == "CVE-2026-12345"
 
 

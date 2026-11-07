@@ -1,0 +1,49 @@
+{
+  "slug": "security-v2-fixture",
+  "category": "security",
+  "published_at": "2026-11-04T01:15:00Z",
+  "url": "/reports/security/security-v2-fixture/",
+  "schema_version": 2,
+  "template_id": "security-daily",
+  "language": "ja",
+  "title": "セキュリティ情報 2026-11-03",
+  "dek": "公表元が更新情報を掲載したことを観測しました。",
+  "summary": [
+    "公表元が更新情報を掲載したことを観測しました。"
+  ],
+  "sections": [
+    {
+      "heading": "確認された事実",
+      "claim_ids": [
+        "C001"
+      ],
+      "evidence_ids": [
+        "E001"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "C001",
+      "text": "公表元が更新情報を掲載したことを観測しました。",
+      "classification": "observed",
+      "evidence_ids": [
+        "E001"
+      ],
+      "section": "primary_observations",
+      "importance": "normal"
+    }
+  ],
+  "sources": [
+    {
+      "evidence_id": "E001",
+      "source_key": "fixture-source",
+      "relation": "record",
+      "title": "Synthetic advisory metadata fixture",
+      "publisher_url": "https://example.com/advisory-fixture",
+      "observed_at": "2026-11-04T01:00:00Z",
+      "published_at": null,
+      "license_id": "NOASSERTION"
+    }
+  ]
+}

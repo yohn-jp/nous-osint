@@ -236,3 +236,27 @@ PostgreSQL has no host port publication. The API publishes only
 `127.0.0.1:8000`. Source policy notes and intervals are in `sources/`; every
 change to that registry requires review. Missing jobs do not imply closure.
 The scheduler is a singleton; do not start another copy of its Quadlet.
+
+## Report pipeline v2 diagnostics and recovery
+
+New report generation uses atomic claims and an independent review, followed by
+Python assembly and the existing Astro publisher. A single repair and re-review
+is the maximum editorial correction budget. Published article-v1 data remains
+readable; new reports use article-v2.
+
+Configure `NOUS_CODEX_MODEL=gpt-6-luna` and
+`NOUS_CODEX_REASONING_EFFORT=max` explicitly in the report Worker Quadlet. Verify
+`codex --version`, `codex exec --help`, and `codex login status` as UID/GID
+10002 with `HOME` and `CODEX_HOME` set to the mounted private Codex home.
+A successful login status does not prove model entitlement or sandbox readiness;
+perform a bounded schema smoke under the actual Worker identity before declaring
+readiness. Never switch to API-key billing as a fallback.
+
+Run events are append-only in `report_run_events`. The admin run detail provides
+a bounded timeline, failure stage, attempt and retry schedule. Diagnostic
+references identify private files; they are not public download URLs. Keep the
+report private volume separate from the read-only published site volume.
+Successful stage artifacts can be reused only when their input, schema, prompt,
+model and output digests match. Do not edit saved snapshots or checkpoints to
+force a failed run to succeed. Authentication, configuration and unknown failures
+require investigation rather than unlimited retries.

@@ -42,6 +42,9 @@ COPY sources /app/sources
 COPY reports /app/reports
 COPY --from=astro-build /app/reports/site/node_modules /app/reports/site/node_modules
 RUN test -f /app/reports/schemas/article-v1.schema.json \
+    && test -f /app/reports/schemas/article-v2.schema.json \
+    && test -f /app/reports/schemas/claims.schema.json \
+    && test -f /app/reports/schemas/claim-review.schema.json \
     && test -d /app/reports/site/node_modules/astro \
     && python -c 'from nous.report_templates import resolve_template; from nous.report_pipeline import _SCHEMA_DIR, _SITE_DIR; assert resolve_template("security-daily")["id"] == "security-daily"; assert (_SCHEMA_DIR / "article-v1.schema.json").is_file(); assert (_SITE_DIR / "astro.config.mjs").is_file()'
 
