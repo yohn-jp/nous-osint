@@ -13,6 +13,18 @@ Nous is an intelligence desk for reading observed records, assessing provenance 
 - Color supports meaning but does not replace status labels. Focus is visible, targets are usable on touch, Japanese titles and identifiers wrap without horizontal clipping.
 - Motion is short action feedback, not delayed content appearance; honor `prefers-reduced-motion`. No invented counts, decorative charts, fake progress or pseudo-buttons.
 
+## Art direction — evidence ledger, not a generic dashboard
+
+We evaluated two distinct compositions: (A) a provenance-first **ledger with a reading inspector**; (B) an editorial briefing that enlarges the newest item and pushes older evidence below. We selected A. Comparison across sources, versions and observation dates is Nous's frequent operation; newest-first hero storytelling would hide peers and make the first item look editorially recommended without evidence.
+
+The ledger uses a compact sequence gutter (display order only, **not a rank**), a title column with category and explicit state, and an observation stamp with source identity and recorded time. On large screens, the first actual fetched item is available in the inspector immediately; users can select another item without losing query state. Mobile reflows these fields into a single readable record with an explicit detail route.
+
+The report index uses a publication masthead and numbered article register rather than a promotional hero. The report content and citation trail own most of the canvas; provenance links remain perceivable and reachable. Source status is a register of **configuration / last success / last error**, not a health score.
+
+Design controls: real sources and actual dates only; no stock photography, invented graphs, generic KPI card wall, arbitrary shader, staggered animations, or promotional microcopy. UI copy is Japanese and task-specific; long identifiers and evidence links wrap. Semantically meaningful state is expressed in text as well as shape/color.
+
+References were interpreted **selectively**: [Taste Skill](https://github.com/Leonxlnx/taste-skill/blob/main/skills/taste-skill/SKILL.md) for product-specific content, aligned geometry and finished interactions; [DADS](https://design.digital.go.jp/dads/) for layout, typography, contrast, focus and navigation; [Impeccable](https://github.com/pbakaus/impeccable) for critique, distill and harden. Marketing-site rules such as one-screen hero, hover lift and photographs do **not** apply to this daily research instrument.
+
 ## Navigation and interaction contract
 
 | Surface | Primary user action | State and return path |

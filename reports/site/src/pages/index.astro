@@ -17,24 +17,23 @@ function dateLabel(value: string) {
 <BaseLayout title="インテリジェンスレポート">
   <section class="index-hero" aria-labelledby="page-title">
     <div class="hero-topline">
-      <p class="eyebrow">INTELLIGENCE / REPORTS</p>
-      <span class="report-count">{String(reports.length).padStart(2, '0')} REPORTS</span>
+      <p class="eyebrow">NOUS / REPORT REGISTER</p>
+      <span class="report-count">公開 {reports.length} 件</span>
     </div>
-    <h1 id="page-title">分析レポート<span class="hero-title-mark" aria-hidden="true">.</span></h1>
-    <p class="hero-copy">収集された情報を、出典から読み解く。観測された事実と分析を分け、判断に使った資料へさかのぼれる形でまとめています。</p>
+    <h1 id="page-title">分析レポート</h1>
+    <p class="hero-copy">観測した事実と分析を区別し、根拠へ戻れる形式で記録します。</p>
     <div class="hero-actions">
       <a class="hero-primary-action" href={reports.length ? '#report-archive' : '/explore'}>
-        {reports.length ? 'レポートを見る' : '収集情報を見る'} <span aria-hidden="true">↗</span>
+        {reports.length ? '一覧へ移動' : '収集情報を見る'} <span aria-hidden="true">↗</span>
       </a>
-      <a class="hero-secondary-action" href="/explore">探索ダッシュボードへ戻る <span aria-hidden="true">→</span></a>
+      <a class="hero-secondary-action" href="/explore">収集情報を探索 <span aria-hidden="true">→</span></a>
     </div>
   </section>
 
   <section class="report-archive" id="report-archive" aria-labelledby="archive-heading">
     <div class="archive-heading">
       <div>
-        <p class="eyebrow">PUBLICATIONS</p>
-        <h2 id="archive-heading">公開記事</h2>
+        <h2 id="archive-heading">記事一覧</h2>
       </div>
       <span class="archive-count">{reports.length} 件</span>
     </div>
