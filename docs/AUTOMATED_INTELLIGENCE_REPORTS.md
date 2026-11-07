@@ -147,6 +147,14 @@ Bundle のレコードには最低限 `evidence_id`, `source_key`, `item_id`, `i
 
 公開記事の閲覧は `/reports/*` の **GET/HEAD のみ**。HTML の本文・一覧は Astro の静的出力であり、私的記事を取得するための新しい無認証 JSON API は必要ない。Quasar に `/admin/reports`（テンプレート選択、実行、状態、スケジュール）と `/reports/` への導線を追加する。`remote_mcp.py` には記事作成ツールを追加しない。将来レポート検索 MCP を追加する場合も明示的に読み取り専用で別途設計する。
 
+## Source taxonomy and scoped recurring intelligence
+
+The topic taxonomy is independent of `item_kind` (the ingestion record schema). Public source status exposes effective `category` from optional reviewed source configuration or a backwards-compatible default. The categories are `vulnerability`, `advisory`, `threat_research`, `security_news`, `industry` and `careers`; a UI label does not certify feed reliability. New official feeds remain disabled pending live probe, rate/terms review and operator activation.
+
+For both manual runs and scheduled `security-daily` runs, optional `source_categories` and `source_ids` parameter arrays are canonicalized and bounded to 50 unique members. When both are present, their **intersection** governs the saved version evidence bundle. An omitted selection retains historical template behavior; a selected nonexistent/disabled source is rejected before queuing. The source filters are applied under the existing cutoff and repeatable-read transaction; no new retrieval or uncited body text is introduced. CVE/KEV catalog status always derives from the authoritative CISA observation, even when specific references are filtered.
+
+The scheduled job persists the scope in `report_schedules.parameters`; each execution normalizes that same scope into the immutable run parameters. Existing automatic cadence, evidence limits, independent claim review, rights restrictions, skip-on-insufficient-evidence behavior, source attribution and atomic publication remain in effect. This is a **scope selector**, not a new crawler or a guarantee that a selected group has material on every day. The current reviewed daily report consumes `news`, `advisory` and `vulnerability`; careers and company-update collection are available in the library, not silently injected into security reports. A distinct job-market report template requires its own reviewed editorial contract.
+
 ## 10. 静的出版と Access 境界
 
 専用 Worker が記事 DB snapshot から Astro 入力を作り、**使い捨ての staging directory** で完全なサイトを静的ビルドする。Node/Astro はこの段階で起動して終了する。HTML/内部リンク/asset hash/禁止タグ/CSP を検査してから、以下の手順で昇格する。

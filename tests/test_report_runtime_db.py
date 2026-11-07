@@ -1,5 +1,6 @@
 """PostgreSQL DB-to-Astro publication fixture; no Codex process or auth is used."""
 import hashlib
+from datetime import datetime, timezone
 import json
 import os
 import uuid
@@ -190,3 +191,56 @@ def test_postgres_fixture_runs_db_to_astro_to_publication(postgres_runtime, monk
         assert db.scalar(select(Report).where(Report.run_id == failed_run_id)) is None
         assert db.scalar(select(Report).where(Report.run_id == run_id)) is not None
     assert not list(private_root.glob("runs/*/workspace"))
+
+
+def test_evidence_scope_applies_source_category_and_explicit_ids(postgres_runtime):
+    """The source choices must change the immutable evidence bundle, not just UI."""
+    from nous.report_pipeline import build_evidence_bundle
+    factory, _site_root, _private_root = postgres_runtime
+    cutoff = datetime(2026, 11, 4, 2, tzinfo=timezone.utc)
+    with factory() as db:
+        for index, (source_key, source_category) in enumerate((
+                ("research-feed", "threat_research"), ("advisory-feed", "advisory"))):
+            url = f"https://publisher.example/record-{index}"
+            src = Source(
+                source_key=source_key, kind="rss", url="https://publisher.example/feed",
+                adapter="rss_v1", item_kind="news", config_revision="a" * 64,
+                config={"category": source_category, "policy": {"content_storage": "metadata_only"}},
+                enabled=True, interval_minutes=60, max_requests_per_hour=2,
+                origin="official", overrides={}, next_due_at=cutoff,
+            )
+            db.add(src)
+            db.flush()
+            item = Item(
+                source_id=src.id, external_id=url, canonical_url=url, kind="news",
+                title=f"Source evidence {index}", state="current",
+                first_seen_at=cutoff, last_seen_at=cutoff,
+                current_version=1, current_hash="a" * 64,
+            )
+            db.add(item)
+            db.flush()
+            db.add(ItemVersion(
+                item_id=item.id, version=1, observed_at=cutoff, sha256="a" * 64,
+                attributes={"title": item.title, "url": url,
+                            "published": cutoff.isoformat()},
+                provenance={"item_url": url, "retrieved_at": cutoff.isoformat()},
+            ))
+        db.commit()
+
+    base = {"target_date": "2026-11-04", "timezone": "Asia/Tokyo"}
+    def snapshot(extra):
+        params = normalize_parameters("security-daily", {**base, **extra}, now=cutoff)
+        return build_evidence_bundle(factory, "security-daily", params, cutoff)
+
+    all_sources = snapshot({})
+    assert {e["source_key"] for e in all_sources["evidence"]} == {
+        "research-feed", "advisory-feed",
+    }
+    research = snapshot({"source_categories": ["threat_research"]})
+    assert [e["source_key"] for e in research["evidence"]] == ["research-feed"]
+    advisory = snapshot({"source_ids": ["advisory-feed"]})
+    assert [e["source_key"] for e in advisory["evidence"]] == ["advisory-feed"]
+    intersection = snapshot({
+        "source_categories": ["threat_research"], "source_ids": ["advisory-feed"],
+    })
+    assert intersection["evidence"] == []

@@ -294,6 +294,20 @@ def audits():
         ]
 
 
+def _validate_report_source_scope(db, params: dict) -> None:
+    """Reject unknown/disabled sources before scheduling work for a report.
+
+    A category-only selection is valid without registered matches yet; the
+    worker still applies its bounded cutoff and publication quality gates.
+    """
+    selected = params.get("source_ids", [])
+    if not selected:
+        return
+    sources = db.scalars(select(Source).where(Source.source_key.in_(selected))).all()
+    if {row.source_key for row in sources if row.enabled} != set(selected):
+        raise HTTPException(422, "selected report source is missing or disabled")
+
+
 def _published_url(db, report_id):
     if not report_id:
         return None
@@ -403,6 +417,7 @@ def create_report_run(body: ReportRunCreate, request: Request):
         raise HTTPException(422, "invalid report template parameters") from exc
     current = now()
     with factory() as db:
+        _validate_report_source_scope(db, parameters)
         row = ReportRun(
             id=str(uuid.uuid4()), trigger="manual", created_by=request.state.access_identity.subject,
             template_id=body.template_id, template_revision=template["revision_key"],
@@ -544,6 +559,7 @@ def create_report_schedule(body: ReportScheduleCreate, request: Request):
     )
     factory = _factory()
     with factory() as db:
+        _validate_report_source_scope(db, normalized)
         db.add(row)
         db.commit()
         return _schedule_row(row)
@@ -590,6 +606,7 @@ def update_report_schedule(schedule_id: str, changes: ReportScheduleUpdate):
         row.cadence = cadence
         row.timezone = timezone_name
         row.local_time = local_time
+        _validate_report_source_scope(db, normalized)
         row.parameters = {key: value for key, value in normalized.items()
                           if key in {"category", "source_categories", "source_ids"}}
         if config_changed or (enabled and row.next_slot_at <= now()):
