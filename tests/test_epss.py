@@ -138,3 +138,24 @@ def test_backlog_rotation_does_not_requery_recent_ep_ss(tracked_db, monkeypatch)
     assert epss.refresh_epss(tracked_db, current=TODAY + timedelta(minutes=16))
     assert len(calls) == 2 and calls[0] != calls[1]
     assert not epss.refresh_epss(tracked_db, current=TODAY + timedelta(minutes=31))
+
+
+def test_observation_time_is_after_http_lookup(tracked_db, monkeypatch):
+    # The live scheduler must not backdate evidence to the start of a request.
+    moments = iter((TODAY, TODAY + timedelta(minutes=2)))
+
+    class ControlledClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return next(moments)
+
+    monkeypatch.setattr(epss, "datetime", ControlledClock)
+    monkeypatch.setattr(epss, "fetch", lambda url: (
+        200, response([row()]), {}, url,
+    ))
+    assert epss.refresh_epss(tracked_db)
+    with tracked_db() as db:
+        assert epss.epss_as_of(db, CVE, TODAY + timedelta(minutes=1))["status"] == "unknown"
+        received = epss.epss_as_of(db, CVE, TODAY + timedelta(minutes=3))
+        assert received["status"] == "current"
+        assert epss._utc(received["observed_at"]) == TODAY + timedelta(minutes=2)

@@ -136,21 +136,25 @@ def refresh_epss(factory, *, current: datetime | None = None) -> bool:
             if status != 200:
                 raise ValueError("EPSS HTTP response not OK")
             observations.update(parse_epss_response(content, set(batch), timestamp.date()))
+        # The observation starts *after* the HTTP response is validated.
+        # Otherwise an as-of query could see an observation dated before it
+        # was acquired. Explicit `current` keeps offline fixtures deterministic.
+        observed_at = timestamp if current is not None else _utc(datetime.now(timezone.utc))
         with factory() as db:
             for cve in cves:
-                if db.get(EpssObservation, (cve, timestamp.date())) is not None:
+                if db.get(EpssObservation, (cve, observed_at.date())) is not None:
                     continue
                 value = observations.get(cve)
                 db.add(EpssObservation(
-                    cve_id=cve, checked_on=timestamp.date(), fetched_at=timestamp,
+                    cve_id=cve, checked_on=observed_at.date(), fetched_at=observed_at,
                     score_date=value[0] if value else None,
                     score=value[1] if value else None,
                     percentile=value[2] if value else None,
                 ))
             state = db.get(EpssPollState, 1)
-            state.last_success_at = timestamp
+            state.last_success_at = observed_at
             state.last_error = None
-            state.next_due_at = timestamp + timedelta(minutes=15 if backlog else 1440)
+            state.next_due_at = observed_at + timedelta(minutes=15 if backlog else 1440)
             db.commit()
         log.info("EPSS refresh accepted: %d CVEs (%d scored)", len(cves), len(observations))
     except Exception as exc:
