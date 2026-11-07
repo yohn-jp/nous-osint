@@ -188,3 +188,12 @@ def test_incomplete_tree_does_not_overwrite_previous_observation(repo_db, monkey
             PublicArtifactPollState.last_error.is_not(None))).all()
         assert len(failed) == 1
         assert failed[0].last_error == "ValueError"
+
+
+def test_repository_api_redirect_is_rejected_before_parsing(monkeypatch):
+    """A fixed GitHub API request must never accept content from another host."""
+    monkeypatch.setattr(pub, "fetch", lambda url: (
+        200, b'{"tree": []}', {}, "https://unrelated.example/redirect",
+    ))
+    with pytest.raises(ValueError, match="redirect"):
+        pub._get_json("https://api.github.com/repos/trickest/cve/git/trees/" + SHA_A)

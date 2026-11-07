@@ -48,7 +48,9 @@ def _get_json(url: str) -> dict:
     # All URLs originate from fixed repository identifiers and SHA-only refs.
     if not url.startswith(_API_ROOT + "/"):
         raise ValueError("unapproved GitHub API host")
-    status, content, _headers, _final_url = fetch(url)
+    status, content, _headers, final_url = fetch(url)
+    if final_url != url:
+        raise ValueError("unexpected GitHub API redirect")
     if status != 200 or len(content) > _MAX_TREE_BYTES:
         raise ValueError("GitHub tree unavailable or oversized")
     try:
