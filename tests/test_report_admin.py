@@ -194,6 +194,7 @@ def test_run_detail_exposes_bounded_safe_event_timeline(managed):
                 artifact_sha256="a" * 64,
                 diagnostic_ref="runs/example/attempts/2/claim_review/diagnostic.json",
                 retryable=False,
+                stderr_bytes=1314 if seq == 104 else None,
             ))
         db.commit()
 
@@ -206,8 +207,10 @@ def test_run_detail_exposes_bounded_safe_event_timeline(managed):
     assert result["events"][0]["attempt"] == 1
     assert result["events"][-1]["error_code"] == "codex_auth"
     assert result["events"][-1]["usage"] == {"input_tokens": 42, "output_tokens": 7}
+    assert result["events"][-1]["stderr_bytes"] == 1314
+    assert "stderr" not in result["events"][-1]
     assert "secret" not in detail.text
-    assert "stderr" not in detail.text
+    assert "unprocessed stderr contents" not in detail.text
 
 
 def test_run_timeline_requires_access_identity(managed):
