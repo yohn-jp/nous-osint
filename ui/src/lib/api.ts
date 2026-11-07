@@ -285,7 +285,7 @@ async function mutation<T>(path: string, method: 'POST' | 'PUT' | 'PATCH', paylo
 }
 
 export const api = {
-  stream: (params: { category?: string; source?: string; limit?: number; cursor?: number } = {},
+  stream: (params: { category?: string | undefined; source?: string | undefined; limit?: number | undefined; cursor?: number | undefined } = {},
            signal?: AbortSignal) => get<StreamPage>('/v1/stream' + qs(params), signal),
   items: (params: { q?: string | undefined; kind?: ItemKind | undefined; source?: string | undefined; category?: string | undefined; limit?: number | undefined; cursor?: number | undefined }, signal?: AbortSignal) =>
     get<ItemPage>('/v1/items' + qs(params), signal),
