@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
+from functools import lru_cache
 import ctypes
 import errno
 import fcntl
@@ -42,6 +43,7 @@ from .report_pipeline import (
     _all_article_evidence,
     _json_bytes,
     _safe_publisher_url,
+    _SITE_DIR,
     build_evidence_bundle,
     build_static_release,
     release_manifest,
@@ -617,6 +619,39 @@ def _remove_release_tree(path: Path):
     shutil.rmtree(path)
 
 
+@lru_cache(maxsize=1)
+def _renderer_revision() -> str:
+    """Fingerprint the image-bundled renderer, excluding generated reports and dependencies.
+
+    A report Worker image update must regenerate archived HTML even if no new
+    report is published. The fingerprint is stable for the immutable image.
+    """
+    paths = [path for directory in ("src", "public")
+             for path in (_SITE_DIR / directory).rglob("*") if path.is_file()]
+    paths.extend(_SITE_DIR / name for name in
+                 ("astro.config.mjs", "package.json", "package-lock.json"))
+    fingerprint = hashlib.sha256()
+    for path in sorted(set(paths)):
+        if path.is_symlink() or not path.is_file():
+            raise ReportError("renderer_source_invalid")
+        relative = path.relative_to(_SITE_DIR).as_posix().encode()
+        fingerprint.update(relative)
+        fingerprint.update(bytes((0,)))
+        fingerprint.update(hashlib.sha256(path.read_bytes()).digest())
+        fingerprint.update(bytes((0,)))
+    return fingerprint.hexdigest()
+
+
+def _release_matches_renderer(site_root: Path, digest: str) -> bool:
+    try:
+        manifest = json.loads(
+            (site_root / ".manifests" / f"{digest}.json").read_text(encoding="utf-8")
+        )
+        return manifest.get("renderer_revision") == _renderer_revision()
+    except (OSError, ValueError, TypeError, ReportError):
+        return False
+
+
 def _write_release(site_root: Path, dist: Path, assets: list[Path], digest: str) -> dict:
     if not _DIGEST.fullmatch(digest):
         raise ReportError("release_digest_invalid")
@@ -667,6 +702,7 @@ def _write_release(site_root: Path, dist: Path, assets: list[Path], digest: str)
             os.replace(temp_asset, target)
 
     manifest = release_manifest(dist, assets, digest)
+    manifest["renderer_revision"] = _renderer_revision()
     _fsync_write(site_root / ".manifests" / f"{digest}.json", _json_bytes(manifest), 0o600)
     if not _verify_release(site_root, digest):
         raise ReportError("release_verification_failed")
@@ -728,7 +764,8 @@ def _release_has_404_page(site_root: Path, digest: str) -> bool:
 
 
 def _is_current_contract_release(site_root: Path, digest: str) -> bool:
-    return _verify_release(site_root, digest) and _release_has_404_page(site_root, digest)
+    return (_verify_release(site_root, digest) and _release_has_404_page(site_root, digest)
+            and _release_matches_renderer(site_root, digest))
 
 
 def _current_digest(site_root: Path) -> str | None:
@@ -818,8 +855,9 @@ def _ensure_current_release_locked(factory, site_root: Path) -> str:
     if expected and _is_current_contract_release(site_root, expected):
         _promote(site_root, expected)
         return expected
-    # The selected release is absent or corrupt. Rebuild the complete archive
-    # from immutable DB article JSON before changing the public pointer.
+    # The selected release is missing, corrupt or rendered by another image revision.
+    # Rebuild from immutable DB articles without changing report records, then atomically
+    # promote the new HTML/assets while retaining the previous valid release.
     private = private_root()
     build_root = private / "build-recovery"
     dist = assets = None

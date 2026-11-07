@@ -146,6 +146,65 @@ def test_corrupt_active_release_is_rebuilt_at_the_same_digest(publication):
     assert index.read_text(encoding="utf-8") == "<html><body>fixture index</body></html>"
 
 
+
+def test_renderer_revision_change_rebuilds_published_archive(publication, monkeypatch):
+    """An updated report image refreshes existing pages without republishing claims."""
+    factory, claim, _bundle, _article = publication
+    site_root = worker.public_root()
+    previous_digest = worker._current_digest(site_root)
+    article_id = str(uuid.uuid4())
+    archived_content = {
+        "title": "Previously published finding",
+        "summary": ["Supported observation"],
+        "claims": [],
+        "sections": [],
+    }
+    with factory() as db:
+        db.add(Report(
+            id=article_id, run_id=claim["id"], slug="prior-rendered-report",
+            category="security", template_id="security-daily",
+            article=archived_content, headline=archived_content["title"],
+            summary=archived_content["summary"],
+            published_at=datetime.now(timezone.utc),
+            artifact_digest=previous_digest,
+            artifact_path=f"releases/{previous_digest}",
+            harness_version="fixture", input_digest="c" * 64,
+        ))
+        db.commit()
+
+    builds = []
+
+    def rebuild(articles, staging_root):
+        builds.append(articles)
+        return fake_static_build(articles, staging_root)
+
+    monkeypatch.setattr(worker, "build_static_release", rebuild)
+    monkeypatch.setattr(worker, "_renderer_revision", lambda: "e" * 64)
+
+    next_digest = worker.ensure_current_release(factory)
+
+    assert len(builds) == 1
+    assert len(builds[0]) == 1
+    assert builds[0][0]["slug"] == "prior-rendered-report"
+    assert next_digest != previous_digest
+    assert worker._current_digest(site_root) == next_digest
+    assert worker._is_current_contract_release(site_root, next_digest)
+    assert (site_root / "releases" / previous_digest / "index.html").is_file()
+    assert (site_root / "releases" / next_digest / "security" /
+            "prior-rendered-report" / "index.html").is_file()
+    with factory() as db:
+        state = db.get(ReportSiteState, 1)
+        report = db.get(Report, article_id)
+        assert state.active_digest == next_digest
+        assert state.pending_digest is None
+        assert report.article == archived_content
+        assert report.artifact_digest == previous_digest
+
+    # A subsequent poll must not rebuild the same renderer revision.
+    assert worker.ensure_current_release(factory) == next_digest
+    assert len(builds) == 1
+
+
 @pytest.mark.parametrize("include_published_article", [False, True])
 def test_legacy_release_without_404_page_is_rebuilt_from_published_archive(
         publication, tmp_path, monkeypatch, include_published_article):
