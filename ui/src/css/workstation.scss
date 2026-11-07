@@ -137,7 +137,7 @@ body { background: var(--nous-paper); color: var(--nous-ink); }
 }
 .workstation-query {
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) minmax(140px, 185px) minmax(170px, 235px) auto;
+  grid-template-columns: minmax(190px, 1fr) minmax(130px, 160px) minmax(175px, 210px) minmax(150px, 195px) auto;
   gap: 8px; align-items: stretch;
   margin-bottom: 13px; padding: 9px;
   border: 1px solid var(--nous-line);

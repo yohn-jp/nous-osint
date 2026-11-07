@@ -9,7 +9,7 @@ from sqlalchemy import func, select, text
 from .db import session_factory
 from .cve_queries import query_cve
 from .models import FetchAttempt, FetchJob, Item, ItemVersion, Source
-from .source_taxonomy import source_category
+from .source_taxonomy import SOURCE_CATEGORIES, source_category
 
 app = FastAPI(title="Nous OSINT", version="0.1.0")
 
@@ -171,6 +171,7 @@ def items(kind: ItemKind | None = None, state: ItemState | None = None,
           organization: str | None = Query(None, min_length=1, max_length=200),
           source: str | None = Query(None, min_length=3, max_length=100,
                                      pattern=r"^[a-z][a-z0-9-]*$"),
+          category: str | None = Query(None, max_length=32),
           q: str | None = Query(None, min_length=1, max_length=200),
           since: AwareDatetime | None = None,
           published_since: AwareDatetime | None = None,
@@ -178,6 +179,14 @@ def items(kind: ItemKind | None = None, state: ItemState | None = None,
           cursor: int | None = Query(None, ge=0)):
     with session_factory()() as db:
         query = select(Item, Source).join(Source, Item.source_id == Source.id)
+        if category is not None:
+            if category not in SOURCE_CATEGORIES:
+                raise HTTPException(422, "unsupported source category")
+            matching = [
+                row.id for row in db.scalars(select(Source)).all()
+                if source_category(row.config or {}, row.item_kind) == category
+            ]
+            query = query.where(Source.id.in_(matching))
         if kind:
             query = query.where(Item.kind == kind)
         if state:

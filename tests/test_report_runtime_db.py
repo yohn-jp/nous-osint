@@ -1,6 +1,6 @@
 """PostgreSQL DB-to-Astro publication fixture; no Codex process or auth is used."""
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import uuid
@@ -198,6 +198,7 @@ def test_evidence_scope_applies_source_category_and_explicit_ids(postgres_runtim
     from nous.report_pipeline import build_evidence_bundle
     factory, _site_root, _private_root = postgres_runtime
     cutoff = datetime(2026, 11, 4, 2, tzinfo=timezone.utc)
+    observed = cutoff - timedelta(minutes=1)
     with factory() as db:
         for index, (source_key, source_category) in enumerate((
                 ("research-feed", "threat_research"), ("advisory-feed", "advisory"))):
@@ -214,13 +215,13 @@ def test_evidence_scope_applies_source_category_and_explicit_ids(postgres_runtim
             item = Item(
                 source_id=src.id, external_id=url, canonical_url=url, kind="news",
                 title=f"Source evidence {index}", state="current",
-                first_seen_at=cutoff, last_seen_at=cutoff,
+                first_seen_at=observed, last_seen_at=observed,
                 current_version=1, current_hash="a" * 64,
             )
             db.add(item)
             db.flush()
             db.add(ItemVersion(
-                item_id=item.id, version=1, observed_at=cutoff, sha256="a" * 64,
+                item_id=item.id, version=1, observed_at=observed, sha256="a" * 64,
                 attributes={"title": item.title, "url": url,
                             "published": cutoff.isoformat()},
                 provenance={"item_url": url, "retrieved_at": cutoff.isoformat()},
