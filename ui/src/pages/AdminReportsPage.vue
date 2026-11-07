@@ -57,7 +57,10 @@ const stageLabel = (stage: string) => ({
   queued: '待機中', claimed: 'ワーカー割当', evidence: '根拠スナップショット',
   claims: '企画・Claim生成', claim_review: '独立レビュー',
   claim_repair: 'Claim修正', claim_rereview: '修正後レビュー',
-  plan: '企画', fact_check: '事実検証', draft: '執筆', article: '推敲',
+  plan: '企画（旧履歴）', fact_check: '事実検証（旧履歴）', draft: '執筆（旧履歴）',
+  codex_preflight: '実行環境確認', claims: '企画・主張生成', claim_review: '独立レビュー',
+  claim_repair: '主張修正', claim_rereview: '再レビュー', assembly: '記事組立',
+  article_validation: '記事検証', article: '完成記事',
   article_validated: '決定論的検査', publishing: '静的公開', published: '公開済み',
   retry_wait: '再試行待ち', failed: '失敗', skipped: '対象外',
 }[stage] ?? stage)

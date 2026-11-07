@@ -460,8 +460,10 @@ def report_run(run_id: str):
         if row is None:
             raise HTTPException(404, "report run not found")
         result = _run_list_row(db, row)
-        stage_order = ("evidence", "plan", "fact_check", "draft", "article",
-                       "article_validated", "publishing", "published")
+        stage_order = ("evidence", "codex_preflight", "claims", "claim_review",
+                       "claim_repair", "claim_rereview", "assembly", "article_validation",
+                       "article", "article_validated", "publishing", "published",
+                       "plan", "fact_check", "draft")
         artifacts = row.stage_artifacts if isinstance(row.stage_artifacts, dict) else {}
         stages = {name: "complete" for name in stage_order if name in artifacts}
         if row.stage in stage_order and row.stage not in stages:
