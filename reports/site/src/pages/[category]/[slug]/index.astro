@@ -4,6 +4,8 @@ import ArticleBlock from '../../../components/ArticleBlock.astro';
 import KevPanel from '../../../components/KevPanel.astro';
 import SourceList from '../../../components/SourceList.astro';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ClaimClassifications from '../../../components/ClaimClassifications.astro';
+import EvidenceMarks from '../../../components/EvidenceMarks.astro';
 
 export async function getStaticPaths() {
   const entries = await getCollection('reports');
@@ -71,11 +73,24 @@ function templateName(template: string) {
     <div class="article-columns">
       <div class="article-body">
         {report.sections.map((section, index) => (
-          <section class="article-section" aria-labelledby={`section-${index}`}>
-            <div class="article-section-topline"><span>{String(index + 1).padStart(2, '0')}</span><span>ANALYSIS</span></div>
-            <h2 id={`section-${index}`}>{section.heading}</h2>
-            {section.blocks.map((block) => <ArticleBlock block={block} sources={report.sources} claims={report.claims} cve={report.cve} />)}
-          </section>
+          report.schema_version === 1
+            ? <section class="article-section" aria-labelledby={`section-${index}`}>
+                <div class="article-section-topline"><span>{String(index + 1).padStart(2, '0')}</span><span>ANALYSIS</span></div>
+                <h2 id={`section-${index}`}>{section.heading}</h2>
+                {section.blocks.map((block) => <ArticleBlock block={block} sources={report.sources} claims={report.claims} cve={report.cve} />)}
+              </section>
+            : section.claim_ids.length > 0 && <section class="article-section" aria-labelledby={`section-${index}`}>
+                <div class="article-section-topline"><span>{String(index + 1).padStart(2, '0')}</span><span>ANALYSIS</span></div>
+                <h2 id={`section-${index}`}>{section.heading}</h2>
+                {section.claim_ids.map((claimId) => {
+                  const claim = report.claims.find((item) => item.claim_id === claimId);
+                  return claim && <p class="article-paragraph">
+                    {claim.text}
+                    <ClaimClassifications claimIds={[claim.claim_id]} claims={report.claims} />
+                    <EvidenceMarks evidenceIds={claim.evidence_ids} />
+                  </p>;
+                })}
+              </section>
         ))}
       </div>
       <aside class="article-sources" aria-labelledby="sources-heading">

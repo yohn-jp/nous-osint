@@ -84,7 +84,6 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
         <q-route-tab to="/admin/reports" exact icon="calendar_month" label="レポート生成" />
         <q-route-tab to="/explore" exact icon="arrow_back" label="探索へ戻る" />
       </q-tabs>
-      <a class="mobile-report-link" href="/reports/" aria-label="分析レポート"><q-icon name="article" size="22px" /><span>レポート</span></a>
       <q-tabs v-else no-caps dense indicator-color="primary" active-color="primary" class="mobile-tabs">
         <q-route-tab v-for="entry in nav" :key="entry.name" :to="entry.to" exact :icon="entry.icon" :label="entry.title" />
       </q-tabs>
