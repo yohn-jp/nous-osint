@@ -390,3 +390,45 @@ body { background: var(--nous-paper); color: var(--nous-ink); }
   .workstation-record-link, .workstation-filter, .nav-entry, .header-search { transition: none !important; }
   *, *::before, *::after { scroll-behavior: auto !important; }
 }
+
+/* Change events are facts in sequence, not a feed of rounded cards. */
+.changes-register { overflow: hidden; }
+.changes-workstation .workstation-heading { margin-bottom: 16px; }
+.changes-controls {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 12px 14px; background: var(--nous-quiet); border-bottom: 1px solid var(--nous-line);
+}
+.changes-filter { min-width: 155px; max-width: 225px; flex: 1 1 155px; }
+.changes-table-scroll { max-width: 100%; overflow-x: auto; }
+.changes-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.changes-table th {
+  padding: 10px 14px; border-bottom: 1px solid var(--nous-line);
+  background: var(--nous-quiet); color: var(--nous-muted);
+  text-align: left; font-size: 11px; font-weight: 690;
+}
+.changes-table th:first-child { width: 205px; }
+.changes-table th:nth-child(3) { width: 145px; }
+.changes-table th:last-child { width: 115px; }
+.changes-table td {
+  padding: 13px 14px; border-bottom: 1px solid var(--nous-line);
+  color: var(--nous-ink); font-size: 13px; line-height: 1.6;
+  vertical-align: top; overflow-wrap: anywhere;
+}
+.changes-table tbody tr:hover td { background: var(--nous-hover); }
+.changes-table td.changes-date { color: var(--nous-muted); white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; }
+.changes-table .changes-title a { color: var(--nous-ink); font-weight: 660; text-decoration: none; }
+.changes-table .changes-title a:hover { color: var(--nous-accent); text-decoration: underline; text-underline-offset: 3px; }
+.changes-table .changes-title a:focus-visible { outline: 3px solid var(--nous-accent); outline-offset: 2px; }
+.changes-kind { color: var(--nous-muted); font-size: 12px; }
+.changes-version { color: var(--nous-muted); font: 660 12px/1.5 ui-monospace, Consolas, monospace; }
+.changes-table-note { padding: 12px 14px; font-size: 12px; color: var(--nous-muted); }
+@media (max-width: 700px) {
+ .changes-controls { padding: 11px; }
+ .changes-filter { max-width: none; }
+ .changes-table th, .changes-table td { padding: 10px; }
+ .changes-table th:first-child { width: 115px; }
+ .changes-table th:nth-child(3) { width: 82px; }
+ .changes-table th:last-child { width: 76px; }
+ .changes-table td.changes-date { white-space: normal; overflow-wrap: normal; }
+ .changes-table .changes-title a { font-size: 13px; }
+}

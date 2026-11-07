@@ -48,30 +48,62 @@ onBeforeUnmount(() => controller?.abort())
 </script>
 
 <template>
-  <q-page class="nous-page changes-page">
-    <h1 class="page-title q-ma-none">変更履歴</h1>
-    <p class="page-subtitle q-mb-xl">観測された新規・更新レコードを時系列で確認します。</p>
-    <section class="content-panel">
-      <div class="row q-col-gutter-sm items-center q-pa-md">
-        <div class="col-6 col-sm-3"><q-select v-model="windowDays" :options="windows" dense outlined emit-value map-options label="対象期間" @update:model-value="apply" /></div>
-        <div class="col-6 col-sm-3"><q-select v-model="kind" :options="kindsOptions" dense outlined emit-value map-options label="種別" @update:model-value="apply" /></div>
-        <q-space /><q-btn flat dense icon="refresh" color="primary" aria-label="再読み込み" @click="load" />
+  <q-page class="nous-page changes-page changes-workstation">
+    <header class="workstation-heading">
+      <div>
+        <p class="workstation-overline">LIBRARY <span aria-hidden="true">/</span> OBSERVATION HISTORY</p>
+        <h1 class="page-title">変更履歴</h1>
+        <p class="page-subtitle">収集情報の新規観測と版の更新を、観測日時順に確認します。</p>
       </div>
-      <q-separator />
+    </header>
+    <section class="content-panel changes-register" aria-label="観測イベント一覧">
+      <div class="changes-controls">
+        <q-select v-model="windowDays" :options="windows" dense outlined emit-value map-options
+          label="対象期間" class="changes-filter" @update:model-value="apply" />
+        <q-select v-model="kind" :options="kindsOptions" dense outlined emit-value map-options
+          label="種別" class="changes-filter" @update:model-value="apply" />
+        <q-space />
+        <q-btn flat round dense icon="refresh" color="primary" aria-label="履歴を再取得" :loading="loading" @click="load" />
+      </div>
       <div v-if="!loading && !error" class="changes-ledger-summary" role="status" aria-live="polite">
-        <span>観測履歴</span><strong>{{ changes.length }} 件</strong><span>最大100件まで表示</span>
+        <span>観測イベント</span><strong>{{ changes.length }} 件</strong><span>取得上限100件</span>
       </div>
-      <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 3" :key="n" type="rect" height="62px" class="q-mb-md" /></div>
-      <div v-else-if="error" class="empty-state" role="alert"><q-icon name="error_outline" color="negative" size="30px"/><p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="load" /></div>
-      <div v-else-if="changes.length === 0" class="empty-state"><q-icon name="history" size="32px"/><p class="q-mt-md">この期間に記録された変更はありません。</p></div>
-      <template v-else>
-        <router-link v-for="change in changes" :key="change.item_id + ':' + change.version" class="result-row" :to="{ name: 'item', params: { id: change.item_id }, query: { returnTo: route.fullPath } }">
-          <div class="result-meta"><span class="kind-tag">{{ kindLabel(change.kind) }}</span><span>{{ change.version === 1 ? '初回観測' : '改訂 v' + change.version }}</span></div>
-          <div class="result-title">{{ change.title }}</div>
-          <div class="result-foot">{{ dateLabel(change.observed_at) }}</div>
-        </router-link>
-        <div class="text-caption text-grey-6 q-px-lg q-py-md">最大100件を表示。期間を短くすると絞り込めます。</div>
-      </template>
+      <div v-if="loading" class="workstation-loading" role="status" aria-label="履歴を取得中">
+        <q-skeleton v-for="n in 6" :key="n" type="rect" height="42px" class="q-mb-sm" />
+      </div>
+      <div v-else-if="error" class="workstation-message" role="alert">
+        <strong>観測履歴を取得できませんでした</strong><p>{{ error }}</p>
+        <q-btn outline color="primary" no-caps label="再取得" @click="load" />
+      </div>
+      <div v-else-if="changes.length === 0" class="workstation-message">
+        <strong>この期間の観測イベントはありません</strong>
+        <p>取得できた範囲に新規観測・版の更新はありません。情報源の取得状態も確認できます。</p>
+        <q-btn flat no-caps to="/sources" label="情報源を確認" color="primary" />
+      </div>
+      <div v-else class="changes-table-scroll">
+        <table class="changes-table">
+          <caption class="workstation-sr-only">直近の新規観測と改訂。項目名から元のレコードへ移動できます。</caption>
+          <thead><tr>
+            <th scope="col">観測日時</th>
+            <th scope="col">対象レコード</th>
+            <th scope="col">分類</th>
+            <th scope="col">版</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="change in changes" :key="change.item_id + ':' + change.version">
+              <td class="changes-date"><time :datetime="change.observed_at">{{ dateLabel(change.observed_at) }}</time></td>
+              <td class="changes-title">
+                <router-link :to="{ name: 'item', params: { id: change.item_id }, query: { returnTo: route.fullPath } }">
+                  {{ change.title }}
+                </router-link>
+              </td>
+              <td><span class="changes-kind">{{ kindLabel(change.kind) }}</span></td>
+              <td class="changes-version">{{ change.version === 1 ? '初回観測' : 'v' + change.version }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="changes-table-note">最大100件のAPI応答を表示します。対象期間と種別はURLに保持されます。</div>
+      </div>
     </section>
   </q-page>
 </template>
