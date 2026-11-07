@@ -28,12 +28,20 @@ const filtered = computed(() => sources.value
 let controller: AbortController | null = null
 async function load() {
   controller?.abort()
-  controller = new AbortController()
+  const current = new AbortController()
+  controller = current
   loading.value = true
   error.value = ''
-  try { sources.value = await api.sources(controller.signal) }
-  catch (e) { if (!controller.signal.aborted) error.value = e instanceof Error ? e.message : '取得に失敗しました。' }
-  finally { loading.value = false }
+  try {
+    const result = await api.sources(current.signal)
+    if (controller === current && !current.signal.aborted) sources.value = result
+  } catch (e) {
+    if (controller === current && !current.signal.aborted) {
+      error.value = e instanceof Error ? e.message : '取得に失敗しました。'
+    }
+  } finally {
+    if (controller === current) loading.value = false
+  }
 }
 void load()
 onBeforeUnmount(() => controller?.abort())
