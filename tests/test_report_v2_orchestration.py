@@ -38,3 +38,25 @@ def test_repair_cannot_introduce_another_claim():
         run_editorial_pipeline(evidence_bundle(), template_id="security-daily",
                                run_id="invalid-repair", runner=InvalidRepair(),
                                persist_stage=lambda *_: None)
+
+
+def test_repair_payload_excludes_already_accepted_claims():
+    class MixedRunner(FixtureRunner):
+        def run(self, stage, payload, **kwargs):
+            value = super().run(stage, payload, **kwargs)
+            if stage == 'claims':
+                extra = deepcopy(value['claims'][0])
+                extra.update(claim_id='C002', text='公表元による別の更新情報の掲載が観測されました。')
+                value['claims'].append(extra)
+            elif stage == 'claim_review':
+                value['reviews'][0].update(decision='needs_revision', reason_code='unclear')
+                value['reviews'].append({'claim_id':'C002', 'decision':'accepted',
+                                         'evidence_ids':['E001'], 'reason_code':'supported'})
+            elif stage in {'claim_repair', 'claim_rereview'}:
+                assert [claim['claim_id'] for claim in payload['proposal']['claims']] == ['C001']
+            return value
+    runner = MixedRunner()
+    article, _ = run_editorial_pipeline(evidence_bundle(), template_id='security-daily',
+                                        run_id='mixed', runner=runner, persist_stage=lambda *_: None)
+    assert [row['claim_id'] for row in article['claims']] == ['C001', 'C002']
+    assert runner.calls == ['claims', 'claim_review', 'claim_repair', 'claim_rereview']
