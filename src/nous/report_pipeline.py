@@ -858,36 +858,58 @@ class CodexRunner:
 
 def run_editorial_pipeline(bundle: dict, *, template_id: str, run_id: str,
                            runner, persist_stage) -> tuple[dict, str | None]:
+    """Generate atomic claims, independently review, and assemble without rewriting."""
+    from .report_editorial import (
+        assemble_article, validate_article_v2, validate_claims, validate_review,
+    )
     template = resolve_template(template_id, bundle.get("template_snapshot"))
     if len(bundle["evidence"]) < template["publish_policy"]["minimum_evidence"]:
-        raise ReportSkipped("no evidence in the selected window")
-    plan = runner.run("plan", {"template_id": template_id, "bundle": bundle}, run_id=run_id)
-    persist_stage("plan", plan)
-    if plan["decision"] == "skip":
-        raise ReportSkipped("template planner found insufficient editorial value")
-    evidence_ids = {row["evidence_id"] for row in bundle["evidence"]}
-    if not plan["evidence_ids"] or any(eid not in evidence_ids for eid in plan["evidence_ids"]):
-        raise ReportError("plan_has_invalid_evidence")
-    fact_check = runner.run("fact_check", {
-        "template_id": template_id, "plan": plan, "bundle": bundle,
-    }, run_id=run_id)
-    persist_stage("fact_check", fact_check)
-    if not fact_check["claims"]:
-        raise ReportSkipped("no claims passed independent fact review")
-    for claim in fact_check["claims"]:
-        if (claim["assessment"] == "reject" or not claim["evidence_ids"] or
-                any(eid not in evidence_ids for eid in claim["evidence_ids"])):
-            raise ReportError("fact_check_rejected_claim")
-    draft = runner.run("draft", {
-        "template_id": template_id, "plan": plan, "fact_check": fact_check, "bundle": bundle,
-    }, run_id=run_id)
-    persist_stage("draft", draft)
-    article = runner.run("edit", {
-        "template_id": template_id, "draft": draft, "fact_check": fact_check, "bundle": bundle,
-    }, run_id=run_id)
-    persist_stage("article", article)
-    final = validate_article(article, template_id=template_id, bundle=bundle,
-                             fact_check=fact_check)
+        raise ReportSkipped("insufficient_evidence")
+
+    def invoke(stage, payload):
+        digest = hashlib.sha256(_json_bytes(payload)).hexdigest()
+        revisions = {"input_digest": digest, "schema_revision": "2", "prompt_revision": "2"}
+        cached = (persist_stage.load(stage, **revisions)
+                  if hasattr(persist_stage, "load") else None)
+        if cached is not None:
+            return cached
+        value = runner.run(stage, payload, run_id=run_id)
+        if hasattr(persist_stage, "load"):
+            persist_stage(stage, value, **revisions)
+        else:
+            persist_stage(stage, value)
+        return value
+
+    proposal = invoke("claims", {"template_id": template_id, "bundle": bundle})
+    validate_claims(proposal, bundle, template_id)
+    if proposal["decision"] == "skip":
+        raise ReportSkipped("insufficient_evidence")
+    review = invoke("claim_review", {
+        "template_id": template_id, "proposal": proposal, "bundle": bundle,
+    })
+    validate_review(review, proposal, bundle)
+    revision_ids = {row["claim_id"] for row in review["reviews"]
+                    if row["decision"] == "needs_revision"}
+    if revision_ids:
+        repair = invoke("claim_repair", {
+            "template_id": template_id, "proposal": proposal, "review": review,
+            "repair_claim_ids": sorted(revision_ids), "bundle": bundle,
+        })
+        validate_claims(repair, bundle, template_id)
+        original = {row["claim_id"]: row for row in proposal["claims"]}
+        repaired = {row["claim_id"]: row for row in repair["claims"]}
+        if set(repaired) != set(original) or any(
+            repaired[key] != value for key, value in original.items() if key not in revision_ids
+        ):
+            raise ReportError("repair_changed_immutable_claim")
+        proposal = repair
+        review = invoke("claim_rereview", {
+            "template_id": template_id, "proposal": proposal, "bundle": bundle,
+        })
+        validate_review(review, proposal, bundle)
+    article = assemble_article(proposal, review, bundle=bundle, template_id=template_id)
+    final = validate_article_v2(article, bundle=bundle, template_id=template_id)
+    persist_stage("article", final)
     return final, getattr(runner, "model", None)
 
 
