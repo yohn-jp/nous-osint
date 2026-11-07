@@ -620,6 +620,9 @@ class CodexRunner:
         self._set_group_mode(self.workdir, 0o710)
         self.codex_home = Path(os.getenv("NOUS_CODEX_HOME", "/var/lib/nous-codex"))
         self._prepare_codex_home()
+        self.reasoning_effort = os.getenv("NOUS_CODEX_REASONING_EFFORT", "max")
+        if self.reasoning_effort not in {"minimal", "low", "medium", "high", "xhigh", "max"}:
+            raise ReportError("invalid_codex_reasoning_config")
         self.model = os.getenv("NOUS_CODEX_MODEL")
         if not self.model:
             raise ReportError("codex_model_not_configured")
@@ -709,12 +712,15 @@ class CodexRunner:
                 "--ambient-caps=-all", "--no-new-privs"]
 
     def _codex_args(self, stage_dir: Path, schema_path: Path, output: Path) -> list[str]:
+        if not isinstance(getattr(self, "model", None), str) or not self.model:
+            raise ReportError("codex_model_not_configured")
         args = [self.binary, "exec", "--ephemeral", "--ignore-user-config",
                 "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never",
                 "--json",
                 "--output-schema", str(schema_path), "--output-last-message",
                 str(output), "-C", str(stage_dir)]
         args.extend(["--model", self.model])
+        args.extend(["-c", f'model_reasoning_effort="{self.reasoning_effort}"'])
         args.append("-")  # Explicitly consume the bounded prompt from stdin.
         return args
 
@@ -782,7 +788,8 @@ class CodexRunner:
         )
         help_text = (stdout + stderr).decode("utf-8", errors="replace")
         required = ("--json", "--ephemeral", "--ignore-user-config", "--skip-git-repo-check",
-                    "--sandbox", "--output-schema", "--output-last-message", "--color")
+                    "--sandbox", "--output-schema", "--output-last-message", "--color",
+                    "-c, --config")
         if status or any(option not in help_text for option in required):
             code = _codex_failure_code(help_text)
             raise ReportError("codex_cli_contract_unverified" if code == "codex_execution_failed" else code)
@@ -826,6 +833,7 @@ class CodexRunner:
             "retryable": retryable,
             "cli_version": getattr(self, "version", None),
             "model": getattr(self, "model", None),
+            "reasoning_effort": getattr(self, "reasoning_effort", None),
             "stdout_bytes": stdout_bytes,
             "stderr_bytes": stderr_bytes,
             "jsonl_last_event": jsonl_last_event,
@@ -983,6 +991,7 @@ class CodexRunner:
                 "stage": stage,
                 "cli_version": getattr(self, "version", None),
                 "model": getattr(self, "model", None),
+                "reasoning_effort": getattr(self, "reasoning_effort", None),
                 "started_at_ms": int(time.time() * 1000) - elapsed_ms,
                 "elapsed_ms": elapsed_ms,
                 "input_sha256": input_digest,
@@ -990,7 +999,10 @@ class CodexRunner:
                 "stdout_bytes": stdout_size,
                 "stderr_bytes": stderr_size,
                 "jsonl_events": parsed.get("events", []),
+                "jsonl_event_count": parsed.get("event_count", 0),
+                "jsonl_events_omitted": parsed.get("events_omitted", 0),
                 "jsonl_last_event": parsed.get("last_event"),
+                "jsonl_error_preview": redact_stderr(parsed.get("failure_text", "")),
                 "jsonl_usage": parsed.get("usage"),
                 "jsonl_malformed_lines": parsed.get("malformed_lines", 0),
                 "jsonl_truncated": parsed.get("truncated", False),

@@ -7,14 +7,18 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import time
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 MAX_JSONL_BYTES = 262_144
 MAX_JSONL_EVENTS = 2_000
+MAX_RETAINED_EVENTS = 255
 MAX_STDERR_BYTES = 65_536
 MAX_STDERR_PREVIEW = 4_096
 MAX_DIAGNOSTIC_BYTES = 32_768
+DIAGNOSTIC_RETENTION_SECONDS = 14 * 24 * 60 * 60
+MAX_RETENTION_SCAN = 10_000
 _EVENT_NAME = re.compile(r"^[a-z][a-z0-9_.-]{0,47}$")
 _SAFE_PART = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 _TOKEN = re.compile(
@@ -27,6 +31,7 @@ _ASSIGNMENT = re.compile(
 )
 _BEARER = re.compile(r"(?i)\bBearer\s+[^\s,;]+")
 _URL = re.compile(r"https?://[^\s\"'<>]+", re.I)
+_EMAIL = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
 _ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _ALLOWED_EVENTS = {
     "thread.started", "turn.started", "turn.completed", "turn.failed",
@@ -54,6 +59,7 @@ def parse_codex_jsonl(data: bytes) -> dict[str, Any]:
     """Summarize JSONL using an allowlist; message and tool content are discarded."""
     bounded = data[:MAX_JSONL_BYTES]
     events: list[dict[str, Any]] = []
+    total_events = 0
     malformed = 0
     usage = None
     failure_text: list[str] = []
@@ -88,7 +94,12 @@ def parse_codex_jsonl(data: bytes) -> dict[str, Any]:
             if event_usage:
                 event["usage"] = event_usage
                 usage = event_usage
-            events.append(event)
+            total_events += 1
+            if len(events) < MAX_RETAINED_EVENTS:
+                events.append(event)
+            elif normalized_type in {"turn.completed", "turn.failed", "error"}:
+                events.append(event)
+                events.pop(0)
 
         if event_type in {"turn.failed", "error"}:
             error = value.get("error")
@@ -108,6 +119,8 @@ def parse_codex_jsonl(data: bytes) -> dict[str, Any]:
 
     return {
         "events": events,
+        "event_count": total_events,
+        "events_omitted": max(0, total_events - len(events)),
         "last_event": events[-1]["type"] if events else None,
         "usage": usage,
         "malformed_lines": min(malformed, MAX_JSONL_EVENTS),
@@ -143,6 +156,7 @@ def redact_stderr(data: bytes | str) -> str:
     value = _ASSIGNMENT.sub(r"\1\2[REDACTED]", value)
     value = _TOKEN.sub("[REDACTED_TOKEN]", value)
     value = _URL.sub(lambda match: _redact_url(match.group(0)), value)
+    value = _EMAIL.sub("[REDACTED_EMAIL]", value)
     # Single-line diagnostics reduce the risk of preserving large arbitrary
     # payloads embedded in stderr while retaining a bounded human preview.
     lines = [line.strip() for line in value.splitlines() if line.strip()]
@@ -180,7 +194,9 @@ def classify_codex_failure(detail: str) -> tuple[str, bool]:
                                        "sandbox initialization failed")):
         return "codex_sandbox_rejected", False
     if any(text in detail for text in ("model not found", "unsupported model",
-                                       "model is not supported", "model does not exist")):
+                                       "model is not supported", "model does not exist",
+                                       "not supported when using codex with a chatgpt account",
+                                       "not supported for this account")):
         return "codex_model_unavailable", False
     if any(text in detail for text in ("no such file", "not found", "binary unavailable")):
         return "codex_unavailable", False
@@ -235,5 +251,35 @@ def write_diagnostic(root: Path, run_id: str, attempt: int, stage: str,
             temp_path.unlink()
         except FileNotFoundError:
             pass
+    prune_diagnostics(root)
     return (Path("runs") / run_part / "attempts" / str(attempt) /
             stage_part / "diagnostic.json").as_posix()
+
+
+def prune_diagnostics(root: Path, *, now: float | None = None) -> int:
+    """Remove only expired diagnostic.json files; never follow symlinks."""
+    runs = root / "runs"
+    if not runs.is_dir() or runs.is_symlink():
+        return 0
+    cutoff = (time.time() if now is None else now) - DIAGNOSTIC_RETENTION_SECONDS
+    removed = 0
+    visited = 0
+    for directory, child_dirs, files in os.walk(runs, followlinks=False):
+        child_dirs[:] = [name for name in child_dirs
+                         if not (Path(directory) / name).is_symlink()]
+        for name in files:
+            if name != "diagnostic.json" or visited >= MAX_RETENTION_SCAN:
+                continue
+            visited += 1
+            path = Path(directory) / name
+            try:
+                if path.is_symlink() or not path.is_file():
+                    continue
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+                    removed += 1
+            except OSError:
+                continue
+        if visited >= MAX_RETENTION_SCAN:
+            break
+    return removed

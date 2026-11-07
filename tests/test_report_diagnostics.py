@@ -1,10 +1,13 @@
 import json
+import os
+import time
 
 import pytest
 
 from nous.report_diagnostics import (
     classify_codex_failure,
     parse_codex_jsonl,
+    prune_diagnostics,
     redact_stderr,
     write_diagnostic,
 )
@@ -44,16 +47,28 @@ def test_jsonl_parser_extracts_error_for_classification_but_not_persistence():
     assert "user@example.test" not in json.dumps(result["events"])
 
 
+def test_jsonl_summary_caps_retained_events():
+    raw = b"\n".join(json.dumps({"type": "turn.started"}).encode() for _ in range(300))
+
+    result = parse_codex_jsonl(raw)
+
+    assert result["event_count"] == 300
+    assert len(result["events"]) == 255
+    assert result["events_omitted"] == 45
+
+
 def test_stderr_redacts_bearer_and_url_query_and_bounds_preview():
     preview = redact_stderr(
         "Authorization: Bearer super-secret-value\n"
-        "request https://service.example/path?access_token=very-secret#fragment\n" + "x" * 9_000
+        "request https://service.example/path?access_token=very-secret#fragment for user@example.test\n"
+        + "x" * 9_000
     )
 
     assert len(preview) <= 4_096
     assert "super-secret-value" not in preview
     assert "very-secret" not in preview
     assert "fragment" not in preview
+    assert "user@example.test" not in preview
 
 
 def test_failure_taxonomy_retries_only_recognized_transient_network_errors():
@@ -64,6 +79,9 @@ def test_failure_taxonomy_retries_only_recognized_transient_network_errors():
     assert classify_codex_failure("unrelated temporary failure") == (
         "codex_execution_failed", False
     )
+    assert classify_codex_failure(
+        "the gpt model is not supported when using Codex with a ChatGPT account"
+    ) == ("codex_model_unavailable", False)
 
 
 def test_diagnostic_is_atomic_private_and_reference_is_relative(tmp_path):
@@ -99,3 +117,22 @@ def test_diagnostic_never_replaces_symlink_root(tmp_path):
     with pytest.raises(ValueError):
         write_diagnostic(root, "run-1", 1, "claims", {})
     assert not list(outside.iterdir())
+
+
+def test_diagnostic_retention_removes_only_expired_diagnostic_files(tmp_path):
+    root = tmp_path / "private"
+    old_ref = write_diagnostic(root, "old-run", 1, "claims", {"old": True})
+    old_path = root / old_ref
+    now = time.time()
+    old_time = now - 15 * 24 * 60 * 60
+    os.utime(old_path, (old_time, old_time))
+    unrelated = root / "runs" / "old-run" / "attempts" / "1" / "claims" / "other.json"
+    unrelated.write_text("keep")
+
+    removed = prune_diagnostics(root, now=now)
+    recent_ref = write_diagnostic(root, "recent-run", 1, "claims", {"recent": True})
+
+    assert removed == 1
+    assert not old_path.exists()
+    assert unrelated.exists()
+    assert (root / recent_ref).exists()
