@@ -6,8 +6,7 @@ const entries = await getCollection('reports');
 const reports = entries.map(({ data }) => data).sort(
   (left, right) => new Date(right.published_at).getTime() - new Date(left.published_at).getTime(),
 );
-const base = import.meta.env.BASE_URL;
-const categoryName = (category: string) => category === 'cve' ? 'CVE / KEV' : 'Security';
+const categoryName = (category: string) => category === 'cve' ? 'CVE / KEV' : 'セキュリティ動向';
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat('ja-JP', {
     dateStyle: 'long', timeZone: 'Asia/Tokyo',
@@ -17,41 +16,55 @@ function dateLabel(value: string) {
 
 <BaseLayout title="インテリジェンスレポート">
   <section class="index-hero" aria-labelledby="page-title">
-    <p class="eyebrow">Nous / 分析レポート</p>
-    <h1 id="page-title">分析レポート</h1>
-    <p class="hero-copy">
-      収集した公開情報をもとに、確認された事実と分析を分けてまとめています。
-      出典と観測時刻から原資料を確認できます。
-    </p>
-    <p class="report-count">{reports.length} 件のレポート</p>
+    <div class="hero-topline">
+      <p class="eyebrow">INTELLIGENCE / REPORTS</p>
+      <span class="report-count">{String(reports.length).padStart(2, '0')} REPORTS</span>
+    </div>
+    <h1 id="page-title">分析レポート<span class="hero-title-mark" aria-hidden="true">.</span></h1>
+    <p class="hero-copy">収集された情報を、出典から読み解く。観測された事実と分析を分け、判断に使った資料へさかのぼれる形でまとめています。</p>
+    <div class="hero-actions">
+      <a class="hero-primary-action" href={reports.length ? '#report-archive' : '/explore'}>
+        {reports.length ? 'レポートを見る' : '収集情報を見る'} <span aria-hidden="true">↗</span>
+      </a>
+      <a class="hero-secondary-action" href="/explore">探索ダッシュボードへ戻る <span aria-hidden="true">→</span></a>
+    </div>
   </section>
 
-  {reports.length > 0 ? (
-    <section class="report-grid" aria-label="公開中のレポート">
-      {reports.map((report) => (
-        <article class="report-card">
-          <div class="card-meta">
-            <span class={`category-pill category-${report.category}`}>{categoryName(report.category)}</span>
-            <time datetime={report.published_at}>{dateLabel(report.published_at)}</time>
-          </div>
-          <h2>
-            <a href={report.url}>{report.title}</a>
-          </h2>
-          <p class="card-dek">{report.dek}</p>
-          <ul class="card-summary">
-            {report.summary.map((line) => <li>{line}</li>)}
-          </ul>
-          <a class="card-read-link" href={report.url}>
-            レポートを読む <span aria-hidden="true">→</span>
-          </a>
-        </article>
-      ))}
-    </section>
-  ) : (
-    <section class="empty-state" aria-label="レポート一覧">
-      <h2>まだレポートは公開されていません</h2>
-      <p>対象期間に確認できる根拠がそろったときに掲載されます。収集済みの情報はダッシュボードで確認できます。</p>
-      <a class="empty-return" href="/explore">ダッシュボードで情報を探す <span aria-hidden="true">↗</span></a>
-    </section>
-  )}
+  <section class="report-archive" id="report-archive" aria-labelledby="archive-heading">
+    <div class="archive-heading">
+      <div>
+        <p class="eyebrow">PUBLICATIONS</p>
+        <h2 id="archive-heading">公開記事</h2>
+      </div>
+      <span class="archive-count">{reports.length} 件</span>
+    </div>
+    {reports.length > 0 ? (
+      <div class="report-grid">
+        {reports.map((report, index) => (
+          <article class:list={['report-card', index === 0 && 'report-card-lead']}>
+            <span class="report-card-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+            <div class="report-card-content">
+              <div class="card-meta">
+                <span class={`category-pill category-${report.category}`}>{categoryName(report.category)}</span>
+                <time datetime={report.published_at}>{dateLabel(report.published_at)}</time>
+              </div>
+              <h3><a href={report.url}>{report.title}</a></h3>
+              <p class="card-dek">{report.dek}</p>
+              {report.summary.length > 0 && <ul class="card-summary">
+                {report.summary.slice(0, 2).map((line) => <li>{line}</li>)}
+              </ul>}
+              <a class="card-read-link" href={report.url}>記事を読む <span aria-hidden="true">→</span></a>
+            </div>
+          </article>
+        ))}
+      </div>
+    ) : (
+      <div class="empty-state">
+        <p class="eyebrow">NO REPORTS YET</p>
+        <h3>まだレポートは公開されていません</h3>
+        <p>現在、公開中のレポートはありません。根拠がそろった記事から順次掲載されます。収集済みの観測情報は探索画面で確認できます。</p>
+        <a class="empty-return" href="/explore">探索画面で情報を見る <span aria-hidden="true">→</span></a>
+      </div>
+    )}
+  </section>
 </BaseLayout>

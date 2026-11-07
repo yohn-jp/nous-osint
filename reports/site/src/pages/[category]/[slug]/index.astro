@@ -15,60 +15,83 @@ export async function getStaticPaths() {
 
 const { report } = Astro.props;
 const base = import.meta.env.BASE_URL;
-const categoryName = report.category === 'cve' ? 'CVE / KEV' : 'Security';
+const categoryName = report.category === 'cve' ? 'CVE / KEV' : 'セキュリティ動向';
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat('ja-JP', {
     dateStyle: 'long', timeZone: 'Asia/Tokyo',
   }).format(new Date(value));
 }
 function templateName(template: string) {
-  return template === 'cve-kev-deep-dive' ? 'CVE evidence review' : 'Daily security intelligence';
+  return template === 'cve-kev-deep-dive' ? 'CVE / KEV 調査' : 'セキュリティ定期分析';
 }
 ---
 
 <BaseLayout title={report.title} description={report.dek}>
   <article class="report-article">
     <nav class="breadcrumbs" aria-label="パンくずリスト">
-      <a href={base}>レポート一覧</a>
+      <a href="/explore">探索</a>
       <span aria-hidden="true">/</span>
-      <span>{categoryName}</span>
+      <a href={base}>分析レポート</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">{categoryName}</span>
     </nav>
 
     <header class="article-header">
       <div class="article-kicker">
         <span class={`category-pill category-${report.category}`}>{categoryName}</span>
         <span>{templateName(report.template_id)}</span>
+        <span class="article-source-count">出典 {report.sources.length} 件</span>
       </div>
-      <time class="article-date" datetime={report.published_at}>公開 {dateLabel(report.published_at)}</time>
+      <time class="article-date" datetime={report.published_at}>公開日 · {dateLabel(report.published_at)}</time>
       <h1>{report.title}</h1>
       <p class="article-dek">{report.dek}</p>
-      <ul class="article-summary">
-        {report.summary.map((line) => <li>{line}</li>)}
-      </ul>
+      <div class="article-abstract" aria-labelledby="abstract-heading">
+        <div class="abstract-heading-row">
+          <h2 id="abstract-heading">この記事の要点</h2>
+          <a href="#sources-heading">出典を確認 <span aria-hidden="true">↓</span></a>
+        </div>
+        <ul class="article-summary">
+          {report.summary.map((line) => <li>{line}</li>)}
+        </ul>
+      </div>
     </header>
 
     {report.cve && <KevPanel cve={report.cve} sources={report.sources} />}
+
+    <nav class="article-outline" aria-label="この記事の目次">
+      <span class="outline-label">この記事の構成</span>
+      <ol>
+        {report.sections.map((section, index) => (
+          <li><a href={`#section-${index}`}>{section.heading}</a></li>
+        ))}
+        <li><a href="#sources-heading">出典一覧</a></li>
+      </ol>
+    </nav>
 
     <div class="article-columns">
       <div class="article-body">
         {report.sections.map((section, index) => (
           <section class="article-section" aria-labelledby={`section-${index}`}>
+            <div class="article-section-topline"><span>{String(index + 1).padStart(2, '0')}</span><span>ANALYSIS</span></div>
             <h2 id={`section-${index}`}>{section.heading}</h2>
             {section.blocks.map((block) => <ArticleBlock block={block} sources={report.sources} claims={report.claims} cve={report.cve} />)}
           </section>
         ))}
       </div>
       <aside class="article-sources" aria-labelledby="sources-heading">
-        <p class="eyebrow">PRIMARY REFERENCES</p>
+        <p class="eyebrow">SOURCE REGISTER</p>
         <h2 id="sources-heading">参照した出典</h2>
-        <p class="sources-intro">各資料のタイトル、公開元、Nousでの観測時刻を示しています。</p>
-        <SourceList evidenceIds={report.sources.map((source) => source.evidence_id)} sources={report.sources} />
+        <p class="sources-intro">レポートに使用した資料の公開元と観測日時です。根拠番号を選ぶと該当資料に移動できます。</p>
+        <SourceList evidenceIds={report.sources.map((source) => source.evidence_id)} sources={report.sources} anchorIds />
       </aside>
     </div>
 
     <footer class="article-footer">
-      <a href={base}>← レポート一覧へ戻る</a>
-      <span>記事は保存された出典メタデータと観測時点に基づきます。</span>
+      <div class="article-footer-note">このレポートは保存済みの出典メタデータと観測時点に基づいています。</div>
+      <nav class="article-footer-actions" aria-label="記事を読んだ後の移動">
+        <a href={base}>レポート一覧へ <span aria-hidden="true">→</span></a>
+        <a class="article-footer-primary" href="/explore">探索ダッシュボードへ戻る <span aria-hidden="true">↗</span></a>
+      </nav>
     </footer>
   </article>
 </BaseLayout>

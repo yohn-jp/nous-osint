@@ -8,6 +8,9 @@ interface Props {
 
 const { title, description = 'Nous OSINT が保存した公開情報と根拠から構成した分析レポートです。' } = Astro.props;
 const base = import.meta.env.BASE_URL;
+const origin = Astro.site ?? new URL('https://nous.yohn.jp');
+const sourcesUrl = new URL('/sources', origin).toString();
+const changesUrl = new URL('/changes', origin).toString();
 ---
 
 <!doctype html>
@@ -25,25 +28,39 @@ const base = import.meta.env.BASE_URL;
     <a class="skip-link" href="#main-content">本文へ移動</a>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href={base} aria-label="Nous OSINT レポート一覧">
+        <a class="brand" href="/explore" aria-label="Nous OSINT の探索画面へ">
           <span class="brand-mark" aria-hidden="true">N</span>
-          <span>nous<span class="brand-product"><span class="brand-separator"> / </span>osint</span></span>
+          <span class="brand-wordmark">nous<span class="brand-product"> / osint</span></span>
         </a>
-        <nav aria-label="メインナビゲーション">
-          <a href={base} class="reports-home">レポート一覧</a>
-          <a href="/explore" class="library-return" aria-label="ダッシュボードへ戻る"><span aria-hidden="true">←</span> <span class="return-desktop">ダッシュボードへ戻る</span><span class="return-mobile">探索へ戻る</span></a>
-        </nav>
+        <span class="header-context" aria-hidden="true">INTELLIGENCE / REPORTS</span>
+        <a class="header-return" href="/explore">
+          <span aria-hidden="true">←</span>
+          <span>探索画面へ戻る</span>
+        </a>
       </div>
+      <nav class="workspace-nav" aria-label="Nous OSINT 内の移動">
+        <div class="workspace-nav-inner">
+          <a class="workspace-link" href="/explore">探索</a>
+          <a class="workspace-link" href={changesUrl} rel="noopener noreferrer">変更履歴</a>
+          <a class="workspace-link" href={sourcesUrl} rel="noopener noreferrer">情報源</a>
+          <a class="workspace-link workspace-link-active" href={base} aria-current="page">分析レポート</a>
+        </div>
+      </nav>
     </header>
     <main id="main-content" class="site-main">
       <slot />
     </main>
     <footer class="site-footer">
       <div class="footer-inner">
-        <span>Nous OSINT / 分析レポート</span>
-        <nav class="footer-nav" aria-label="閲覧先">
+        <div class="footer-identity">
+          <span class="footer-brand">nous / osint</span>
+          <span>収集情報と出典に基づく分析</span>
+        </div>
+        <nav class="footer-nav" aria-label="他の画面へ移動">
+          <a href="/explore">探索</a>
+          <a href={sourcesUrl} rel="noopener noreferrer">情報源</a>
+          <a href={changesUrl} rel="noopener noreferrer">変更履歴</a>
           <a href={base}>レポート一覧</a>
-          <a href="/explore">ダッシュボードへ戻る <span aria-hidden="true">↗</span></a>
         </nav>
       </div>
     </footer>
