@@ -376,7 +376,7 @@ def _append_run_event(db, row: ReportRun, attempt: int, event: dict):
         created_at=now(),
         **values,
     ))
-    if values["event_type"] == "codex_stage_started":
+    if values["event_type"] in {"codex_stage_started", "stage_started", "stage_reused"}:
         row.stage = values["stage"]
         row.state = "running"
     elif values["event_type"] == "codex_stage_failed":
@@ -500,6 +500,15 @@ class StagePersistence:
                         envelope.get("model") != expected_model or
                         not isinstance(envelope.get("output"), dict)):
                     continue
+                self.event({
+                    "stage": name,
+                    "event_type": "stage_reused",
+                    "artifact_sha256": digest,
+                    "input_sha256": input_digest,
+                    "schema_revision": schema_revision,
+                    "prompt_revision": prompt_revision,
+                    "model": expected_model,
+                })
                 return envelope["output"]
             except (OSError, ValueError, KeyError, TypeError, ReportError):
                 continue

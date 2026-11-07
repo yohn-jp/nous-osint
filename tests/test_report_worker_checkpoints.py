@@ -58,6 +58,7 @@ def test_stage_checkpoint_is_atomic_private_and_reused_only_for_same_inputs(
         assert run.stage_artifacts["claims"][0]["artifact_sha256"] == digest
         assert [(event.event_type, event.artifact_sha256) for event in events] == [
             ("stage_succeeded", digest),
+            ("stage_reused", digest),
         ]
 
 
@@ -89,6 +90,36 @@ def test_checkpoint_rejects_corruption_and_appends_sanitized_runner_events(
         assert failed.usage == {"input_tokens": 10}
         assert failed.diagnostic_ref == "runs/abc/diagnostic.json"
         assert not hasattr(failed, "raw_stderr")
+
+
+def test_resume_reuses_only_verified_checkpoint_and_records_current_attempt(
+        tmp_path, monkeypatch):
+    factory, claim, _root = _db(tmp_path, monkeypatch)
+    first = worker.StagePersistence(factory, claim, attempt=1, model="gpt-test")
+    input_digest = hashlib.sha256(b"same snapshot and prompt").hexdigest()
+    output = {"claims": []}
+    first("claims", output, input_digest=input_digest,
+          schema_revision="claims-v1", prompt_revision="p2")
+
+    second_claim = {**claim, "attempts": 2, "lease_token": "lease-2"}
+    with factory() as db:
+        row = db.get(ReportRun, claim["id"])
+        row.attempts = 2
+        row.lease_token = "lease-2"
+        db.commit()
+    second = worker.StagePersistence(factory, second_claim, attempt=2, model="gpt-test")
+    assert second.load("claims", input_digest=input_digest,
+                       schema_revision="claims-v1", prompt_revision="p2") == output
+
+    with factory() as db:
+        row = db.get(ReportRun, claim["id"])
+        assert row.stage == "claims"
+        event = db.scalar(select(ReportRunEvent).where(
+            ReportRunEvent.run_id == claim["id"],
+            ReportRunEvent.attempt == 2,
+        ))
+        assert event.event_type == "stage_reused"
+        assert event.artifact_sha256 == row.stage_artifacts["claims"][0]["artifact_sha256"]
 
 
 def test_failure_keeps_progress_stage_and_separates_retry_state(tmp_path, monkeypatch):
