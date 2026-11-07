@@ -214,7 +214,8 @@ def test_codex_stage_schemas_drop_unique_items_but_canonical_validation_rejects_
 
 def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
     runner = object.__new__(CodexRunner)
-    runner.binary, runner.model = "codex", None
+    runner.binary, runner.model = "codex", "gpt-6-luna"
+    runner.reasoning_effort = "max"
     runner.uid, runner.gid = 10002, 10002
     runner.setpriv, runner.prlimit = "setpriv", "prlimit"
     identity = runner._identity_args()
@@ -224,6 +225,8 @@ def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
                               Path("/tmp/job/plan/output.json"))
     assert args[:2] == ["codex", "exec"]
     assert "--skip-git-repo-check" in args
+    assert "--json" in args
+    assert args[args.index("--model") + 1] == "gpt-6-luna"
     assert "--output-schema" in args and "--output-last-message" in args
     assert args[-1] == "-"  # Bounded input arrives explicitly on stdin.
     command = runner._exec_command(Path("/tmp/job/plan"), Path("/tmp/plan.json"),
@@ -238,11 +241,14 @@ def test_codex_exec_is_non_git_and_both_commands_use_same_uid():
 def test_codex_runtime_file_limit_keeps_response_and_log_caps(
         tmp_path, monkeypatch, write_kind, expected_error):
     runner = object.__new__(CodexRunner)
-    runner.binary, runner.model = "codex", None
+    runner.binary, runner.model = "codex", "gpt-6-luna"
+    runner.reasoning_effort = "max"
     runner.uid, runner.gid = 10002, 10002
     runner.setpriv, runner.prlimit = "setpriv", "prlimit"
     runner.workdir = tmp_path
     runner._set_group_mode = lambda *_args: None
+    runner._preflight = lambda: None
+    runner._diagnostic_root = tmp_path / "diagnostics"
     observed = {}
 
     class FakeProcess:
@@ -259,6 +265,7 @@ def test_codex_runtime_file_limit_keeps_response_and_log_caps(
                 output = Path(observed["command"][
                     observed["command"].index("--output-last-message") + 1
                 ])
+                self.stdout.write(b'{"type":"turn.completed"}\n')
                 output.write_bytes(b"x" * 200_001)
 
     def fake_popen(command, **kwargs):
@@ -268,7 +275,7 @@ def test_codex_runtime_file_limit_keeps_response_and_log_caps(
     monkeypatch.setattr("nous.report_pipeline.subprocess.Popen", fake_popen)
 
     with pytest.raises(ReportError, match=expected_error):
-        runner.run("plan", {"bundle": {}}, run_id="safe-fixture")
+        runner.run("claims", {"bundle": {}}, run_id="safe-fixture")
 
     assert observed["command"][1] == "--fsize=16777216"
 
