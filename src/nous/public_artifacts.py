@@ -175,6 +175,8 @@ def refresh_public_artifacts(factory, *, current: datetime | None = None) -> boo
         db.commit()
     with factory() as db:
         selected = db.scalar(select(PublicArtifactPollState).where(
+            PublicArtifactPollState.provider.in_(tuple(PROVIDERS)),
+            PublicArtifactPollState.year.in_(years),
             PublicArtifactPollState.next_due_at <= started,
         ).order_by(
             PublicArtifactPollState.next_due_at,

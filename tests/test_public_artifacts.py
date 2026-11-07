@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import sessionmaker
 
 from nous import public_artifacts as pub
@@ -197,3 +197,16 @@ def test_repository_api_redirect_is_rejected_before_parsing(monkeypatch):
     ))
     with pytest.raises(ValueError, match="redirect"):
         pub._get_json("https://api.github.com/repos/trickest/cve/git/trees/" + SHA_A)
+
+
+def test_retired_cve_year_stops_repository_polls(repo_db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(pub, "fetch_repository_index", lambda provider, year: (
+        calls.append((provider, year)) or SHA_A, {},
+    ))
+    assert pub.refresh_public_artifacts(repo_db, current=T0)
+    with repo_db() as db:
+        db.execute(delete(CveItemLink))
+        db.commit()
+    assert pub.refresh_public_artifacts(repo_db, current=T0 + timedelta(days=3)) is False
+    assert len(calls) == 1
