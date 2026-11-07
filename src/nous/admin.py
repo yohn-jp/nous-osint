@@ -572,13 +572,15 @@ def update_report_schedule(schedule_id: str, changes: ReportScheduleUpdate):
         timezone_name = changes.timezone if "timezone" in supplied else row.timezone
         local_time = changes.local_time if "local_time" in supplied else row.local_time
         parameters = changes.parameters if "parameters" in supplied else row.parameters
-        if parameters is None or set(parameters) - {"category"}:
+        if parameters is None or set(parameters) - {"category", "source_categories", "source_ids"}:
             raise HTTPException(422, "unsupported schedule parameters")
         try:
             zone = ZoneInfo(timezone_name)
             resolve_template(row.template_id, row.template_snapshot)
             normalized = normalize_parameters(row.template_id, {
                 "timezone": timezone_name, "category": parameters.get("category"),
+                **{key: parameters[key] for key in ("source_categories", "source_ids")
+                   if key in parameters},
             }, now=now())
         except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError) as exc:
             raise HTTPException(422, "invalid report schedule") from exc
@@ -588,7 +590,8 @@ def update_report_schedule(schedule_id: str, changes: ReportScheduleUpdate):
         row.cadence = cadence
         row.timezone = timezone_name
         row.local_time = local_time
-        row.parameters = {"category": normalized["category"]}
+        row.parameters = {key: value for key, value in normalized.items()
+                          if key in {"category", "source_categories", "source_ids"}}
         if config_changed or (enabled and row.next_slot_at <= now()):
             current = now()
             wall_time = time.fromisoformat(local_time)

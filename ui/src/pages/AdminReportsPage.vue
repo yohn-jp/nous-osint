@@ -48,15 +48,18 @@ const sourceCategoryOptions = [
   { label: '企業・業界動向', value: 'industry' },
   { label: '求人情報', value: 'careers' },
 ]
+const reportCategoryOptions = sourceCategoryOptions.filter(c => !['industry', 'careers'].includes(c.value))
 const selectedCategories = ref<string[]>([])
 const selectedSourceIds = ref<string[]>([])
 const scheduleCategories = ref<string[]>([])
 const scheduleSourceIds = ref<string[]>([])
 const sourceOptions = computed(() => availableSources.value
-  .filter(s => s.enabled && (!selectedCategories.value.length || selectedCategories.value.includes(s.category)))
+  .filter(s => s.enabled && ['news', 'advisory', 'vulnerability'].includes(s.item_kind) &&
+    (!selectedCategories.value.length || selectedCategories.value.includes(s.category)))
   .map(s => ({ value: s.id, label: s.id })))
 const scheduleSourceOptions = computed(() => availableSources.value
-  .filter(s => s.enabled && (!scheduleCategories.value.length || scheduleCategories.value.includes(s.category)))
+  .filter(s => s.enabled && ['news', 'advisory', 'vulnerability'].includes(s.item_kind) &&
+    (!scheduleCategories.value.length || scheduleCategories.value.includes(s.category)))
   .map(s => ({ value: s.id, label: s.id })))
 const scopeParameters = (categories: string[], ids: string[]) => ({
   ...(categories.length ? { source_categories: [...categories] } : {}),
@@ -317,7 +320,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
             <span>指定しなければテンプレートの既定対象を使用します。カテゴリと情報源の指定は絞り込み条件です。</span></div>
           <div class="row q-col-gutter-sm">
             <div class="col-12 col-md-6"><q-select v-model="selectedCategories" multiple use-chips dense outlined clearable
-              emit-value map-options :options="sourceCategoryOptions" label="カテゴリを選択"
+              emit-value map-options :options="reportCategoryOptions" label="カテゴリを選択"
               @update:model-value="selectedSourceIds = selectedSourceIds.filter(id => sourceOptions.some(s => s.value === id))" /></div>
             <div class="col-12 col-md-6"><q-select v-model="selectedSourceIds" multiple use-chips dense outlined clearable
               emit-value map-options :options="sourceOptions" label="情報源を指定（任意）" /></div>
@@ -475,7 +478,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
         <p>新しい実行ごとに、このカテゴリと情報源を条件に根拠を収集します。</p>
         <div class="row q-col-gutter-sm">
           <div class="col-12 col-md-6"><q-select v-model="scheduleCategories" multiple use-chips dense outlined clearable
-            emit-value map-options :options="sourceCategoryOptions" label="対象カテゴリ"
+            emit-value map-options :options="reportCategoryOptions" label="対象カテゴリ"
             @update:model-value="scheduleSourceIds = scheduleSourceIds.filter(id => scheduleSourceOptions.some(s => s.value === id))" /></div>
           <div class="col-12 col-md-6"><q-select v-model="scheduleSourceIds" multiple use-chips dense outlined clearable
             emit-value map-options :options="scheduleSourceOptions" label="対象情報源（任意）" /></div>
