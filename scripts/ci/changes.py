@@ -16,7 +16,8 @@ REPORT_MODULES = {
     'src/nous/report_templates.py', 'src/nous/cve_index.py',
     'src/nous/cve_queries.py', 'src/nous/db.py', 'src/nous/models.py',
     'src/nous/registry.py', 'src/nous/source_taxonomy.py',
-    'src/nous/social_feeds.py', 'src/nous/__init__.py',
+    'src/nous/social_feeds.py', 'src/nous/epss.py',
+    'src/nous/fetch.py', 'src/nous/__init__.py',
 }
 
 
