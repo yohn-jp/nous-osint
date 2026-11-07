@@ -4,6 +4,8 @@ Status: **code integrated into main (PR #13 and #14); owner-authenticated Codex 
 Date: **2026-11-05**  
 Authority: [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [REMOTE_MCP_ACCESS.md](REMOTE_MCP_ACCESS.md), [SOURCE_LICENSES.md](SOURCE_LICENSES.md), [CVE_KEV_CORRELATION.md](CVE_KEV_CORRELATION.md)
 
+> **移行条件（RFC #38採用時）:** 現行の4回Codex実行（企画・事実検証・執筆・推敲）、既存の生成契約および受入条件は引き続き有効です。`REPORT_PIPELINE_REDESIGN_RFC.md` の採用は設計方針の承認であり、v2実行への切替を意味しません。v2の2回実行・記事契約への切替は実装統合と実機受入の成功後にのみ行い、その時点で本書の工程定義と受入条件を改訂します。
+
 ## 1. Goal and decisions
 
 Nous OSINT に、取得済みの公開情報から**利用者向けの品質の高い記事を自動生成し、Cloudflare Access 配下で公開する**機能を追加する。記事生成は既存の収集基盤の代替ではなく、出典付きの派生物である。初期実装は単一 VM のセルフホストを基準とする。
