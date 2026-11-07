@@ -1071,22 +1071,27 @@ def run_editorial_pipeline(bundle: dict, *, template_id: str, run_id: str,
     revision_ids = {row["claim_id"] for row in review["reviews"]
                     if row["decision"] == "needs_revision"}
     if revision_ids:
+        repair_proposal = {**proposal, "claims": [
+            row for row in proposal["claims"] if row["claim_id"] in revision_ids]}
+        repair_review = {"reviews": [
+            row for row in review["reviews"] if row["claim_id"] in revision_ids]}
         repair = invoke("claim_repair", {
-            "template_id": template_id, "proposal": proposal, "review": review,
+            "template_id": template_id, "proposal": repair_proposal, "review": repair_review,
             "repair_claim_ids": sorted(revision_ids), "bundle": bundle,
         })
         validate_claims(repair, bundle, template_id)
-        original = {row["claim_id"]: row for row in proposal["claims"]}
         repaired = {row["claim_id"]: row for row in repair["claims"]}
-        if set(repaired) != set(original) or any(
-            repaired[key] != value for key, value in original.items() if key not in revision_ids
-        ):
+        if set(repaired) != revision_ids:
             raise ReportError("repair_changed_immutable_claim")
-        proposal = repair
-        review = invoke("claim_rereview", {
-            "template_id": template_id, "proposal": proposal, "bundle": bundle,
+        rereview = invoke("claim_rereview", {
+            "template_id": template_id, "proposal": repair, "bundle": bundle,
         })
-        validate_review(review, proposal, bundle)
+        validate_review(rereview, repair, bundle)
+        proposal = {**proposal, "claims": [repaired.get(row["claim_id"], row)
+                                           for row in proposal["claims"]]}
+        decisions = {row["claim_id"]: row for row in rereview["reviews"]}
+        review = {"reviews": [decisions.get(row["claim_id"], row)
+                               for row in review["reviews"]]}
     if hasattr(persist_stage, "event"):
         persist_stage.event({"stage": "assembly", "event_type": "stage_started"})
     article = assemble_article(proposal, review, bundle=bundle, template_id=template_id)
