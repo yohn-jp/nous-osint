@@ -60,7 +60,7 @@ async function openSearch() {
     </q-header>
 
     <q-drawer v-model="drawerOpen" show-if-above :breakpoint="1024" :width="186" bordered class="nous-drawer">
-      <div class="sidebar-main">
+      <nav class="sidebar-main" aria-label="主要ナビゲーション">
         <div class="sidebar-caption">RESEARCH</div>
         <q-list class="sidebar-nav">
           <q-item v-for="entry in researchNav" :key="entry.name" clickable :to="entry.to" exact
@@ -88,7 +88,7 @@ async function openSearch() {
             </q-item>
           </q-list>
         </template>
-      </div>
+      </nav>
       <div class="sidebar-footnote">NOUS / RESEARCH INSTRUMENT</div>
     </q-drawer>
 

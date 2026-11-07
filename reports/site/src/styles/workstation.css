@@ -11,7 +11,7 @@
   --accent-soft: #e9f0f9;
   --reading-surface: #f9faf9;
   --hero-surface: #f9faf9;
-  --gold: #a76b35;
+  --gold: #915b28;
   --gold-soft: #f8efe5;
   --blue: #315f9e;
   --blue-soft: #e9f0f9;
@@ -121,13 +121,6 @@ html { scroll-padding-top: 110px; }
 .publication-register-label { color: var(--muted); font: 750 10px/1.5 ui-monospace, Consolas, monospace; letter-spacing: .09em; }
 .publication-register-bar h2 { margin: 3px 0 0; font-size: 21px; font-weight: 760; letter-spacing: -.03em; line-height: 1.35; }
 .publication-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.publication-filter {
-  min-height: 37px; padding: 7px 12px; border: 1px solid transparent;
-  color: var(--muted); background: transparent; border-radius: 3px;
-  font-size: 13px; font-weight: 660; line-height: 1.5; cursor: pointer; transition: background 150ms ease-out, border-color 150ms ease-out;
-}
-.publication-filter:hover { border-color: var(--line); color: var(--ink); }
-.publication-filter.is-active { border-color: var(--line); color: var(--ink); background: var(--surface); box-shadow: inset 0 -2px var(--accent); }
 .publication-count {
   display: flex; justify-content: space-between; gap: 10px;
   padding: 9px 3px; color: var(--muted);
@@ -197,7 +190,6 @@ html { scroll-padding-top: 110px; }
 /* Motion belongs to user actions: focus, selection and results reveal. */
 @media (prefers-reduced-motion: no-preference) {
   .publication-entry:nth-child(-n+5) { animation: nous-publication-enter 180ms ease-out both; }
-  .publication-filter:not(.is-active) { transition: color 145ms ease-out, background 145ms ease-out; }
 }
 @keyframes nous-publication-enter { from { opacity: .55; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 1020px) {

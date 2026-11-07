@@ -153,6 +153,9 @@ function onShortcut(event: KeyboardEvent) {
   if ($q.screen.width < 1200 || rows.value.length === 0) return
   if (event.key === 'Escape' && inspectorOpen.value) { event.preventDefault(); closeInspector(); return }
   if (event.key !== 'j' && event.key !== 'k' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+  // Arrow keys keep their native page/element scrolling behavior outside the register.
+  if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !target?.closest('.workstation-ledger')) return
+  if (target?.closest('a, button') && !target.closest('.workstation-record-link')) return
   event.preventDefault()
   const currentIndex = rows.value.findIndex(row => row.id === activeRecordId.value)
   const step = event.key === 'j' || event.key === 'ArrowDown' ? 1 : -1
