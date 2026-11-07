@@ -30,7 +30,7 @@ const categoryOptions = [{ label: 'セキュリティ全件', value: null }, ...
 const sourceOptions = computed(() => [
   { label: 'すべての発信源', value: null },
   ...sources.value
-    .filter(s => s.enabled && s.category !== 'careers' &&
+    .filter(s => s.category !== 'careers' &&
       (!selectedCategory.value || s.category === selectedCategory.value))
     .map(s => ({ label: s.id, value: s.id })),
 ])
@@ -123,6 +123,7 @@ watch(() => [route.query.category, route.query.source], () => {
   selectedCategory.value = queryValue(route.query.category) || null
   selectedSource.value = queryValue(route.query.source) || null
   records.value = []
+  loadingMore.value = false
   nextCursor.value = null
   pendingNew.value = 0
   void loadLatest(true)
@@ -177,8 +178,8 @@ onBeforeUnmount(() => {
     <section class="live-filters" aria-label="発信源の絞り込み">
       <q-select v-model="selectedCategory" dense outlined emit-value map-options
         :options="categoryOptions" label="対象カテゴリ" @update:model-value="updateCategory" />
-      <q-select v-model="selectedSource" dense outlined emit-value map-options use-input
-        input-debounce="0" :options="sourceOptions" label="発信源"
+      <q-select v-model="selectedSource" dense outlined emit-value map-options
+        :options="sourceOptions" label="発信源"
         @update:model-value="updateFilters" />
       <span class="live-filter-note">速報性の順位付けではありません。到着した観測記録を新しい順に掲載します。</span>
     </section>

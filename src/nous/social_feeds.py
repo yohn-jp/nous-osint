@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 _DID = re.compile(r"did:plc:[a-z2-7]{24}")
 _POST_URI = re.compile(r"at://(did:plc:[a-z2-7]{24})/app[.]bsky[.]feed[.]post/([a-z0-9]{1,50})")
 _MAX_POSTS = 100
-_MAX_EXCERPT = 240
+_MAX_EXCERPT = 160
 
 
 def author_from_url(url: str) -> str:
@@ -65,9 +65,13 @@ def extract_bluesky_author(content: bytes, source_url: str, final_url: str) -> l
             raise ValueError("unexpected Bluesky record type")
         text = record.get("text")
         indexed_at = post.get("indexedAt")
-        if (not isinstance(text, str) or not text.strip()
+        if (not isinstance(text, str)
                 or not isinstance(indexed_at, str) or len(indexed_at) > 50):
             raise ValueError("missing Bluesky public metadata")
+        if not text.strip():
+            # A media-only post cannot be represented in a metadata-only
+            # text excerpt without inventing content.
+            continue
         if uri in seen:
             raise ValueError("duplicate Bluesky post URI")
         seen.add(uri)
