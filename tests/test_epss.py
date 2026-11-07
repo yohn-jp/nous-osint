@@ -123,3 +123,19 @@ def test_first_epss_rejects_partial_response_and_backs_off(tracked_db, monkeypat
         assert state.last_success_at is None
         assert epss._utc(state.next_due_at) == TODAY + timedelta(minutes=30)
     assert epss.refresh_epss(tracked_db, current=TODAY+timedelta(minutes=10)) is False
+
+
+def test_backlog_rotation_does_not_requery_recent_ep_ss(tracked_db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(epss, "_MAX_PER_POLL", 1)
+
+    def fake_fetch(url):
+        selected = set(parse_qs(urlparse(url).query)["cve"][0].split(","))
+        calls.append(selected)
+        return 200, response([row(cve=next(iter(selected)))]), {}, url
+
+    monkeypatch.setattr(epss, "fetch", fake_fetch)
+    assert epss.refresh_epss(tracked_db, current=TODAY)
+    assert epss.refresh_epss(tracked_db, current=TODAY + timedelta(minutes=16))
+    assert len(calls) == 2 and calls[0] != calls[1]
+    assert not epss.refresh_epss(tracked_db, current=TODAY + timedelta(minutes=31))

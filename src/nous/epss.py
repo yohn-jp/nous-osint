@@ -96,7 +96,7 @@ def _batches(cves: list[str]):
         yield batch
 
 
-def _oldest_tracked(db) -> tuple[list[str], bool]:
+def _oldest_tracked(db, current: datetime) -> tuple[list[str], bool]:
     # Only current CVE links, not retired title mentions or arbitrary user input.
     cves = db.scalars(select(CveItemLink.cve_id).distinct()
                       .order_by(CveItemLink.cve_id).limit(_MAX_TRACKED + 1)).all()
@@ -106,11 +106,13 @@ def _oldest_tracked(db) -> tuple[list[str], bool]:
             EpssObservation.cve_id, func.max(EpssObservation.fetched_at),
         ).where(EpssObservation.cve_id.in_(cves[:_MAX_TRACKED])).group_by(
             EpssObservation.cve_id)).all())
-    tracked = sorted(cves[:_MAX_TRACKED], key=lambda cve: (
+    due = [cve for cve in cves[:_MAX_TRACKED]
+           if cve not in last or _utc(last[cve]) <= current - timedelta(hours=24)]
+    due.sort(key=lambda cve: (
         _utc(last[cve]) if cve in last else datetime.min.replace(tzinfo=timezone.utc),
         cve,
     ))
-    return tracked[:_MAX_PER_POLL], len(cves) > _MAX_PER_POLL
+    return due[:_MAX_PER_POLL], len(due) > _MAX_PER_POLL or len(cves) > _MAX_TRACKED
 
 
 def refresh_epss(factory, *, current: datetime | None = None) -> bool:
@@ -126,7 +128,7 @@ def refresh_epss(factory, *, current: datetime | None = None) -> bool:
         db.commit()
     try:
         with factory() as db:
-            cves, backlog = _oldest_tracked(db)
+            cves, backlog = _oldest_tracked(db, timestamp)
         observations = {}
         for batch in _batches(cves):
             endpoint = EPSS_API + "?" + urlencode({"cve": ",".join(batch)})
