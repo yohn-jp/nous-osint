@@ -1,7 +1,6 @@
 """FIRST EPSS contract, freshness and DB-backed bounded refresh tests."""
 import json
-from datetime import date, datetime, timedelta, timezone
-from types import SimpleNamespace
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 import pytest
