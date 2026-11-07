@@ -137,7 +137,7 @@ function openProposal() {
 </script>
 
 <template>
-  <q-page class="nous-page">
+  <q-page class="nous-page source-onboarding-page">
     <div class="row items-center justify-between q-mb-sm">
       <h1 class="page-title q-ma-none">公式情報源の提案</h1>
       <q-btn flat icon="arrow_back" color="primary" label="情報源一覧" to="/sources" />

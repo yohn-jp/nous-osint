@@ -571,3 +571,36 @@ button.result-row {
   *, *::before, *::after { scroll-behavior: auto !important; }
   .nous-skip-link { transition: none !important; }
 }
+
+
+/* Cross-surface operational clarity. */
+.cve-page .content-panel { border-top: 2px solid var(--nous-accent); }
+.cve-status-block { padding-bottom: 16px; border-bottom: 1px solid var(--nous-line); }
+.cve-reference-source { overflow-wrap: anywhere; }
+.cve-page .q-item { align-items: start; }
+.source-onboarding-page .content-panel, .source-form-page .content-panel { border-top: 2px solid var(--nous-line); }
+.source-onboarding-page .onboarding-review { border-top-color: var(--nous-accent); }
+.source-form-page .admin-form { max-width: 1000px; }
+.source-admin-page .admin-toolbar,
+.report-admin .section-heading { background: var(--nous-panel); }
+.source-admin-page .q-tabs, .report-admin .report-template-tabs { max-width: 100%; overflow-x: auto; }
+.source-admin-page .admin-source-id, .report-admin .run-meta { font-variant-numeric: tabular-nums; }
+.report-admin .run-row:focus-visible, .source-admin-page .admin-source-actions .q-btn:focus-visible {
+  outline: 3px solid var(--nous-accent);
+  outline-offset: -3px;
+}
+.report-admin .run-row.selected .run-title { color: var(--nous-accent); }
+.report-admin .run-detail { min-width: 0; overflow-wrap: anywhere; }
+.report-admin .run-detail code { overflow-wrap: anywhere; white-space: normal; }
+.report-admin .event-timeline { overflow-wrap: anywhere; }
+.nous-page .q-banner { border-radius: 6px; }
+@media (max-width: 700px) {
+  .source-onboarding-page .content-panel, .source-form-page .content-panel { min-width: 0; }
+  .source-onboarding-page .onboarding-grid { gap: 12px; }
+  .report-admin .report-form-wrap { padding-inline: 14px; }
+}
+@media (prefers-contrast: more) {
+  :root { --nous-line: #8caaa1; --nous-muted: #34534d; }
+  .body--dark { --nous-line: #7ba69a; --nous-muted: #d0e3dc; }
+  .nav-entry-active, .result-row.selected { outline: 1px solid var(--nous-accent); outline-offset: -1px; }
+}

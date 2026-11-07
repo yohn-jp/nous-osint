@@ -116,7 +116,7 @@ async function submit() {
 </script>
 
 <template>
-  <q-page class="nous-page">
+  <q-page class="nous-page source-form-page">
     <div class="row items-center justify-between q-gutter-sm q-mb-sm">
       <h1 class="page-title q-ma-none">{{ editing ? '独自ソースの編集' : '独自ソースの追加' }}</h1>
       <q-btn flat color="primary" icon="arrow_back" label="管理画面に戻る" to="/admin/sources" />

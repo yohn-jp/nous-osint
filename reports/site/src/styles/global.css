@@ -535,3 +535,59 @@ html { scroll-padding-top: 136px; }
 @media (prefers-reduced-motion: reduce) {
   .header-return, .workspace-link, .report-card, .hero-primary-action, .hero-secondary-action { transition: none !important; transform: none !important; }
 }
+
+
+/* Reading and evidence audit: anchored citations remain discoverable at every width. */
+.article-sources {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.source-register-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 16px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--line);
+  color: var(--accent);
+  font-size: .82rem;
+  font-weight: 720;
+  text-decoration: none;
+}
+.source-register-back:hover { text-decoration: underline; }
+.article-sources .source-list { margin-bottom: 0; }
+.source-entry { border-radius: 4px; }
+.source-entry:target {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 8px var(--accent-soft);
+}
+.article-section:target h2 { border-bottom-color: var(--accent); }
+.article-outline a:focus-visible,
+.source-title:focus-visible,
+.source-register-back:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.article-section h2, .source-entry, #abstract-heading { scroll-margin-top: 150px; }
+.article-abstract, .article-outline, .article-sources, .report-card-lead {
+  box-shadow: none;
+}
+.report-card h3 a:focus-visible { display: inline-block; }
+.article-paragraph, .article-list li { overflow-wrap: anywhere; }
+.article-sources .source-title { overflow-wrap: anywhere; }
+.article-footer-actions a { transition: border-color 150ms ease, background 150ms ease; }
+@media (max-width: 820px) {
+  .article-sources { max-height: none; overflow: visible; overscroll-behavior: auto; }
+  .source-entry:target { box-shadow: inset 3px 0 0 var(--accent); padding-left: 10px; }
+  .article-section h2, .source-entry, #abstract-heading { scroll-margin-top: 128px; }
+}
+@media (max-width: 600px) {
+  .article-sources { padding: 18px 16px; }
+  .article-footer-actions a { min-height: 48px; }
+  .source-register-back { min-height: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .article-footer-actions a { transition: none; }
+}

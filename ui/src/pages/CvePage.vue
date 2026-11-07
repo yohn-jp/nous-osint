@@ -42,7 +42,7 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
 </script>
 
 <template>
-  <q-page class="nous-page">
+  <q-page class="nous-page cve-page">
     <q-btn class="q-mb-md" flat no-caps icon="arrow_back" color="secondary"
       label="情報検索へ戻る" to="/explore" />
     <h1 class="page-title q-ma-none">{{ id }}</h1>
@@ -54,13 +54,13 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
         <q-btn flat color="primary" label="再試行" @click="load" />
       </div>
       <template v-else-if="data">
-        <div class="row items-center justify-between q-gutter-md">
+        <div class="cve-status-block row items-center justify-between q-gutter-md">
           <div>
             <div class="eyebrow">CISA KEV掲載状況</div>
             <div class="text-h6 q-mt-sm">{{ kevStatus }}</div>
           </div>
           <q-badge :color="data.kev.status === 'listed' ? 'negative' : 'grey-7'"
-            :label="data.kev.status === 'listed' ? 'KEV' : '未確認・未掲載'" />
+            :label="data.kev.status === 'listed' ? 'KEV掲載' : data.kev.status === 'not_listed' ? '掲載なし' : '未確認'" />
         </div>
         <p class="text-caption text-grey-7 q-mt-md q-mb-none">
           KEVの最終正常取得: {{ dateLabel(data.kev.catalog_as_of) }}。
@@ -97,7 +97,7 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
                     row.relation === 'record' ? 'CVEレコード' :
                     row.relation === 'reference' ? '構造化参照' : 'タイトル中の言及' }}
                   · {{ dateLabel(row.last_seen_at) }}</q-item-label>
-                <q-item-label caption class="q-mt-xs">{{ row.source_url }}</q-item-label>
+                <q-item-label caption class="q-mt-xs cve-reference-source">{{ row.source_url }}</q-item-label>
               </q-item-section>
               <q-item-section side>
                 <q-btn flat dense color="primary" icon="chevron_right" :to="'/items/' + row.item_id"

@@ -96,7 +96,7 @@ const runtimeRow = (entry: CatalogEntry) => entry.runtime
 </script>
 
 <template>
-  <q-page class="nous-page">
+  <q-page class="nous-page source-admin-page">
     <div class="row items-start justify-between q-gutter-md">
       <div>
         <h1 class="page-title q-ma-none">情報源管理</h1>
