@@ -377,7 +377,8 @@ def _schedule_row(row):
         "id": row.id,
         "template_id": row.template_id,
         "template_revision": row.template_revision,
-        "parameters": {"category": row.parameters.get("category")},
+        "parameters": {key: row.parameters[key] for key in ("category", "source_categories", "source_ids")
+                       if key in row.parameters},
         "timezone": row.timezone,
         "cadence": row.cadence,
         "local_time": row.local_time,
