@@ -126,10 +126,9 @@ def _validate_claim_rows(claims: list, evidence: dict[str, dict], *, template_id
                 _raise("invalid_cve_context")
             if expected_cve_id and cve_ids != {expected_cve_id.upper()}:
                 _raise("cve_claim_id_mismatch")
-            if not any(
-                any(cve_id in str(row.get("title", "")).upper() or
-                    cve_id == str((row.get("vulnerability") or {}).get("cve_id", "")).upper()
-                    for cve_id in cve_ids)
+            if not all(any(
+                cve_id in {value.upper() for value in _CVE_ID.findall(str(row.get("title", "")))}
+                or cve_id == str((row.get("vulnerability") or {}).get("cve_id", "")).upper()
                 or (
                     template_id == "cve-kev-deep-dive"
                     and expected_cve_id
@@ -138,7 +137,7 @@ def _validate_claim_rows(claims: list, evidence: dict[str, dict], *, template_id
                     and row.get("content_policy", {}).get("dataset_license") == "CC0-1.0"
                     and isinstance(row.get("vulnerability"), dict)
                 )
-                for row in cited_rows
+                for row in cited_rows) for cve_id in cve_ids
             ):
                 _raise("cve_claim_evidence_mismatch")
         # The exact CVE identifier is checked above against the run snapshot

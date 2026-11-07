@@ -148,3 +148,16 @@ def test_date_numbers_allow_unpadded_day_and_section_keeps_classification():
     article = assemble_article(candidate, review(), bundle=snapshot, template_id="security-daily")
     assert article["claims"][0]["classification"] == "observed"
     assert article["sections"][0]["heading"] == "未確認事項"
+
+
+@pytest.mark.parametrize("text", [
+    "CVE-2026-1234に関する情報の掲載を観測しました。",
+    "CVE-2026-12345とCVE-2026-99999に関する情報の掲載を観測しました。",
+])
+def test_every_cve_identifier_requires_an_exact_cited_match(text):
+    snapshot = bundle()
+    snapshot["evidence"][0]["title"] = "CVE-2026-12345に関する公開情報"
+    candidate = proposal()
+    candidate["claims"][0]["text"] = text
+    with pytest.raises(ReportError, match="cve_claim_evidence_mismatch"):
+        validate_claims(candidate, snapshot, "security-daily")
