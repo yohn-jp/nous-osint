@@ -50,7 +50,7 @@ onBeforeUnmount(() => controller?.abort())
 </script>
 
 <template>
-  <div class="q-pa-lg">
+  <div class="q-pa-lg item-preview">
     <div v-if="loading" aria-live="polite"><q-skeleton type="text" width="60%" /><q-skeleton type="text" height="64px" /><q-skeleton type="text" width="85%" /></div>
     <div v-else-if="error" role="alert" class="text-center q-py-lg">
       <q-icon name="error_outline" color="negative" size="28px" />
@@ -58,7 +58,7 @@ onBeforeUnmount(() => controller?.abort())
     </div>
     <template v-else-if="item">
       <div class="eyebrow q-mb-md">{{ kindLabel(item.kind) }} / {{ stateLabel[item.state] }}</div>
-      <h2 class="q-ma-none" :class="compact ? 'text-h6' : 'text-h5'" style="line-height: 1.5; overflow-wrap: anywhere">{{ item.title }}</h2>
+      <h2 class="q-ma-none detail-title" :class="compact ? 'text-h6' : 'text-h5'">{{ item.title }}</h2>
       <div class="text-caption text-grey-6 q-mt-md">{{ item.organization || item.source }}</div>
       <q-btn class="q-mt-lg" outline no-caps color="primary" icon-right="open_in_new" :href="safeExternalUrl(item.url)" :disable="!safeExternalUrl(item.url)" target="_blank" rel="noopener noreferrer" label="元の情報源を開く" />
       <section v-if="cveIds.length" class="detail-section">
@@ -87,7 +87,7 @@ onBeforeUnmount(() => controller?.abort())
         </div>
       </section>
       <section class="detail-section">
-        <div class="text-subtitle2 q-mb-sm">Provenance</div>
+        <div class="text-subtitle2 q-mb-sm">出典メタデータ</div>
         <div v-for="[key, value] in Object.entries(item.provenance)" :key="key" class="kv-line">
           <div class="kv-key">{{ key }}</div><div>{{ safeValue(value) }}</div>
         </div>

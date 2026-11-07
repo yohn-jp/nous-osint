@@ -48,9 +48,9 @@ onBeforeUnmount(() => controller?.abort())
 </script>
 
 <template>
-  <q-page class="nous-page">
+  <q-page class="nous-page changes-page">
     <h1 class="page-title q-ma-none">変更履歴</h1>
-    <p class="page-subtitle q-mb-xl">観測された新規・更新レコードを時系列で確認する。</p>
+    <p class="page-subtitle q-mb-xl">観測された新規・更新レコードを時系列で確認します。</p>
     <section class="content-panel">
       <div class="row q-col-gutter-sm items-center q-pa-md">
         <div class="col-6 col-sm-3"><q-select v-model="windowDays" :options="windows" dense outlined emit-value map-options label="対象期間" @update:model-value="apply" /></div>
@@ -58,6 +58,9 @@ onBeforeUnmount(() => controller?.abort())
         <q-space /><q-btn flat dense icon="refresh" color="primary" aria-label="再読み込み" @click="load" />
       </div>
       <q-separator />
+      <div v-if="!loading && !error" class="changes-ledger-summary" role="status" aria-live="polite">
+        <span>観測履歴</span><strong>{{ changes.length }} 件</strong><span>最大100件まで表示</span>
+      </div>
       <div v-if="loading" class="q-pa-lg" aria-live="polite"><q-skeleton v-for="n in 3" :key="n" type="rect" height="62px" class="q-mb-md" /></div>
       <div v-else-if="error" class="empty-state" role="alert"><q-icon name="error_outline" color="negative" size="30px"/><p>{{ error }}</p><q-btn outline color="primary" label="再試行" @click="load" /></div>
       <div v-else-if="changes.length === 0" class="empty-state"><q-icon name="history" size="32px"/><p class="q-mt-md">この期間に記録された変更はありません。</p></div>

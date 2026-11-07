@@ -23,6 +23,7 @@ const adminNav = [
 const isActive = (name: string) => {
   if (name === 'admin-sources') return ['admin-sources', 'admin-new', 'admin-edit'].includes(active.value)
   if (name === 'admin-reports') return active.value === 'admin-reports'
+  if (name === 'sources') return ['sources', 'source-onboarding'].includes(active.value)
   return active.value === name || (active.value === 'item' && name === 'explore')
 }
 function toggleDark() { $q.dark.set(!$q.dark.isActive) }
@@ -33,12 +34,14 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
 
 <template>
   <q-layout view="hHh Lpr fFf" class="nous-shell">
+    <a class="nous-skip-link" href="#nous-main">本文に移動</a>
     <q-header class="nous-header">
       <q-toolbar class="q-px-lg" style="min-height: 64px">
         <q-btn v-if="$q.screen.lt.md" flat round dense icon="menu" aria-label="メニュー" @click="drawerOpen = !drawerOpen" />
         <router-link to="/explore" class="brand-link" aria-label="Nous OSINT 探索へ戻る">
           <q-avatar rounded class="nous-mark" size="34px"><q-icon name="radar" size="22px" /></q-avatar>
           <span class="brand-name">nous<span class="brand-soft"> / osint</span></span>
+          <span class="brand-context" aria-hidden="true">INTELLIGENCE DESK</span>
         </router-link>
         <q-space />
 
@@ -46,7 +49,7 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
         <q-btn v-if="canAdmin" flat no-caps class="header-admin-action q-mr-sm" :to="adminDestination"
           :icon="isAdminArea ? 'arrow_back' : 'admin_panel_settings'"
           :label="$q.screen.gt.xs ? adminLabel : undefined" :aria-label="adminLabel" />
-        <q-btn flat round dense :icon="$q.dark.isActive ? 'light_mode' : 'dark_mode'" :aria-label="$q.dark.isActive ? 'ライトモード' : 'ダークモード'" @click="toggleDark" />
+        <q-btn flat round dense :icon="$q.dark.isActive ? 'light_mode' : 'dark_mode'" :aria-label="$q.dark.isActive ? 'ライトモード' : 'ダークモード'" :aria-pressed="$q.dark.isActive" @click="toggleDark" />
       </q-toolbar>
     </q-header>
 
@@ -77,7 +80,7 @@ function closeDrawerOnMobile() { if ($q.screen.lt.md) drawerOpen.value = false }
       </template>
     </q-drawer>
 
-    <q-page-container><router-view /></q-page-container>
+    <q-page-container id="nous-main"><router-view /></q-page-container>
     <q-footer v-if="$q.screen.lt.md" class="mobile-footer">
       <q-tabs v-if="isAdminArea && canAdmin" no-caps dense indicator-color="primary" active-color="primary" class="mobile-tabs">
         <q-route-tab to="/admin/sources" :exact="false" icon="tune" label="情報源管理" />

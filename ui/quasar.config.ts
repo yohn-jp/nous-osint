@@ -6,14 +6,14 @@ export default defineConfig(() => ({
   framework: {
     config: {
       brand: {
-        primary: '#397650',
-        secondary: '#5c7464',
-        accent: '#9fba92',
-        dark: '#15201b',
-        positive: '#397650',
-        negative: '#b3483b',
-        info: '#457c91',
-        warning: '#b08035',
+        primary: '#0b685f',
+        secondary: '#486967',
+        accent: '#236b83',
+        dark: '#142521',
+        positive: '#207b56',
+        negative: '#b04740',
+        info: '#236b83',
+        warning: '#96621d',
       },
     },
   },
