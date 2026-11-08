@@ -40,7 +40,7 @@ def test_static_ui_requires_assertion_and_unknown_routes_stay_hidden(gateway):
     page = client.get("/", headers=headers)
     assert page.text == "<main>Nous UI</main>"
     assert page.headers["cache-control"] == "no-store"
-    for route in ("/explore", "/changes", "/sources", "/sources/new", "/admin/reports",
+    for route in ("/live", "/explore", "/changes", "/sources", "/sources/new", "/admin/reports",
                   "/admin/sources", "/admin/sources/new",
                   "/admin/sources/example/edit", "/items/3", "/cves/CVE-2026-1234"):
         page = client.get(route, headers=headers)
@@ -186,10 +186,26 @@ def test_api_proxy_forwards_only_bounded_read_queries(gateway):
     assert requests[0].url.path == "/v1/items"
     assert dict(requests[0].url.params) == {"q": "security", "limit": "20"}
 
-    assert client.get("/v1/items?state=current", headers=headers).status_code == 400
+    # UI category filters and immutable observation feed must survive the
+    # exact Access allowlist + gateway query allowlist at the private origin.
+    scoped = client.get("/v1/items?category=threat_research&state=current",
+                        headers=headers)
+    assert scoped.status_code == 200
+    assert requests[-1].url.path == "/v1/items"
+    assert dict(requests[-1].url.params) == {
+        "category": "threat_research", "state": "current",
+    }
+    stream = client.get("/v1/stream?category=threat_research&limit=40",
+                        headers=headers)
+    assert stream.status_code == 200
+    assert requests[-1].url.path == "/v1/stream"
+    assert dict(requests[-1].url.params) == {
+        "category": "threat_research", "limit": "40",
+    }
     assert client.get("/v1/items?q=first&q=second", headers=headers).status_code == 400
+    assert client.get("/v1/stream?unexpected=1", headers=headers).status_code == 400
     assert client.get("/v1/items?q=" + "x" * 2100, headers=headers).status_code == 400
-    assert len(requests) == 1
+    assert len(requests) == 3
     history = client.get("/v1/items/42/versions?limit=25&before=11", headers=headers)
     assert history.status_code == 200
     assert requests[-1].url.path == "/v1/items/42/versions"

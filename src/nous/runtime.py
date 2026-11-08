@@ -19,6 +19,7 @@ from .job_postings import fetch_lever_board
 from .cve_index import cve_relations, record_item_version_cves, sync_item_cves
 from .db import session_factory
 from .fetch import fetch
+from .x_timeline import fetch_x_timeline, latest_post_id, x_source_allowed
 from .models import (FetchAttempt, FetchJob, Item, ItemVersion,
                      KevCatalogContent, KevCatalogObservation, Source, now)
 from .registry import load_registry, sync
@@ -91,11 +92,20 @@ def claim(factory):
         count = db.scalar(select(func.coalesce(func.sum(FetchAttempt.request_count), 0))
                           .select_from(FetchAttempt).join(FetchJob)
                           .where(FetchJob.source_id == source.id, FetchAttempt.started_at >= earliest))
-        required = source.config.get("max_pages", 1) if source.adapter == "lever_jobs_v1" else 1
+        required = (source.config.get("max_pages", 1) if source.adapter in
+                    ("lever_jobs_v1", "x_user_posts_v1") else 1)
         if count + required > source.max_requests_per_hour:
             job.available_at = current + timedelta(minutes=10)
             db.commit()
             return None
+        if source.adapter == "x_user_posts_v1":
+            # Fail closed for cost: no bearer token or explicit global budget,
+            # no paid HTTP request. Existing host lock serializes cost claims.
+            if not x_source_allowed(db, current, required):
+                source.last_error = "x_api_budget_or_token_not_configured"
+                job.available_at = current + timedelta(minutes=30)
+                db.commit()
+                return None
         job.state = "leased"
         job.lease_until = current + timedelta(seconds=_FETCH_LEASE_SECONDS)
         job.attempts += 1
@@ -227,6 +237,8 @@ def process(factory, job_id, claim_attempt=None):
         job = db.get(FetchJob, job_id)
         source = db.get(Source, job.source_id)
         url, etag, modified = source.url, source.etag, source.last_modified
+        x_since_id = latest_post_id(db, source.id) if source.adapter == "x_user_posts_v1" else None
+        x_pages = source.config.get("max_pages", 1) if source.adapter == "x_user_posts_v1" else 1
     started = now()
     status = None
     final_url = None
@@ -251,13 +263,21 @@ def process(factory, job_id, claim_attempt=None):
             # All pages must succeed before store_item or missing-item state
             # changes. Lever does not use a first-page conditional ETag.
             status, records, headers, final_url = fetch_lever_board(source, counted_fetch)
+        elif source.adapter == "x_user_posts_v1":
+            def counted_x_request():
+                nonlocal requests_made
+                requests_made += 1
+            status, records, headers, final_url = fetch_x_timeline(
+                url, since_id=x_since_id, max_pages=x_pages,
+                on_request=counted_x_request,
+            )
         else:
             status, body, headers, final_url = counted_fetch(url, etag, modified)
         if status == 304:
             outcome = "unchanged"
             records = []
         elif status == 200:
-            if source.adapter != "lever_jobs_v1":
+            if source.adapter not in ("lever_jobs_v1", "x_user_posts_v1"):
                 records = extract(source, body, final_url)
             outcome = "success"
         elif status == 429:
@@ -314,7 +334,9 @@ def process(factory, job_id, claim_attempt=None):
                 db.execute(update(Item).where(Item.source_id == source.id,
                                               Item.state == "current")
                            .values(last_seen_at=now()))
-            if outcome == "success":
+            if outcome == "success" and source.adapter != "x_user_posts_v1":
+                # A since_id timeline is an incremental delta, not a complete
+                # catalog snapshot. Unreturned prior X posts stay current.
                 seen = {raw.get("id") or raw.get("url") for raw in records}
                 for old_item in db.scalars(select(Item).where(Item.source_id == source.id)):
                     if old_item.external_id not in seen:

@@ -29,7 +29,7 @@ _UNKNOWN_UI_PATH = re.compile(r"^/(?:[A-Za-z0-9_-]{1,128}/)*[A-Za-z0-9_-]{1,128}
 _API_ITEM = re.compile(r"^/v1/items/[0-9]+$")
 _API_CVE = re.compile(r"^/v1/cves/CVE-[0-9]{4}-[0-9]{4,}$")
 _API_VERSIONS = re.compile(r"^/v1/items/[0-9]+/versions$")
-_SPA_ROUTE = re.compile(r"^/(?:explore|changes|sources|sources/new|admin/sources|admin/sources/new|admin/reports|admin/sources/[a-z][a-z0-9-]{2,99}/edit|items/[0-9]+|cves/CVE-[0-9]{4}-[0-9]{4,})$")
+_SPA_ROUTE = re.compile(r"^/(?:live|explore|changes|sources|sources/new|admin/sources|admin/sources/new|admin/reports|admin/sources/[a-z][a-z0-9-]{2,99}/edit|items/[0-9]+|cves/CVE-[0-9]{4}-[0-9]{4,})$")
 _ADMIN_ROUTE = re.compile(
     r"^/v1/admin/(?:session|catalog|sources|audits|report-templates|"
     r"report-runs(?:/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
@@ -308,7 +308,7 @@ class AccessAssertionMiddleware:
             return method in ("GET", "HEAD")
         if method != "GET":
             return False
-        if path in ("/v1/items", "/v1/sources", "/v1/changes"):
+        if path in ("/v1/items", "/v1/sources", "/v1/changes", "/v1/stream"):
             return True
         return bool(_API_ITEM.fullmatch(path) or _API_VERSIONS.fullmatch(path)
                     or _API_CVE.fullmatch(path))

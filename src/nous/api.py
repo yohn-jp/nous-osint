@@ -68,7 +68,7 @@ class StreamObservationResponse(APIModel):
     change: Literal["new", "updated"]
     source: str
     category: str
-    platform: Literal["bluesky", "rss", "json_api", "html"]
+    platform: Literal["bluesky", "x", "rss", "json_api", "html"]
     organization: str | None
     kind: ItemKind
     title: str
@@ -305,7 +305,8 @@ def stream(category: str | None = None,
                 "change": "new" if version.version == 1 else "updated",
                 "source": origin.source_key,
                 "category": source_category(origin.config or {}, origin.item_kind),
-                "platform": "bluesky" if origin.adapter == "bluesky_author_v1" else origin.kind,
+                "platform": ("bluesky" if origin.adapter == "bluesky_author_v1" else
+                             "x" if origin.adapter == "x_user_posts_v1" else origin.kind),
                 "organization": origin.config.get("organization"),
                 "kind": item.kind,
                 "title": title,

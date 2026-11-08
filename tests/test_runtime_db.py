@@ -431,3 +431,59 @@ def test_slow_fetch_heartbeats_without_losing_its_own_result(monkeypatch):
     with factory() as db:
         assert db.get(FetchJob, job_id).state == "done"
         assert db.scalar(select(Item).where(Item.source_id == source_id)) is not None
+
+
+def test_x_incremental_ingestion_does_not_retire_unreturned_posts(monkeypatch):
+    """An X since_id response is a delta, never a full source snapshot."""
+    factory = session_factory()
+    key = "x-delta-" + uuid.uuid4().hex[:12]
+    url = "https://api.x.com/2/users/2244994945/tweets"
+    with factory() as db:
+        source = Source(source_key=key, kind="json_api", url=url,
+                        adapter="x_user_posts_v1", item_kind="news",
+                        config_revision="x" * 64, enabled=True, interval_minutes=15,
+                        max_requests_per_hour=4,
+                        config={"max_concurrency": 1, "max_pages": 1,
+                                "organization": "X researcher"})
+        db.add(source)
+        db.flush()
+        prior = Item(source_id=source.id, external_id="2000000000000000010",
+                     canonical_url="https://x.com/i/web/status/2000000000000000010",
+                     kind="news", title="Earlier post", state="current",
+                     current_version=1, current_hash="1" * 64)
+        db.add(prior)
+        db.flush()
+        prior_id = prior.id
+        job = FetchJob(source_id=source.id, dedupe_key=key)
+        db.add(job)
+        db.commit()
+        job_id = job.id
+        source_id = source.id
+
+    def fake_fetch(source_url, *, since_id, max_pages, on_request):
+        assert source_url == url
+        assert since_id == "2000000000000000010"
+        assert max_pages == 1
+        on_request()
+        return (200, [{
+            "id": "2000000000000000020",
+            "url": "https://x.com/i/web/status/2000000000000000020",
+            "title": "New research signal",
+            "published": "2026-11-07T12:00:00Z",
+        }], {}, url)
+
+    monkeypatch.setattr(runtime, "fetch_x_timeline", fake_fetch)
+    runtime.process(factory, job_id)
+    with factory() as db:
+        old = db.get(Item, prior_id)
+        latest = db.scalar(select(Item).where(
+            Item.source_id == source_id,
+            Item.external_id == "2000000000000000020"))
+        assert old.state == "current"
+        assert latest is not None and latest.state == "current"
+        assert latest.current_version == 1
+        assert db.scalar(select(func.count()).select_from(ItemVersion).where(
+            ItemVersion.item_id == latest.id)) == 1
+        attempt = db.scalar(select(FetchAttempt).where(FetchAttempt.job_id == job_id))
+        assert attempt.outcome == "success"
+        assert attempt.request_count == 1
