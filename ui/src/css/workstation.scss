@@ -195,7 +195,11 @@ body { background: var(--nous-paper); color: var(--nous-ink); }
 .workstation-count span { color: var(--nous-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .workstation-toolbar-actions { display: flex; align-items: center; gap: 4px; }
 .workstation-toolbar-actions .q-btn { min-height: 34px; font-size: 11px; }
-.workstation-table-scroll { min-height: 0; flex: 1; overflow: auto; scrollbar-width: thin; }
+.workstation-table-scroll {
+  min-height: 0; flex: 1; overflow: auto; scrollbar-width: thin;
+  container: record-ledger / inline-size;
+  contain: layout paint;
+}
 .workstation-table { width: 100%; border-spacing: 0; border-collapse: collapse; table-layout: fixed; }
 .workstation-table .col-record { width: 45%; }
 .workstation-table .col-source { width: 22%; }
@@ -248,6 +252,20 @@ body { background: var(--nous-paper); color: var(--nous-ink); }
   overflow: visible; white-space: normal; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
   overflow: hidden;
+}
+/* Keep source and date context beside each record when the inspector narrows the register. */
+@container record-ledger (max-width: 820px) {
+  .workstation-table .col-record { width: 68%; }
+  .workstation-table .col-source, .workstation-table .col-observed { display: none; }
+  .workstation-table .col-state { width: 32%; }
+  .workstation-record-main { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .workstation-record-mobile-meta { display: flex; flex-wrap: wrap; gap: 2px 6px; }
+  .workstation-record-link {
+    overflow: hidden; white-space: normal; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .workstation-table .workstation-state { white-space: normal; }
+  .workstation-table .workstation-version { padding-left: 0; }
 }
 .workstation-list-footer {
   display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
@@ -325,17 +343,7 @@ body { background: var(--nous-paper); color: var(--nous-ink); }
 .source-admin-page .admin-source { padding-block: 13px; }
 .changes-page .result-row { padding-block: 12px; }
 .cve-page .content-panel { border-top-color: var(--nous-warm); }
-@media (max-width: 1440px) {
-  .workstation-table .col-record { width: 48%; }
-  .workstation-table .col-source { width: 20%; }
-  .workstation-table .col-observed { width: 21%; }
-  .workstation-table .col-state { width: 11%; }
-}
 @media (max-width: 1199px) {
-  .workstation-table .col-record { width: 48%; }
-  .workstation-table .col-source { width: 21%; }
-  .workstation-table .col-observed { width: 20%; }
-  .workstation-table .col-state { width: 11%; }
   .workstation-split { grid-template-columns: minmax(0,1fr); }
   .workstation-resizer, .workstation-inspector { display: none; }
   .workstation-ledger { border-radius: 4px; }
@@ -369,7 +377,7 @@ body { background: var(--nous-paper); color: var(--nous-ink); }
   .workstation-table th, .workstation-table td { padding: 11px 9px; }
   .workstation-record-cell { gap: 6px; }
   .workstation-record-main { flex-direction: column; align-items: flex-start; gap: 3px; }
-  .workstation-record-mobile-meta { display: block; }
+  .workstation-record-mobile-meta { display: flex; flex-wrap: wrap; gap: 2px 6px; }
   .workstation-record-link { max-width: 100%; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .workstation-table .workstation-state { white-space: normal; }
   .workstation-table .workstation-version { padding-left: 0; }

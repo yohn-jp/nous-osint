@@ -109,7 +109,12 @@ async function loadPage(append = false) {
     if (token === generation) { loading.value = false; loadingMore.value = false }
   }
 }
-watch(() => [route.query.q, route.query.kind, route.query.source, route.query.category], () => {
+watch([
+  () => route.query.q,
+  () => route.query.kind,
+  () => route.query.source,
+  () => route.query.category,
+], () => {
   term.value = queryValue(route.query.q).slice(0, 200)
   kind.value = parseKind(queryValue(route.query.kind))
   source.value = queryValue(route.query.source) || null
@@ -150,12 +155,20 @@ function openItem(id: number) {
     void router.push({ name: 'item', params: { id }, query: { returnTo: route.fullPath } })
   }
 }
-function closeInspector() {
+async function closeInspector(returnFocus = true) {
+  const returnFocusId = selectedId.value ?? activeRecordId.value
   inspectorOpen.value = false
   if (route.query.item) {
     const query = { ...route.query }
     delete query.item
-    void router.replace({ name: 'explore', query })
+    await router.replace({ name: 'explore', query })
+  }
+  if (returnFocus && returnFocusId !== null) {
+    await nextTick()
+    const returnTarget = document.getElementById('nous-record-' + returnFocusId)
+      ?? document.querySelector<HTMLElement>('.workstation-table-scroll')
+      ?? document.getElementById('nous-search-input')
+    returnTarget?.focus({ preventScroll: true })
   }
 }
 function toggleDensity() {
@@ -178,7 +191,12 @@ function onShortcut(event: KeyboardEvent) {
   if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !target?.closest('.workstation-ledger')) return
   if (target?.closest('a, button') && !target.closest('.workstation-record-link')) return
   event.preventDefault()
-  const currentIndex = rows.value.findIndex(row => row.id === activeRecordId.value)
+  const focusedRecordId = target?.closest<HTMLButtonElement>('.workstation-record-link')?.id
+    .replace(/^nous-record-/, '')
+  const currentRecordId = focusedRecordId && /^\d+$/.test(focusedRecordId)
+    ? Number(focusedRecordId)
+    : activeRecordId.value
+  const currentIndex = rows.value.findIndex(row => row.id === currentRecordId)
   const step = event.key === 'j' || event.key === 'ArrowDown' ? 1 : -1
   const index = Math.max(0, Math.min(rows.value.length - 1, currentIndex + step))
   const id = rows.value[index]?.id
@@ -276,7 +294,7 @@ onBeforeUnmount(() => {
             <q-btn v-if="$q.screen.width >= 1200" flat dense no-caps
               :icon="inspectorOpen ? 'vertical_split' : 'dock_to_right'"
               :label="inspectorOpen ? '詳細を閉じる' : '詳細を表示'"
-              :aria-pressed="inspectorOpen" @click="inspectorOpen ? closeInspector() : inspectorOpen = true" />
+              :aria-pressed="inspectorOpen" @click="inspectorOpen ? closeInspector(false) : inspectorOpen = true" />
           </div>
         </div>
         <div v-if="loading" class="workstation-loading" role="status" aria-label="検索結果を取得中">
@@ -293,7 +311,7 @@ onBeforeUnmount(() => {
           <q-btn v-else flat no-caps color="primary" to="/sources" label="情報源へ移動" />
         </div>
         <template v-else>
-          <div class="workstation-table-scroll">
+          <div class="workstation-table-scroll" tabindex="0" role="region" aria-label="収集レコードをスクロール">
             <table class="workstation-table" :class="'density-' + density">
               <caption class="workstation-sr-only">収集レコード。タイトルを選ぶと詳細と出典を表示します。</caption>
               <thead><tr>
@@ -312,7 +330,12 @@ onBeforeUnmount(() => {
                         <button :id="'nous-record-' + item.id" type="button" class="workstation-record-link"
                           :title="item.title" :aria-pressed="activeRecordId === item.id"
                           @click="openItem(item.id)">{{ item.title }}</button>
-                        <span class="workstation-record-mobile-meta">{{ item.organization || item.source }} · {{ dateLabel(item.published_at || item.last_seen_at) }}</span>
+                        <span class="workstation-record-mobile-meta">
+                          <span class="workstation-sr-only">情報源・組織: </span>{{ item.organization || item.source }}<template v-if="item.organization && item.organization !== item.source"> · {{ item.source }}</template>
+                          <time :datetime="item.published_at || item.last_seen_at">
+                            {{ dateLabel(item.published_at || item.last_seen_at) }} · {{ item.published_at ? '公開' : '最終観測' }}
+                          </time>
+                        </span>
                       </div>
                     </div>
                   </td>
@@ -338,7 +361,7 @@ onBeforeUnmount(() => {
         <aside class="workstation-inspector" aria-label="選択したレコードの根拠">
           <div class="workstation-inspector-heading">
             <span>RECORD INSPECTOR</span>
-            <q-btn flat round dense icon="close" aria-label="詳細ペインを閉じる" @click="closeInspector" />
+            <q-btn flat round dense icon="close" aria-label="詳細ペインを閉じる" @click="closeInspector()" />
           </div>
           <ItemPreview v-if="activeRecordId" :item-id="activeRecordId" compact />
           <div v-else class="workstation-message"><strong>レコードを選択</strong><p>タイトルを選ぶと出典と変更履歴が表示されます。</p></div>
