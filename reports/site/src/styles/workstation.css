@@ -1,6 +1,7 @@
 /* Shared research-shell vocabulary for the static Astro publication surface.
    One source of truth is the generated report, not a fictional severity score. */
 :root {
+  color-scheme: light dark;
   --ink: #1b2933;
   --muted: #50616c;
   --faint: #63737c;
@@ -17,6 +18,10 @@
   --blue-soft: #e9f0f9;
   --danger: #a43d37;
   --danger-soft: #f9eeeb;
+  --brand-mark: #28445a;
+  --masthead-bg: #243b4b;
+  --masthead-ink: #edf4f7;
+  --masthead-muted: #d4e1e9;
   --shadow: none;
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
   font-synthesis: none;
@@ -36,7 +41,7 @@ html { scroll-padding-top: 110px; }
 .brand { gap: 9px; font-size: 17px; letter-spacing: -.043em; font-weight: 780; }
 .brand-mark {
   width: 29px; height: 29px; border-radius: 3px;
-  color: #fff; background: #28445a;
+  color: #fff; background: var(--brand-mark);
   font: 800 18px/1 Georgia, serif;
 }
 .brand-product { color: var(--muted); font-weight: 450; }
@@ -132,6 +137,10 @@ html { scroll-padding-top: 110px; }
   padding: 24px 8px; border-bottom: 1px solid var(--line);
   background: transparent;
   transition: background 160ms ease-out;
+}
+.publication-entry:nth-child(n + 9) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 15rem;
 }
 .publication-entry[hidden] { display: none !important; }
 .publication-entry:hover { background: var(--reading-surface); }
@@ -240,8 +249,9 @@ html { scroll-padding-top: 110px; }
     --gold: #e0ad72; --gold-soft: #403024;
     --blue: #98c1ff; --blue-soft: #253b53;
     --danger: #ffaca3; --danger-soft: #422b2b;
+    --brand-mark: #456582;
+    --masthead-bg: #253e53; --masthead-ink: #eaf2f9; --masthead-muted: #d3e5f5;
   }
-  .brand-mark { background: #456582; }
   .publication-type { color: var(--ink); }
   .publication-kev[data-kev="listed"] { color: var(--danger); }
 }

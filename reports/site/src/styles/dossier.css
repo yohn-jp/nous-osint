@@ -1,16 +1,17 @@
 /* NOUS REPORT DOSSIER
    The article is a research document, not a blog post or a promotional dashboard.
    Geometry belongs to three artifacts: brief, analysis, and provenance. */
+:root { color-scheme: light dark; }
 .report-dossier {
   width: 100%;
   max-width: none;
   margin: 0 auto;
   color: var(--ink);
-  --dossier-accent: #284d70;
-  --dossier-accent-pale: #e9f0f5;
-  --dossier-warm: #81552e;
-  --dossier-warm-pale: #f6efe3;
-  --dossier-rule: #c8d2d4;
+  --dossier-accent: var(--accent);
+  --dossier-accent-pale: var(--accent-soft);
+  --dossier-warm: var(--gold);
+  --dossier-warm-pale: var(--gold-soft);
+  --dossier-rule: var(--line);
   --dossier-code: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
   --dossier-reading: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
 }
@@ -31,11 +32,11 @@
 .report-dossier .dossier-masthead {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
   gap: 8px 18px; min-height: 40px; padding: 10px clamp(19px, 2.5vw, 37px);
-  color: #edf4f7; background: #243b4b;
+  color: var(--masthead-ink); background: var(--masthead-bg);
   font: 680 11px/1.65 var(--dossier-code);
   letter-spacing: .055em; font-variant-numeric: tabular-nums;
 }
-.report-dossier .dossier-issued { color: #d4e1e9; font: 500 12px/1.65 var(--dossier-reading); letter-spacing: .01em; }
+.report-dossier .dossier-issued { color: var(--masthead-muted); font: 500 12px/1.65 var(--dossier-reading); letter-spacing: .01em; }
 .report-dossier .dossier-cover-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 263px;
@@ -212,6 +213,7 @@
   margin: 0;
 }
 .report-dossier .dossier-chapter-nav {
+  display: block;
   position: sticky; top: 92px;
   align-self: start; max-height: calc(100dvh - 110px); overflow: auto;
   margin: 0; padding: 15px 0 20px;
@@ -378,7 +380,7 @@
   color: var(--muted); font-size: 11px; line-height: 1.6;
 }
 .report-dossier .dossier-source-register .source-register-back {
-  display: inline-flex; align-items: center; min-height: 40px;
+  display: flex; align-items: center; width: fit-content; max-width: calc(100% - 28px); min-height: 40px;
   margin: 5px 14px 0; padding: 5px 4px;
   color: var(--dossier-accent); font-size: 12px; font-weight: 710;
   text-decoration: none;
@@ -478,16 +480,6 @@
   .report-dossier .dossier-source-register .source-entry { grid-template-columns: 39px minmax(0,1fr); }
 }
 @media (prefers-color-scheme: dark) {
-  .report-dossier {
-    --dossier-accent: #a5caff;
-    --dossier-accent-pale: #253b53;
-    --dossier-warm: #e7b77a;
-    --dossier-warm-pale: #2b2924;
-    --dossier-rule: #4b5962;
-  }
-  .report-dossier .dossier-masthead { color: #eaf2f9; background: #253e53; }
-  .report-dossier .dossier-issued { color: #d3e5f5; }
-  .report-dossier .dossier-category { background: var(--dossier-accent-pale); color: var(--dossier-accent); }
   .report-dossier .dossier-claim-rail .rail-observed, .report-dossier .legend-dot.observed { background: #a5caff; }
   .report-dossier .dossier-claim-rail .rail-inference, .report-dossier .legend-dot.inference { background: #e7b77a; }
   .report-dossier .dossier-claim-rail .rail-unconfirmed, .report-dossier .legend-dot.unconfirmed { background: #bec2cd; }
