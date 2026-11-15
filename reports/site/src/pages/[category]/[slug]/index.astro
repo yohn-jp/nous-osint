@@ -31,8 +31,21 @@ function shortDateLabel(value: string | null) {
 function relationName(value: string) {
   return value === 'kev' ? 'KEV掲載根拠' : value === 'title_mention' ? 'タイトル中の言及' : value === 'reference' ? '参照資料' : '収集レコード';
 }
-function claimForSummary(text: string) {
-  return report.claims.find((claim) => claim.text === text);
+function summaryTarget(text: string) {
+  const claim = report.claims.find((claim) => report.schema_version === 1
+    ? claim.text.trim() === text.trim()
+    : claim.text === text);
+  if (!claim) return undefined;
+  if (report.schema_version === 2) return '#claim-' + claim.claim_id;
+
+  // Legacy articles render claims in typed blocks rather than individual claim anchors.
+  const index = report.sections.findIndex(section => section.blocks.some(block => {
+    if (block.type === 'bullet_list') return block.items.some(item => item.claim_ids.includes(claim.claim_id));
+    if (block.type === 'fact_table') return block.rows.some(row => row.claim_ids.includes(claim.claim_id));
+    if (block.type === 'source_list') return false;
+    return block.claim_ids.includes(claim.claim_id);
+  }));
+  return index >= 0 ? '#section-' + index : undefined;
 }
 ---
 
@@ -75,10 +88,10 @@ function claimForSummary(text: string) {
       </div>
       <ol>
         {report.summary.map((line) => {
-          const claim = claimForSummary(line);
+          const target = summaryTarget(line);
           return <li>
             <p>{line}</p>
-            {claim && <a class="brief-citation" href={'#claim-' + claim.claim_id} aria-label="本文中の該当箇所へ移動">本文へ <span aria-hidden="true">↓</span></a>}
+            {target && <a class="brief-citation" href={target} aria-label="本文中の該当箇所へ移動">本文へ <span aria-hidden="true">↓</span></a>}
           </li>;
         })}
       </ol>
