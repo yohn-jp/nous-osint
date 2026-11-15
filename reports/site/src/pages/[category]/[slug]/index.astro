@@ -52,7 +52,7 @@ function claimForSummary(text: string) {
       </div>
       <h1 id="report-title">{report.title}</h1>
       <p class="report-dek">{report.dek}</p>
-      {report.cve && <p class="report-cve-tag"><span>対象識別子</span><a href={report.cve.canonical_url}>{report.cve.id}</a></p>}
+      {report.cve && <p class="report-cve-tag"><span>対象識別子</span><a href={report.cve.canonical_url} rel="noopener noreferrer">{report.cve.id}</a></p>}
 
       <dl class="report-classification-register" aria-label="本文中の記述分類">
         <div class="classification-total"><dt>主張</dt><dd>{report.claims.length}</dd></div>
