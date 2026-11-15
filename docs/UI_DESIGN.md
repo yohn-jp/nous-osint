@@ -1,81 +1,55 @@
-# Nous OSINT — UI design contract
+# Nous OSINT — Interface design contract
 
-Updated: 2026-11-07  
-State: Quasar SPA / Astro publication implemented. Authenticated browser acceptance and rollback remain **NOT VERIFIED**.  
-Authority: [ARCHITECTURE.md](ARCHITECTURE.md), [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md), [AUTOMATED_INTELLIGENCE_REPORTS.md](AUTOMATED_INTELLIGENCE_REPORTS.md).
+Updated: 2026-11-15<br>
+Status: redesign candidate on `feat/ui-redesign-v2`; see [redesign evidence](ui-redesign/README.md). This is a product design and implementation contract, not evidence of a production deployment.<br>
+Architecture authority: [ARCHITECTURE.md](ARCHITECTURE.md), [FRONTEND_EXECUTION_POLICY.md](FRONTEND_EXECUTION_POLICY.md), [EDGE_FRONTEND_DEPLOYMENT.md](EDGE_FRONTEND_DEPLOYMENT.md), [AUTOMATED_INTELLIGENCE_REPORTS.md](AUTOMATED_INTELLIGENCE_REPORTS.md).
 
-## Purpose and visual system
+## Product model
 
-Nous is an intelligence desk for reading observed records, assessing provenance and tracing changes, not a promotional dashboard. The dominant artifact is the collected title or the published report; source identity, timestamp, evidence and state come next. Use a continuous scan-friendly register, an evidence reading lane and an accessible operational layout.
+Nous connects three daily jobs: monitor newly collected information, investigate a record and its provenance, and read published intelligence. Research records are the primary objects in the SPA; published reports are first-class reading surfaces. The interface must make the path between those jobs legible without pretending that collection state, KEV state, claim classification, and publication state are interchangeable.
 
-- Quasar 2 + Vue 3 + TypeScript `ui/` and Astro `reports/site/` share paper/panel, deep ink, measured blue action, warm provenance accents and restrained separators. Source text remains plain escaped content.
-- Use real API data only. Loading, empty, permission denied, failed, unknown, disabled and stale states must not collapse into the same visual state.
-- Color supports meaning but does not replace status labels. Focus is visible, targets are usable on touch, Japanese titles and identifiers wrap without horizontal clipping.
-- Motion is short action feedback, not delayed content appearance; honor `prefers-reduced-motion`. No invented counts, decorative charts, fake progress or pseudo-buttons.
+The selected direction is a light, warm-paper research register with deep-green navigation, restrained copper editorial markers and blue evidence links. It uses chronological observation groups for Live Feed, a full-width searchable record index for Explore, a dedicated record dossier, and an editorial report archive and article. The report page opens directly on the report title and conclusion summary, then connects sectioned analysis to numbered claims and a source register. It does not use an oversized cover or dashboard-style provenance cards.
 
-## Art direction — research workstation, not a generic dashboard
+Two high-fidelity directions were compared. Direction A makes the observed record or article the visual anchor and keeps contextual detail one action away. Direction B, “Signal Room,” uses a dark two-column feed and persistent source-health rail. B presents source health prominently, but repeats status alongside the timeline and competes with the information being investigated. A better supports continuous scanning and publication reading, so it is the selected direction. See the [direction B prototype](ui-redesign/direction-b-signal-room.html), its [screenshot](ui-redesign/screenshots/direction-b-signal-room.png), and the before/after captures in the [redesign evidence](ui-redesign/README.md).
 
-We compared a promotional news-feed composition with a split register-and-dossier workspace. The selected instrument preserves a scannable primary table and puts the provenance dossier beside it. The main object is the real ingested record, not an invented threat score or a decorative health chart.
+## Surface and interaction contracts
 
-The exploration register is a genuine table: record title/kind, organization/source, published-or-observed time, explicit lifecycle state and version. Only the title is an interactive button (not the table row), honoring table semantics and keyboard navigation. In compact mode it favors rapid scanning; standard mode allows multi-line titles. Row numbers indicate sequence on the loaded page, **not priority, severity or global ranking**. The same URL stores `q`, `kind`, `source` and optionally selected `item`. Selected item is inspected inline from 1200px upward, otherwise opened as a document route. The inspector can be closed, resized between 300–640px by pointer or arrow keys, and switched among Overview, Attributes/Provenance and Observation History using existing immutable item/version APIs. Filter chips support independent removal; `/` focuses search, and `j/k` advances selection outside form controls. Arrow keys only change the record while focus is inside the register.
+### Monitoring and investigation
 
-The common navigational geometry is a 54px brand/search bar, a 186px research/publications/operations rail on desktop, and mobile destinations on narrow screens. The Astro publication experience uses the same header and rail for orientation but remains a separate, script-free static renderer. Its archive is a publication register of **actual** report content: category, date, report title, verified claim-classification counts, evidence count and documented KEV status; no CVSS/EPSS scores without a verified source field. Article pages keep their reading lane, linked citations and source list. The report admin displays counts **within the loaded API page**, filterable observed execution states, the last successful refresh, and real run stage/events without fake progress bars or ETAs.
+- **Live Feed** is an observation timeline grouped by actual Tokyo-local date and time. Each entry identifies its source, content kind/category and real record state. Refreshes do not silently reorder the user's current context: newly arrived records are announced in a pending count until requested. Filters live in the URL; pagination remains bounded.
+- **Explore** is a full-width index with compact search and category, kind and source filters. Its row hierarchy favors title, source identity and observed/published time, then explicit state and version. `/` focuses search; `j`/`k` and arrows move through records when the register is active. IME composition is respected. Query filters survive reload and return navigation.
+- Selecting a record opens a **dossier route** rather than replacing part of the index. It presents source identity, publisher link, observed and published times, current immutable version, attributes, provenance and observation history. A validated internal `returnTo` restores Live Feed, Explore, Changes or CVE context and its query. Publisher links are URL-sanitized and open with `noopener noreferrer`.
+- **Changes** remains a view of observed revisions across the existing time ranges. It does not imply unobserved chronology or fabricate a diff.
+- **Sources** and source administration keep configuration, successful collection, recent collection error and unknown state distinct. Operational status derives from API data, not the enabled flag alone.
+- **CVE / KEV** preserves `listed`, `not_listed` and `unknown` as three different states. A mention is not catalog confirmation; unknown is not shown as a negative result. No urgency, severity or intelligence score is invented.
 
-Visual language: neutral paper/graphite, restrained institutional blue for interactions, desaturated warm provenance marker; one thin-rule grammar and contextual typesetting. No marketing hero, card-wall KPIs, stock images, shaders, cyber neon, decorative background gradients or fabricated telemetry. Short CSS transitions only on selection, navigation, filtering and first-record entry, with `prefers-reduced-motion` removing animations. Compact data cells retain title access on mobile and show source/time inline. Light/low-contrast appearances are not a substitute for accessible keyboard focus or statuses in text.
+### Reports and publication
 
-References were interpreted selectively: [Taste Skill](https://github.com/Leonxlnx/taste-skill/blob/main/skills/taste-skill/SKILL.md) for content-specific identity, consistent alignment and restrained finishing; [DADS](https://design.digital.go.jp/dads/) for data tables, typography and accessibility; [Impeccable](https://github.com/pbakaus/impeccable) for critique/distill/harden; [Linear](https://linear.app/now) for navigation receding behind the work object; [OpenCTI](https://docs.opencti.io/latest/usage/filters/) for URL-persisted investigation filters. We did not incorporate external runtime code/assets or the marketing-site-specific rules. User-supplied UX audit identifies useful friction, but speculative real-time protocols, STIX export, severity signals and hardcoded 32px rows are **not approved API contracts**.
+- **Archive** lists real published reports, with category, publication date, title, deck, evidence and claim-classification counts. Empty or sparse publication content remains sparse; fixtures are not shipped as live reports.
+- **Article** uses Japanese reading typography, an immediately visible concise opening, a substantive “read first” summary, numbered sections and an intuitive contents rail. Claim classification and evidence IDs are close to the claim text. The source register provides source identity, publisher, captured/published times and relation metadata. Links connect claims to evidence and back to the report archive or research workspace.
+- The static Astro renderer remains script-free. Article navigation and evidence references use normal anchors and document landmarks; print removes application chrome while retaining report text and source metadata. The SPA shell and publication shell share visual tokens and navigation roles, while keeping their runtime and security responsibilities separate.
+- Report schema versions supported by the existing renderer remain supported. New visual presentation does not alter report JSON, provenance, public release paths or the renderer fingerprint / atomic promotion workflow.
 
-## Published article — provenance dossier
+### Administration
 
-The **article reading view** is the primary result of this system. The previous PRs revised the report index and shell but left individual article pages structurally unchanged. The new dossier composition is intentionally unlike a card-based blog: it treats the publication as an auditable research document.
+Source configuration, collection outcomes, report runs and schedules have explicit tasks and state labels. For report runs, configuration and ad-hoc execution are separate from execution history and event detail; schedule controls remain a separate operational task. Queued, leased, running, validating, publishing, published, failed and unknown states remain distinguishable. Counts are from the loaded API page, not estimated totals. Existing role checks remain server-side and unchanged.
 
-1. **Cover:** compact publication strip, real category/template/date, report title and a concise deck. A provenance stamp exposes actual source and claim counts. The segmented strip represents observed/inferred/unconfirmed **claim counts, not confidence, incident severity or a CVSS estimate**. Legend text stays visible in every mode.
-2. **Editorial brief:** all saved summary points are presented as numbered reading anchors with substantive text; no fabricated abstract, score or additional model-generated information.
-3. **Reading tracks:** a sectional contents rail, restrained ~40-Japanese-character prose measure with 1.85–1.9 line-height, and a source register with anchored evidence IDs, publisher, observed/published times and relation type. Evidence tags link to the canonical source ID; `:target` highlights the destination without any JavaScript.
-4. **CVE:** preserve the three-valued KEV catalog status and freshness caveat. No visual red severity signal for `not_listed` or `unknown`.
-5. **Responsive:** at wide widths, display three parallel tracks; at intermediate widths, a visible contents strip above body + source rail; at narrow widths, title, provenance summary, executive brief, contents, full article and source list in that sequence. Print removes chrome but preserves article and source metadata.
-6. **Motion:** only modest cover/brief entrance and source-target acknowledgement, with `prefers-reduced-motion` removing it. Never infer processing or scoring from an animation.
+## Visual and responsive system
 
-Both article schema v1 blocks and v2 claim-only sections remain supported. This document describes the **actual static Astro renderer**, not a client SPA: the release gate rejects scripts and unsafe URLs, so interactions rely on links, native document landmarks and CSS.
+- Vue 3, Quasar and TypeScript remain the SPA stack; Astro remains the static report stack. Shared paper, ink, green, copper and evidence-link tokens align both renderers without coupling their runtimes.
+- Layout composition changes at component and viewport widths. Fluid type and spacing use `clamp()`, CSS Grid/Flexbox, logical sizing and `@container` where a component's available width matters. Dense filters collapse to usable stacked controls on narrow screens. Japanese text, identifiers and source titles wrap without page-level horizontal overflow.
+- Focus is visible on controls and full rows; status meaning is present in text as well as color. Native links and buttons retain keyboard behavior. Reduced-motion preferences disable transitions. Print styles hide workspace navigation and preserve report content.
+- Live Feed and Explore records are kept in normal rendering flow because they are simple, scannable content. Deferred rendering is limited to the below-fold article evidence register, with intrinsic-size reservation and normal keyboard access.
+- Screenshots and the direction comparison use a synthetic 18-claim/18-source report fixture with observed fact, inference and unconfirmed classifications. The fixture is under `reports/site/test-fixtures/`, excluded from the published content collection.
 
-### Why a report style change previously failed to appear
+## Data, architecture and security invariants
 
-A published report is a *content-addressed HTML+asset release* built by the private report Worker. Merging a Quasar Worker UI PR never updates this origin-side static release. The report image now records a deterministic fingerprint of its bundled Astro renderer in the private release manifest. On the next Worker tick after deployment of a changed report image, a revision mismatch triggers the existing serialized, validated rebuild from immutable DB article JSON and atomic promotion, without re-running Codex or creating new report rows. A failed build preserves the current public pointer; old releases and asset hashes remain for rollback.
+- Research uses the existing same-origin `/v1` API and bounded cursor pagination. The redesign does not add a client credential, alter API schemas or change claim/source semantics.
+- Observation history is immutable. Item return paths are allowlisted internal paths; publisher destinations pass the existing URL safety rules.
+- Administrative endpoints retain independent role authorization. Frontend navigation or presentation is not an authorization boundary.
+- Static SPA hosting remains isolated from `/v1/*`, `/mcp*`, OAuth and the private `/reports/*` origin. The Cloudflare Worker/Tunnel split is unchanged; no catch-all forwarding is introduced.
+- Published output remains sanitized, script-free HTML generated by the Astro renderer. CSP, trusted renderer fingerprinting, content-addressed release assets, validation and atomic release promotion remain intact. No external scripts, runtime CSS or browser-side report data fetching are added.
 
-This propagation mechanism does **not** mean GitHub CI alone has deployed a report Worker image or switched the live site. The runtime verification must record the image digest, active before/after site digest, authenticated `/reports/` and a specific article URL, plus rollback evidence.
+## Verification record
 
-## Navigation and interaction contract
-
-| Surface | Primary user action | State and return path |
-| --- | --- | --- |
-| Explore | Query/filter bounded records; select item; request next cursor page | URL retains `q`, `kind`, `source`, optional selected `item` |
-| Item detail | Verify publisher URL, timestamps, attributes, provenance and recent immutable versions | Allowlisted internal `returnTo` preserves Explore, Changes or CVE origin; other targets fall back to Explore |
-| Changes | Compare observed revisions over 7/30/90 days | Open underlying record; do not invent chronological diff details |
-| Sources | Find and filter registered sources, distinguish enabled config from successful fetch | Admin actions require independent origin authorization |
-| CVE / KEV | Differentiate listed, fresh not-listed and unknown; inspect related evidence | Return to the originating Explore/Item view; mentions are not KEV confirmation |
-| Source admin/onboarding | Maintain reviewed custom sources or generate Git review definitions | Disabled-by-default registration and explicit confirmation for destructive/enable actions |
-| Report admin | Enqueue template runs; inspect actual state/stage/events and schedules | Queued is not published; read published output in `/reports/` |
-| Report publication | Read article, follow claim/evidence references, navigate back to the library | Persistent shared navigation and contextual links to archive, evidence and Explore |
-
-Desktop uses a left navigation rail and, from 1200px upward, an optional resizable record preview. Below that breakpoint, selecting a record opens a readable detail route. Mobile uses bottom navigation, inline source/time metadata and full-width actions. Report articles use a reading column and a reference register: sticky alongside on wide screens, placed after the body on narrow screens. The workspace nav remains available across the SPA and separate report pages.
-
-## Technical contracts
-
-- Same-origin `/v1` GET for research; admin mutation endpoints are separately role-protected. Never expose a client token, SQL or untrusted HTML.
-- Bounded `/v1/items` cursor pagination; cancel stale requests when filters change. Independent errors do not imply zero sources or records.
-- Source state must distinguish **configured enabled**, **successful collection**, and **last error**; do not derive service health from enabled alone.
-- Static SPA routes on Cloudflare must remain narrow. `/v1/*`, `/mcp*`, OAuth and `/reports/*` remain behind the existing Access/Tunnel origin. No catch-all Worker forwarding.
-- Astro outputs are built one-shot by the report Worker, not rendered by a persistent VM frontend server. Its trusted renderer rejects scripts, JS assets, unapproved internal links and external links without `noopener noreferrer`. Keep archive filtering server-side or omit it rather than weakening this gate.
-
-## Verification gates
-
-1. `ui/` typecheck and production build; `reports/site/` build and report fixtures.
-2. 320px, 390px, 1199px, 1200px and 1440px: navigation, overflowing text, filtering, item return, source-status triage, report-to-library return, and long evidence registers.
-3. Keyboard (`/`, `j/k`, arrow keys inside register, resize keys), focus return, Japanese IME, contrast, dark mode, reduced motion, loading, empty, permission and error states.
-4. Actual API/JWT/role checks and live Cloudflare routing, including unknown paths and rollback, separately from CI.
-
-**A checked code path is not a verified live browser or deployment path.** Record runtime test evidence only when it is actually observed.
-
-## Design references
-
-[Impeccable](https://github.com/pbakaus/impeccable) was used for the audit vocabulary (critique, distill, polish, harden, adapt), not installed as a runtime dependency. No external CSS, assets or automated install hooks are copied into this product.
+Automated build and fixture results, rendered browser walkthroughs, screenshot evidence, resource-size comparison, limitations and Modern Web Guidance references are maintained in [docs/ui-redesign/README.md](ui-redesign/README.md). Those local checks do not claim production Core Web Vitals, authenticated Cloudflare Access behavior, remote origin routing, image promotion or rollback. No merge or deployment is part of this design contract.

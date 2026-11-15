@@ -33,7 +33,7 @@ async function openSearch() {
   closeDrawerOnMobile()
   if (route.path !== '/explore') await router.push({ name: 'explore' })
   await nextTick()
-  document.getElementById('nous-search-input')?.focus()
+  document.querySelector<HTMLInputElement>('.atlas-search-field input')?.focus()
 }
 </script>
 
@@ -60,7 +60,7 @@ async function openSearch() {
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="drawerOpen" show-if-above :breakpoint="1024" :width="186" bordered class="nous-drawer">
+    <q-drawer v-model="drawerOpen" show-if-above :breakpoint="1024" :width="216" bordered class="nous-drawer">
       <nav class="sidebar-main" aria-label="主要ナビゲーション">
         <div class="sidebar-caption">RESEARCH</div>
         <q-list class="sidebar-nav">

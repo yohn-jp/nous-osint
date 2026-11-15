@@ -6,6 +6,7 @@ const templates = ref<ReportTemplate[]>([])
 const runs = ref<ReportRunListItem[]>([])
 const schedules = ref<ReportSchedule[]>([])
 const selectedRun = ref<ReportRun | null>(null)
+const detailDismissed = ref(false)
 const selectedTemplate = ref<ReportTemplateId>('security-daily')
 const loading = ref(true)
 const dataReady = ref(false)
@@ -158,8 +159,11 @@ async function loadData(initial = false) {
     if (previouslyLoaded <= 100 || (pageTail && !knownBeforeRefresh.has(pageTail.id))) {
       nextScheduleCursor.value = schedulePage.next_cursor
     }
-    if (selectedRun.value) {
-      selectedRun.value = await api.adminReportRun(selectedRun.value.run_id)
+    const runToInspect = selectedRun.value?.run_id ??
+      (!detailDismissed.value ? sortedRuns.value[0]?.run_id : undefined)
+    if (runToInspect) {
+      try { selectedRun.value = await api.adminReportRun(runToInspect) }
+      catch { if (!selectedRun.value) selectedRun.value = null }
     }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'レポート管理情報を取得できません。'
@@ -232,12 +236,18 @@ async function enqueueRun() {
 }
 
 async function showRun(runId: string) {
+  detailDismissed.value = false
   selectedRun.value = null
   busy.value = `detail:${runId}`
   error.value = ''
   try { selectedRun.value = await api.adminReportRun(runId) }
   catch (cause) { error.value = cause instanceof Error ? cause.message : '実行詳細を取得できません。' }
   finally { busy.value = '' }
+}
+
+function closeRunDetail() {
+  detailDismissed.value = true
+  selectedRun.value = null
 }
 
 async function createSchedule() {
@@ -304,6 +314,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
       <div class="admin-stat"><span>公開済み（読込範囲）</span><strong>{{ publishedCount }}</strong></div>
     </div>
 
+    <div class="report-operations-grid">
     <section class="content-panel q-mt-lg" aria-labelledby="new-report-heading">
       <div class="section-heading">
         <div>
@@ -406,7 +417,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
               <div class="eyebrow">RUN DETAIL</div>
               <div class="text-subtitle1 text-weight-bold q-mt-xs">{{ templateTitle(selectedRun.template_id) }}</div>
             </div>
-            <q-btn flat round dense icon="close" aria-label="詳細を閉じる" @click="selectedRun = null" />
+            <q-btn flat round dense icon="close" aria-label="詳細を閉じる" @click="closeRunDetail" />
           </div>
           <div class="detail-line"><span>状態</span><strong>{{ stateLabel(selectedRun.state) }} / {{ stageLabel(selectedRun.stage) }}</strong></div>
           <div class="detail-line"><span>実行ID</span><code>{{ selectedRun.run_id }}</code></div>
@@ -464,6 +475,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
       </div>
       <div class="admin-hint">最新50件から表示します。古い履歴は追加で読み込めます。状態は10秒ごとに取得します。処理状況はワーカーが最後に保存した状態です。</div>
     </section>
+    </div>
 
     <section class="content-panel q-mt-lg" aria-labelledby="schedule-heading">
       <div class="section-heading">
@@ -527,48 +539,27 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 </template>
 
 <style scoped>
-.report-admin section { overflow: hidden; }
-.run-sync-time { color: var(--nous-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.report-run-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 10px 17px; border-bottom: 1px solid var(--nous-line); }
-.report-run-filter { min-height: 36px; padding: 6px 12px; background: none; border: 1px solid transparent; border-radius: 3px; color: var(--nous-muted); cursor: pointer; font: inherit; font-size: 12px; font-weight: 650; }
-.report-run-filter:hover { border-color: var(--nous-line); }
-.report-run-filter.active { color: var(--nous-ink); background: var(--nous-accent-wash); border-color: var(--nous-line); }
-.report-run-filter-count { margin-left: auto; color: var(--nous-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.report-run-empty { min-height: 95px; font-size: 13px; }
-.report-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 19px 22px; border-bottom: 1px solid var(--nous-line); }
+.report-operations-grid { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.25fr); gap: 18px; align-items: start; }
+.report-operations-grid > .content-panel.q-mt-lg { min-width: 0; margin-top: 0 !important; }
+.report-operations-grid .report-form .q-form > .col-sm-4 { flex: 0 0 50%; max-width: 50%; }
 .report-form-wrap { padding: 0 22px 22px; }
-.report-template-tabs { border-bottom: 1px solid var(--nous-line); }
-.report-form { max-width: 980px; }
 .schedule-form { padding: 20px 22px 8px; }
-.run-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); }
-.run-list { min-width: 0; }
-.run-row { width: 100%; display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 17px 22px; border: 0; border-bottom: 1px solid var(--nous-line); background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.run-row:hover, .run-row:focus-visible, .run-row.selected { background: var(--nous-hover); }
-.run-row:focus-visible { outline: 2px solid #4e9565; outline-offset: -2px; }
 .run-row-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.run-title { font-size: 14px; font-weight: 650; }
-.run-meta { color: var(--nous-muted); font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
-.run-state { flex: 0 0 auto; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 700; background: var(--nous-hover); }
-.state-published { color: #237044; background: #e8f5ea; }
-.state-failed { color: #9c2f2f; background: #fff0ee; }
-.state-skipped, .state-cancelled { color: var(--nous-muted); }
-.body--dark .state-published { color: #a4deb1; background: #294331; }
-.body--dark .state-failed { color: #ffaaa1; background: #4b2927; }
-.run-detail { min-width: 0; padding: 20px; border-left: 1px solid var(--nous-line); background: var(--nous-paper); }
 .run-detail-empty { display: grid; place-items: center; }
-.detail-line { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--nous-line); font-size: 12px; overflow-wrap: anywhere; }
-.detail-line > span:first-child { color: var(--nous-muted); }
-.stage-line { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--nous-line); font-size: 11px; }
-.event-timeline { list-style: none; padding: 0; margin: 0; max-height: 420px; overflow: auto; }
-.event-row { padding: 9px 0; border-bottom: 1px solid var(--nous-line); font-size: 11px; overflow-wrap: anywhere; }
-.event-row.event-failed { color: var(--q-negative); }
+.run-detail .detail-line { overflow-wrap: anywhere; }
+.event-timeline { max-height: 420px; overflow: auto; }
 .event-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.event-heading > span, .event-meta { color: var(--nous-muted); font-size: 10px; line-height: 1.6; }
-.event-code { font-family: monospace; font-weight: 700; }
-.schedule-list { border-top: 1px solid var(--nous-line); }
-.schedule-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--nous-line); }
+.event-heading > span, .event-meta { color: var(--atlas-muted); font-size: 10px; line-height: 1.6; }
+.event-code { font: 650 10px/1.6 var(--atlas-mono-font); }
+.schedule-list { border-top: 1px solid var(--atlas-rule); }
 .schedule-main { min-width: 0; overflow-wrap: anywhere; }
-@media (max-width: 900px) { .run-grid { grid-template-columns: minmax(0,1fr); } .run-detail { border-left: 0; border-top: 1px solid var(--nous-line); } }
-@media (max-width: 600px) { .report-stats { gap: 6px; } .section-heading, .report-form-wrap, .schedule-form { padding-left: 15px; padding-right: 15px; } .section-heading { padding-top: 16px; padding-bottom: 16px; } .run-row { align-items: flex-start; padding: 15px; } .schedule-row { padding: 15px; } .run-state { white-space: nowrap; } }
+@media (max-width: 1100px) {
+  .report-operations-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .report-form-wrap, .schedule-form { padding-left: 15px; padding-right: 15px; }
+  .report-operations-grid .report-form .q-form > .col-sm-4 { flex-basis: 100%; max-width: 100%; }
+  .run-row { align-items: flex-start; padding: 13px 11px; }
+  .run-state { white-space: nowrap; }
+}
 </style>
