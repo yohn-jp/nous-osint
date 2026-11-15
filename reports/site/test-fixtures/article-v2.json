@@ -6,43 +6,436 @@
   "schema_version": 2,
   "template_id": "security-daily",
   "language": "ja",
-  "title": "セキュリティ情報 2026-11-03",
-  "dek": "公表元が更新情報を掲載したことを観測しました。",
+  "title": "検証用の合成情報源は注意喚起の改訂を公開しています。",
+  "dek": "検証用の合成情報源は注意喚起の改訂を公開しています。",
   "summary": [
-    "公表元が更新情報を掲載したことを観測しました。"
+    "検証用の合成情報源は注意喚起の改訂を公開しています。",
+    "合成資料の更新日時は検証用データに記録されています。",
+    "複数の合成資料は共通する製品群に言及しています。"
   ],
   "sections": [
     {
       "heading": "確認された事実",
       "claim_ids": [
-        "C001"
+        "C001",
+        "C002",
+        "C003",
+        "C004",
+        "C005",
+        "C006",
+        "C007",
+        "C008"
       ],
       "evidence_ids": [
-        "E001"
+        "E001",
+        "E002",
+        "E003",
+        "E004",
+        "E005",
+        "E006",
+        "E007",
+        "E008"
+      ]
+    },
+    {
+      "heading": "分析",
+      "claim_ids": [
+        "C009",
+        "C010",
+        "C011",
+        "C012",
+        "C013",
+        "C014"
+      ],
+      "evidence_ids": [
+        "E009",
+        "E010",
+        "E011",
+        "E012",
+        "E013",
+        "E014"
+      ]
+    },
+    {
+      "heading": "未確認事項",
+      "claim_ids": [
+        "C015",
+        "C016",
+        "C017",
+        "C018"
+      ],
+      "evidence_ids": [
+        "E015",
+        "E016",
+        "E017",
+        "E018"
       ]
     }
   ],
   "claims": [
     {
       "claim_id": "C001",
-      "text": "公表元が更新情報を掲載したことを観測しました。",
+      "text": "検証用の合成情報源は注意喚起の改訂を公開しています。",
       "classification": "observed",
       "evidence_ids": [
         "E001"
       ],
       "section": "primary_observations",
+      "importance": "high"
+    },
+    {
+      "claim_id": "C002",
+      "text": "合成資料の更新日時は検証用データに記録されています。",
+      "classification": "observed",
+      "evidence_ids": [
+        "E002"
+      ],
+      "section": "primary_observations",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C003",
+      "text": "合成アドバイザリは影響する製品群を列挙しています。",
+      "classification": "observed",
+      "evidence_ids": [
+        "E003",
+        "E004"
+      ],
+      "section": "primary_observations",
+      "importance": "high"
+    },
+    {
+      "claim_id": "C004",
+      "text": "検証用の変更履歴には修正済みバージョンが記載されています。",
+      "classification": "observed",
+      "evidence_ids": [
+        "E004"
+      ],
+      "section": "primary_observations",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C005",
+      "text": "合成資料は緩和策として設定変更を案内しています。",
+      "classification": "observed",
+      "evidence_ids": [
+        "E005"
+      ],
+      "section": "primary_observations",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C006",
+      "text": "検証用の参考文書には調査対象の識別子が記載されています。",
+      "classification": "observed",
+      "evidence_ids": [
+        "E006"
+      ],
+      "section": "primary_observations",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C007",
+      "text": "合成情報源の公開元は追加の技術資料へリンクしています。",
+      "classification": "observed",
+      "evidence_ids": [
+        "E007"
+      ],
+      "section": "primary_observations",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C008",
+      "text": "検証用の記録では更新前後の説明が保存されています。",
+      "classification": "observed",
+      "evidence_ids": [
+        "E008"
+      ],
+      "section": "primary_observations",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C009",
+      "text": "複数の合成資料は共通する製品群に言及しています。",
+      "classification": "inference",
+      "evidence_ids": [
+        "E009",
+        "E010"
+      ],
+      "section": "analysis",
+      "importance": "high"
+    },
+    {
+      "claim_id": "C010",
+      "text": "合成資料間の時刻差だけでは公開順序を確定できません。",
+      "classification": "inference",
+      "evidence_ids": [
+        "E010"
+      ],
+      "section": "analysis",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C011",
+      "text": "記載された緩和策は製品ごとの適用条件が異なります。",
+      "classification": "inference",
+      "evidence_ids": [
+        "E011"
+      ],
+      "section": "analysis",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C012",
+      "text": "更新履歴の一致は同一の原因を示すとは限りません。",
+      "classification": "inference",
+      "evidence_ids": [
+        "E012"
+      ],
+      "section": "analysis",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C013",
+      "text": "参照先の構成差が影響範囲の解釈に影響する可能性があります。",
+      "classification": "inference",
+      "evidence_ids": [
+        "E013",
+        "E014"
+      ],
+      "section": "analysis",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C014",
+      "text": "利用可能な合成資料だけでは悪用の有無を判断できません。",
+      "classification": "inference",
+      "evidence_ids": [
+        "E014"
+      ],
+      "section": "analysis",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C015",
+      "text": "一部の検証用資料では対象バージョンが明示されていません。",
+      "classification": "unconfirmed",
+      "evidence_ids": [
+        "E015"
+      ],
+      "section": "unknowns",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C016",
+      "text": "合成情報源の一つは関連する修正版を特定していません。",
+      "classification": "unconfirmed",
+      "evidence_ids": [
+        "E016"
+      ],
+      "section": "unknowns",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C017",
+      "text": "検証用の記録には実環境での適用結果が含まれていません。",
+      "classification": "unconfirmed",
+      "evidence_ids": [
+        "E017"
+      ],
+      "section": "unknowns",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "C018",
+      "text": "追加の公開情報がないため影響組織の範囲は未確認です。",
+      "classification": "unconfirmed",
+      "evidence_ids": [
+        "E018"
+      ],
+      "section": "unknowns",
       "importance": "normal"
     }
   ],
   "sources": [
     {
       "evidence_id": "E001",
-      "source_key": "fixture-source",
+      "source_key": "synthetic-research-source-01",
       "relation": "record",
-      "title": "Synthetic advisory metadata fixture",
-      "publisher_url": "https://example.com/advisory-fixture",
-      "observed_at": "2026-11-04T01:00:00Z",
+      "title": "合成資料 01 — 注意喚起本文",
+      "publisher_url": "https://example.com/nous-fixture/source-01",
+      "observed_at": "2026-11-04T09:15:00Z",
+      "published_at": "2026-11-03T07:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E002",
+      "source_key": "synthetic-research-source-02",
+      "relation": "reference",
+      "title": "合成資料 02 — 更新履歴",
+      "publisher_url": "https://example.com/nous-fixture/source-02",
+      "observed_at": "2026-11-04T10:15:00Z",
+      "published_at": "2026-11-03T08:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E003",
+      "source_key": "synthetic-research-source-03",
+      "relation": "title_mention",
+      "title": "合成資料 03 — 製品一覧",
+      "publisher_url": "https://example.com/nous-fixture/source-03",
+      "observed_at": "2026-11-04T11:15:00Z",
+      "published_at": "2026-11-03T09:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E004",
+      "source_key": "synthetic-research-source-04",
+      "relation": "record",
+      "title": "合成資料 04 — 修正版の案内",
+      "publisher_url": "https://example.com/nous-fixture/source-04",
+      "observed_at": "2026-11-04T12:15:00Z",
+      "published_at": "2026-11-03T10:00:00Z",
+      "license_id": "CC-BY-4.0"
+    },
+    {
+      "evidence_id": "E005",
+      "source_key": "synthetic-research-source-05",
+      "relation": "reference",
+      "title": "合成資料 05 — 緩和策メモ",
+      "publisher_url": "https://example.com/nous-fixture/source-05",
+      "observed_at": "2026-11-04T13:15:00Z",
       "published_at": null,
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E006",
+      "source_key": "synthetic-research-source-06",
+      "relation": "record",
+      "title": "合成資料 06 — 識別子一覧",
+      "publisher_url": "https://example.com/nous-fixture/source-06",
+      "observed_at": "2026-11-04T14:15:00Z",
+      "published_at": "2026-11-03T12:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E007",
+      "source_key": "synthetic-research-source-07",
+      "relation": "title_mention",
+      "title": "合成資料 07 — 技術資料への参照",
+      "publisher_url": "https://example.com/nous-fixture/source-07",
+      "observed_at": "2026-11-05T15:15:00Z",
+      "published_at": "2026-11-04T13:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E008",
+      "source_key": "synthetic-research-source-08",
+      "relation": "reference",
+      "title": "合成資料 08 — 変更前後の記録",
+      "publisher_url": "https://example.com/nous-fixture/source-08",
+      "observed_at": "2026-11-05T16:15:00Z",
+      "published_at": "2026-11-04T14:00:00Z",
+      "license_id": "CC-BY-4.0"
+    },
+    {
+      "evidence_id": "E009",
+      "source_key": "synthetic-research-source-09",
+      "relation": "record",
+      "title": "合成資料 09 — 製品群の記載",
+      "publisher_url": "https://example.com/nous-fixture/source-09",
+      "observed_at": "2026-11-05T17:15:00Z",
+      "published_at": "2026-11-04T15:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E010",
+      "source_key": "synthetic-research-source-10",
+      "relation": "reference",
+      "title": "合成資料 10 — 更新時刻の比較",
+      "publisher_url": "https://example.com/nous-fixture/source-10",
+      "observed_at": "2026-11-05T18:15:00Z",
+      "published_at": null,
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E011",
+      "source_key": "synthetic-research-source-11",
+      "relation": "title_mention",
+      "title": "合成資料 11 — 適用条件の注記",
+      "publisher_url": "https://example.com/nous-fixture/source-11",
+      "observed_at": "2026-11-05T19:15:00Z",
+      "published_at": "2026-11-04T17:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E012",
+      "source_key": "synthetic-research-source-12",
+      "relation": "record",
+      "title": "合成資料 12 — 更新内容の照合",
+      "publisher_url": "https://example.com/nous-fixture/source-12",
+      "observed_at": "2026-11-05T20:15:00Z",
+      "published_at": "2026-11-04T18:00:00Z",
+      "license_id": "CC-BY-4.0"
+    },
+    {
+      "evidence_id": "E013",
+      "source_key": "synthetic-research-source-13",
+      "relation": "reference",
+      "title": "合成資料 13 — 影響範囲の参考文書",
+      "publisher_url": "https://example.com/nous-fixture/source-13",
+      "observed_at": "2026-11-06T21:15:00Z",
+      "published_at": "2026-11-05T19:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E014",
+      "source_key": "synthetic-research-source-14",
+      "relation": "record",
+      "title": "合成資料 14 — 悪用状況の調査範囲",
+      "publisher_url": "https://example.com/nous-fixture/source-14",
+      "observed_at": "2026-11-06T22:15:00Z",
+      "published_at": "2026-11-05T20:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E015",
+      "source_key": "synthetic-research-source-15",
+      "relation": "title_mention",
+      "title": "合成資料 15 — 対象バージョン欄",
+      "publisher_url": "https://example.com/nous-fixture/source-15",
+      "observed_at": "2026-11-06T23:15:00Z",
+      "published_at": null,
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E016",
+      "source_key": "synthetic-research-source-16",
+      "relation": "reference",
+      "title": "合成資料 16 — 修正版の記載",
+      "publisher_url": "https://example.com/nous-fixture/source-16",
+      "observed_at": "2026-11-06T00:15:00Z",
+      "published_at": "2026-11-05T22:00:00Z",
+      "license_id": "CC-BY-4.0"
+    },
+    {
+      "evidence_id": "E017",
+      "source_key": "synthetic-research-source-17",
+      "relation": "record",
+      "title": "合成資料 17 — 検証結果の欄",
+      "publisher_url": "https://example.com/nous-fixture/source-17",
+      "observed_at": "2026-11-06T01:15:00Z",
+      "published_at": "2026-11-05T23:00:00Z",
+      "license_id": "NOASSERTION"
+    },
+    {
+      "evidence_id": "E018",
+      "source_key": "synthetic-research-source-18",
+      "relation": "reference",
+      "title": "合成資料 18 — 関連組織の記載",
+      "publisher_url": "https://example.com/nous-fixture/source-18",
+      "observed_at": "2026-11-06T02:15:00Z",
+      "published_at": "2026-11-05T00:00:00Z",
       "license_id": "NOASSERTION"
     }
   ]
