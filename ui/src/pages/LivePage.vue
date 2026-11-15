@@ -26,42 +26,61 @@ const categories = [
   { label: 'セキュリティ動向', value: 'security_news' },
   { label: '企業・業界動向', value: 'industry' },
 ]
-const categoryOptions = [{ label: 'セキュリティ全件', value: null }, ...categories]
+const categoryOptions = [{ label: 'すべての観測', value: null }, ...categories]
+const categoryName = (value: string) => categories.find(row => row.value === value)?.label ?? value
 const sourceOptions = computed(() => [
-  { label: 'すべての発信源', value: null },
-  ...sources.value
-    .filter(s => s.category !== 'careers' &&
-      (!selectedCategory.value || s.category === selectedCategory.value))
-    .map(s => ({ label: s.id, value: s.id })),
+  { label: 'すべての情報源', value: null },
+  ...sources.value.filter(source => source.category !== 'careers' &&
+    (!selectedCategory.value || source.category === selectedCategory.value))
+    .map(source => ({ label: source.id, value: source.id })),
 ])
-const totalVisible = computed(() => records.value.length)
 const latestObservation = computed(() => records.value[0]?.observed_at ?? null)
-const filterLabel = computed(() => categories.find(c => c.value === selectedCategory.value)?.label ?? '全カテゴリ')
+const filterLabel = computed(() => categoryName(selectedCategory.value ?? 'すべての観測'))
+const dayGroups = computed(() => {
+  const groups: { key: string; label: string; rows: StreamObservation[] }[] = []
+  for (const row of records.value) {
+    const parts = new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
+    }).formatToParts(new Date(row.observed_at))
+    const part = (type: string) => parts.find(value => value.type === type)?.value ?? ''
+    const key = `${part('year')}-${part('month')}-${part('day')}`
+    let group = groups.at(-1)
+    if (!group || group.key !== key) {
+      group = { key, label: `${part('month')} ${part('day')}日 · ${part('weekday')}曜日`, rows: [] }
+      groups.push(group)
+    }
+    group.rows.push(row)
+  }
+  return groups
+})
+
 let request: AbortController | null = null
 let olderRequest: AbortController | null = null
+let sourceController: AbortController | null = null
 let generation = 0
 let interval: ReturnType<typeof setInterval> | null = null
 
-function queryValue(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
+function queryValue(value: unknown): string { return typeof value === 'string' ? value : '' }
 function updateFilters() {
-  void router.replace({
-    name: 'live',
-    query: {
-      ...(selectedCategory.value ? { category: selectedCategory.value } : {}),
-      ...(selectedSource.value ? { source: selectedSource.value } : {}),
-    },
-  })
+  void router.replace({ name: 'live', query: {
+    ...(selectedCategory.value ? { category: selectedCategory.value } : {}),
+    ...(selectedSource.value ? { source: selectedSource.value } : {}),
+  } })
 }
 function updateCategory() {
-  // A selected source may belong to a different category.
-  if (selectedSource.value &&
-      sources.value.find(s => s.id === selectedSource.value)?.category !== selectedCategory.value)
+  if (selectedSource.value && sources.value.find(source => source.id === selectedSource.value)?.category !== selectedCategory.value)
     selectedSource.value = null
   updateFilters()
 }
-
+function platformLabel(platform: StreamObservation['platform']) {
+  return platform === 'bluesky' ? 'BLUESKY' : platform === 'x' ? 'X'
+    : platform === 'rss' ? 'RSS / ATOM' : platform === 'json_api' ? 'JSON API' : 'WEB'
+}
+function timeLabel(value: string) {
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(new Date(value))
+}
 async function loadLatest(install = true) {
   request?.abort()
   const controller = new AbortController()
@@ -92,11 +111,9 @@ async function loadLatest(install = true) {
     if (token === generation && !controller.signal.aborted) loading.value = false
   }
 }
-
 async function loadOlder() {
   if (loading.value || loadingMore.value || nextCursor.value === null) return
   const token = generation
-  const cursor = nextCursor.value
   const controller = new AbortController()
   olderRequest = controller
   loadingMore.value = true
@@ -104,7 +121,7 @@ async function loadOlder() {
     const page = await api.stream({
       category: queryValue(route.query.category) || undefined,
       source: queryValue(route.query.source) || undefined,
-      limit: 40, cursor,
+      limit: 40, cursor: nextCursor.value,
     }, controller.signal)
     if (controller.signal.aborted || token !== generation) return
     const seen = new Set(records.value.map(row => row.observation_id))
@@ -128,123 +145,114 @@ watch(() => [route.query.category, route.query.source], () => {
   pendingNew.value = 0
   void loadLatest(true)
 }, { immediate: true })
-
 onMounted(async () => {
-  const controller = new AbortController()
-  sourceController = controller
-  try {
-    sources.value = await api.sources(controller.signal)
-  } catch (cause) {
+  sourceController = new AbortController()
+  try { sources.value = await api.sources(sourceController.signal) }
+  catch (cause) {
     if (!(cause instanceof Error && cause.name === 'AbortError'))
-      sourceError.value = '発信源一覧を読み込めませんでした。Feed自体は利用できます。'
+      sourceError.value = '発信源一覧を読み込めませんでした。観測記録の閲覧は続けられます。'
   }
   interval = setInterval(() => {
-    if (autoRefresh.value && document.visibilityState === 'visible' && !loading.value &&
-        !loadingMore.value) void loadLatest(false)
+    if (autoRefresh.value && document.visibilityState === 'visible' && !loading.value && !loadingMore.value)
+      void loadLatest(false)
   }, 60_000)
 })
-let sourceController: AbortController | null = null
 onBeforeUnmount(() => {
-  request?.abort()
-  olderRequest?.abort()
-  sourceController?.abort()
+  request?.abort(); olderRequest?.abort(); sourceController?.abort()
   if (interval !== null) clearInterval(interval)
 })
 </script>
 
 <template>
-  <q-page class="nous-page live-page">
-    <header class="live-heading">
-      <div class="live-heading-copy">
-        <p class="workstation-overline">INTELLIGENCE <span aria-hidden="true">/</span> SOURCE SIGNALS</p>
-        <h1 class="page-title">Live Intelligence</h1>
-        <p class="page-subtitle">研究者・一次発信源の公開情報を、Nousで観測した順に表示します。翻訳・要約・脅威度の推測は行いません。</p>
+  <q-page class="nous-page atlas-page live-page">
+    <header class="atlas-page-heading">
+      <div class="atlas-heading-copy">
+        <p class="atlas-kicker"><span class="atlas-kicker-mark" aria-hidden="true"></span> OBSERVATIONS · PUBLIC SOURCES</p>
+        <h1 class="atlas-title">観測記録</h1>
+        <p class="atlas-description">公開情報がNousに記録された順に並びます。見出しから収集記録と出典をたどれます。</p>
       </div>
-      <div class="live-heading-actions">
-        <q-btn unelevated no-caps color="primary" icon="refresh" label="最新を確認"
-          :loading="loading" @click="loadLatest(true)" />
-        <q-toggle v-model="autoRefresh" dense label="自動確認 / 60秒" color="primary" />
+      <div class="atlas-feed-actions">
+        <q-toggle v-model="autoRefresh" dense color="primary" label="60秒ごとに確認" aria-label="60秒ごとに自動確認" />
+        <q-btn flat no-caps icon="refresh" label="今すぐ確認" :loading="loading" @click="loadLatest(true)" />
       </div>
     </header>
-    <div class="live-monitor" role="status" aria-live="polite">
-      <span class="live-monitor-dot" :class="{ 'is-paused': !autoRefresh }" aria-hidden="true"></span>
-      <span>{{ autoRefresh ? '60秒ごとに新着を確認' : '自動確認は停止中' }}</span>
-      <span class="live-monitor-separator" aria-hidden="true"></span>
-      <span>最終確認: {{ dateLabel(lastChecked) }}</span>
-      <span class="live-monitor-separator" aria-hidden="true"></span>
-      <span>最新の収集観測: {{ dateLabel(latestObservation) }}</span>
+
+    <section class="atlas-feed-status" role="status" aria-live="polite">
+      <span class="atlas-status-glyph" :class="{ 'is-paused': !autoRefresh }" aria-hidden="true"></span>
+      <span>{{ autoRefresh ? '自動確認中' : '自動確認を停止中' }}</span>
+      <span class="atlas-status-divider" aria-hidden="true"></span>
+      <span>最終確認 <time v-if="lastChecked" :datetime="lastChecked">{{ dateLabel(lastChecked) }}</time><span v-else>—</span></span>
+      <span class="atlas-status-divider" aria-hidden="true"></span>
+      <span>最新記録 <time v-if="latestObservation" :datetime="latestObservation">{{ dateLabel(latestObservation) }}</time><span v-else>—</span></span>
+    </section>
+
+    <section class="atlas-filter-strip" aria-label="観測を絞り込む">
+      <span class="atlas-filter-label">表示範囲</span>
+      <q-select v-model="selectedCategory" dense borderless emit-value map-options :options="categoryOptions"
+        aria-label="カテゴリ" class="atlas-filter-select" @update:model-value="updateCategory" />
+      <span class="atlas-filter-divider" aria-hidden="true"></span>
+      <q-select v-model="selectedSource" dense borderless emit-value map-options :options="sourceOptions"
+        aria-label="発信源" class="atlas-filter-select atlas-source-filter" @update:model-value="updateFilters" />
+      <span class="atlas-filter-result">{{ filterLabel }} · {{ records.length }}件</span>
+    </section>
+
+    <p v-if="sourceError" class="atlas-inline-notice" role="status">{{ sourceError }}</p>
+    <div v-if="pendingNew > 0" class="atlas-new-observations" role="status">
+      <span>先頭40件に {{ pendingNew }} 件の新しい観測があります。現在の位置は維持しています。</span>
+      <q-btn flat no-caps color="primary" label="先頭に移動" @click="loadLatest(true)" />
     </div>
 
-    <section class="live-filters" aria-label="発信源の絞り込み">
-      <q-select v-model="selectedCategory" dense outlined emit-value map-options
-        :options="categoryOptions" label="対象カテゴリ" @update:model-value="updateCategory" />
-      <q-select v-model="selectedSource" dense outlined emit-value map-options
-        :options="sourceOptions" label="発信源"
-        @update:model-value="updateFilters" />
-      <span class="live-filter-note">速報性の順位付けではありません。到着した観測記録を新しい順に掲載します。</span>
-    </section>
-    <p v-if="sourceError" class="text-warning" role="status">{{ sourceError }}</p>
-    <div v-if="pendingNew > 0" class="live-pending" role="status">
-      <span>新しい観測があります（先頭40件中 {{ pendingNew }} 件）。閲覧中の位置は変更していません。</span>
-      <q-btn unelevated no-caps color="primary" label="新着を表示" @click="loadLatest(true)" />
+    <div v-if="loading && records.length === 0" class="atlas-stream-skeleton" role="status" aria-label="観測情報を取得中">
+      <q-skeleton v-for="index in 6" :key="index" type="rect" height="86px" class="atlas-skeleton-row" />
     </div>
-    <div class="live-stream-header">
-      <div><span class="live-stream-label">OBSERVATION STREAM</span>
-        <h2>新着・更新</h2></div>
-      <span>{{ filterLabel }} · {{ totalVisible }} 件表示</span>
+    <div v-else-if="error && !records.length" class="atlas-empty atlas-error" role="alert">
+      <span class="atlas-empty-code">FEED / UNAVAILABLE</span><h2>観測記録を取得できません</h2><p>{{ error }}</p>
+      <q-btn outline no-caps label="再試行" @click="loadLatest(true)" />
     </div>
-    <div v-if="loading && records.length === 0" class="live-skeleton" role="status" aria-label="観測情報を取得中">
-      <q-skeleton v-for="n in 6" :key="n" type="rect" height="95px" class="q-mb-sm" />
+    <div v-else-if="!records.length" class="atlas-empty">
+      <span class="atlas-empty-code">NO OBSERVATIONS</span><h2>条件に合う観測記録はありません</h2>
+      <p>条件を変えるか、情報源の取得状態を確認してください。</p>
+      <router-link to="/sources">情報源の状態を見る <span aria-hidden="true">↗</span></router-link>
     </div>
-    <div v-else-if="error && !records.length" class="workstation-message" role="alert">
-      <strong>Live Feedに接続できません</strong>
-      <p>{{ error }}</p><q-btn outline no-caps color="primary" label="再試行" @click="loadLatest(true)" />
-    </div>
-    <div v-else-if="!records.length" class="workstation-message">
-      <strong>該当する観測はまだありません</strong>
-      <p>収集が未開始か、選択した条件で新しい情報が見つかっていません。情報源の稼働状態をご確認ください。</p>
-      <q-btn outline no-caps color="primary" to="/sources" label="情報源の状態" />
-    </div>
-    <ol v-else class="live-stream-list">
-      <li v-for="observation in records" :key="observation.observation_id" class="live-entry">
-        <div class="live-entry-rail">
-          <span class="live-entry-marker" :class="{ 'is-update': observation.change === 'updated' }"></span>
-        </div>
-        <article class="live-entry-content">
-          <div class="live-entry-headline">
-            <div class="live-entry-origin">
-              <span class="live-entry-platform">{{ observation.platform === 'bluesky' ? 'BLUESKY' :
-                observation.platform === 'x' ? 'X' :
-                observation.platform === 'rss' ? 'RSS / ATOM' : observation.platform.toUpperCase() }}</span>
-              <span class="live-entry-author">{{ observation.organization || observation.source }}</span>
-              <span class="live-entry-change">{{ observation.change === 'new' ? '新規' : '更新' }}</span>
+
+    <div v-else class="observation-ledger" aria-label="観測記録一覧">
+      <section v-for="group in dayGroups" :key="group.key" class="observation-day" :aria-labelledby="'day-' + group.key">
+        <div class="observation-day-rail"><h2 :id="'day-' + group.key">{{ group.label }}</h2><span>{{ group.rows.length }}件</span></div>
+        <ol class="observation-list">
+          <li v-for="observation in group.rows" :key="observation.observation_id" class="observation-entry"
+            :class="{ 'observation-entry-updated': observation.change === 'updated' }">
+            <div class="observation-time">
+              <time :datetime="observation.observed_at">{{ timeLabel(observation.observed_at) }}</time>
+              <span>{{ observation.change === 'updated' ? '更新' : '新規' }}</span>
             </div>
-            <time class="live-entry-observed" :datetime="observation.observed_at">
-              観測 {{ dateLabel(observation.observed_at) }}
-            </time>
-          </div>
-          <h3 class="live-entry-title">{{ observation.title }}</h3>
-          <div class="live-entry-bottom">
-            <span>発信 {{ dateLabel(observation.published_at) }}</span>
-            <span class="live-entry-separator" aria-hidden="true">/</span>
-            <span>{{ observation.source }}</span>
-            <span class="live-entry-separator" aria-hidden="true">/</span>
-            <span>{{ observation.category }}</span>
-            <a v-if="safeExternalUrl(observation.url)" class="live-entry-direct"
-              :href="safeExternalUrl(observation.url)" target="_blank" rel="noopener noreferrer">
-              原文を開く <q-icon name="open_in_new" size="14px" />
-            </a>
-            <router-link class="live-entry-detail" :to="{ name: 'item', params: { id: observation.item_id },
-              query: { returnTo: '/live' } }">記録と根拠</router-link>
-          </div>
-        </article>
-      </li>
-    </ol>
-    <div v-if="records.length" class="live-list-footer">
-      <q-btn v-if="nextCursor !== null" outline no-caps color="primary"
-        :loading="loadingMore" label="さらに40件を表示" @click="loadOlder" />
-      <span v-else>これ以上の記録はありません</span>
-      <span v-if="error" class="text-negative" role="alert">{{ error }}</span>
+            <div class="observation-main">
+              <div class="observation-source-line">
+                <span class="observation-platform">{{ platformLabel(observation.platform) }}</span>
+                <span class="observation-source-name">{{ observation.organization || observation.source }}</span>
+                <span class="observation-source-id">{{ observation.source }}</span>
+              </div>
+              <router-link class="observation-title" :to="{ name: 'item', params: { id: observation.item_id }, query: { returnTo: route.fullPath } }">
+                {{ observation.title }}
+              </router-link>
+              <div class="observation-meta">
+                <span class="observation-category">{{ categoryName(observation.category) }}</span>
+                <span>公開 {{ dateLabel(observation.published_at) }}</span>
+                <span class="observation-entry-actions">
+                  <a v-if="safeExternalUrl(observation.url)" :href="safeExternalUrl(observation.url)"
+                    target="_blank" rel="noopener noreferrer">発信元 <q-icon name="north_east" size="13px" aria-hidden="true" /></a>
+                  <router-link :to="{ name: 'item', params: { id: observation.item_id }, query: { returnTo: route.fullPath } }">証跡を確認 <span aria-hidden="true">→</span></router-link>
+                </span>
+              </div>
+            </div>
+            <span class="observation-change-mark" aria-hidden="true"></span>
+          </li>
+        </ol>
+      </section>
     </div>
+    <footer v-if="records.length" class="atlas-list-footer">
+      <q-btn v-if="nextCursor !== null" outline no-caps :loading="loadingMore" label="過去の観測を読み込む" @click="loadOlder" />
+      <span v-else>この条件で表示できる観測は以上です。</span>
+      <span v-if="error" role="alert" class="atlas-list-error">{{ error }}</span>
+    </footer>
   </q-page>
 </template>

@@ -2,7 +2,7 @@ import { defineConfig } from '#q-app'
 
 export default defineConfig(() => ({
   extras: ['material-icons'],
-  css: ['app.scss', 'workstation.scss'],
+  css: ['app.scss', 'redesign.scss'],
   framework: {
     config: {
       brand: {

@@ -62,12 +62,12 @@ const kevStatus = computed(() => data.value?.kev.status === 'listed'
         <q-btn flat color="primary" label="再試行" @click="load" />
       </div>
       <template v-else-if="data">
-        <div class="cve-status-block row items-center justify-between q-gutter-md">
+        <div class="cve-status-block row items-center justify-between q-gutter-md" :data-kev="data.kev.status">
           <div>
             <div class="eyebrow">CISA KEV掲載状況</div>
             <div class="text-h6 q-mt-sm">{{ kevStatus }}</div>
           </div>
-          <q-badge :color="data.kev.status === 'listed' ? 'negative' : 'grey-7'"
+          <q-badge class="kev-status-badge" :data-kev="data.kev.status"
             :label="data.kev.status === 'listed' ? 'KEV掲載' : data.kev.status === 'not_listed' ? '掲載なし' : '未確認'" />
         </div>
         <p class="text-caption text-grey-7 q-mt-md q-mb-none">
